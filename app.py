@@ -34,8 +34,8 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # Uniwersalne kolumny bezpieczeństwa
-    wymagane_kolumny = ["CMR_Gotowe", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+    # Uniwersalne kolumny bezpieczeństwa (teraz z podziałem na CMR startowe i POD końcowe)
+    wymagane_kolumny = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
     for kol in wymagane_kolumny:
         if kol not in df.columns:
             df[kol] = ""
@@ -115,7 +115,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 4.2.0 (Clean Process)")
+    st.caption("Wersja systemu: 4.3.0 (Start & End POD)")
     st.caption("Użytkownik: PM / Logistics")
 
 # --- MODUŁY GŁÓWNE ---
@@ -131,8 +131,8 @@ if wybrany_modul == "🚚 Eventy / Targi":
     with col1:
         st.metric("Aktywne Transporty", len(df_aktywne))
     with col2:
-        braki_cmr = len(df_aktywne[df_aktywne.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
-        st.metric("Brakujące POD (CMR)", braki_cmr)
+        braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
+        st.metric("Oczekujące Zwroty POD", braki_pod)
     with col3:
         st.metric("Status Bazy", "Synchronizowana 🟢")
     
@@ -167,14 +167,22 @@ if wybrany_modul == "🚚 Eventy / Targi":
                 przewoznik = st.text_input("Przewoźnik / Kierowca *")
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Flota", "Dokumenty", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
+
+            st.markdown("---")
+            st.markdown("### 🛫 Dokumenty Startowe i Koszty")
+            
+            d_start_1, d_start_2 = st.columns(2)
+            with d_start_1:
+                cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"], help="Czy kierowca otrzymał dokument przewozowy na start?")
+            with d_start_2:
                 koszt_dodatkowy = st.number_input("Koszt Dodatkowy (PLN)", min_value=0, value=0, format="%d")
 
             st.markdown("---")
-            st.markdown("### 📄 Rozliczenie i Dowód Dostawy (POD)")
+            st.markdown("### 🏁 Rozliczenie i Dowód Dostawy (POD)")
             
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1:
-                podpisana_cmr_pod = st.selectbox("Podpisana CMR / POD (Dowód Dostawy)", ["NIE", "TAK"])
+                cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD po usłudze)?", ["NIE", "TAK"], help="Czy przewoźnik odesłał podpisany dowód dostawy?")
             with d_col2:
                 pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
             with d_col3:
@@ -213,7 +221,8 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "ETA_Wydania": "",
                         "Wrzutka_PM": "TAK",
                         "Koszt_Dodatkowy": koszt_dodatkowy,
-                        "CMR_Gotowe": podpisana_cmr_pod, 
+                        "CMR_Gotowe": cmr_gotowe, 
+                        "CMR_Podpisane_POD": cmr_podpisane,
                         "Nr_Zlecenia_Zewn": nr_zlecenia_zewn,
                         "Nr_Faktury": nr_faktury,
                         "Data_Zakonczenia_Uslugi": "",
