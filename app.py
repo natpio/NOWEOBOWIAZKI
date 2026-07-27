@@ -33,11 +33,16 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # ZABEZPIECZENIE: Automatyczne dodanie kluczowych kolumn, jeśli brakuje ich w Google Sheets
+    # ZABEZPIECZENIE: Automatyczne dodanie kluczowych kolumn uniwersalnych
     wymagane_kolumny = ["CMR_Gotowe", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
     for kol in wymagane_kolumny:
         if kol not in df.columns:
             df[kol] = ""
+            
+    # ZABEZPIECZENIE DEDYKOWANE DLA EVENTÓW (Flota własna vs zewnętrzna)
+    if sheet_name == "DB_Eventy":
+        if "Typ_Transportu" not in df.columns:
+            df["Typ_Transportu"] = "Zewnętrzny"
             
     return worksheet, df
 
@@ -50,7 +55,6 @@ def save_data(worksheet, edited_df):
 def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID_Zlecenia"):
     licznik_elementow = {}
     
-    # Upewnij się, że kolumna ID istnieje w dataframe
     if nazwa_kolumny_id not in df.columns:
         df[nazwa_kolumny_id] = ""
     
@@ -58,24 +62,18 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
         wartosc1 = str(row.get(kolumna_glowna, '')).strip().upper()
         wartosc2 = str(row.get(kolumna_dodatkowa, '')).strip().upper()
         
-        # Pomijanie pustych wierszy
         if not wartosc1 and not wartosc2:
             continue
             
-        # Zliczanie wystąpień dla kolumny głównej, aby nadać numer
         if wartosc1 not in licznik_elementow:
             licznik_elementow[wartosc1] = 1
         else:
             licznik_elementow[wartosc1] += 1
             
-        # Skracanie nazw do 4 liter, usuwanie spacji i znaków specjalnych
         czesc1 = re.sub(r'[^A-Z0-9]', '', wartosc1)[:4] if wartosc1 else "BRAK"
         czesc2 = re.sub(r'[^A-Z0-9]', '', wartosc2)[:4] if wartosc2 else "BRAK"
-        
-        # Formatowanie numeru do dwóch cyfr (01, 02...)
         numer = str(licznik_elementow[wartosc1]).zfill(2)
         
-        # Zapis do wskazanej kolumny ID
         df.at[idx, nazwa_kolumny_id] = f"{czesc1}-{czesc2}-{numer}"
         
     return df
@@ -105,7 +103,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 3.2.0 (Auto-Schema PRO)")
+    st.caption("Wersja systemu: 3.3.0 (Fleet Split PRO)")
     st.caption("Użytkownik: PM / Logistics")
 
 # --- MODUŁY GŁÓWNE ---
@@ -134,17 +132,18 @@ if wybrany_modul == "🚚 Eventy / Targi":
     )
     
     if widok == "📍 Baza i Trasa":
-        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Project_Manager", "Faza_Procesu", "Akcept_Alicji", "Typ_Pojazdu", "Przewoznik", "Data_Zlecenia_Tr"]
+        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Typ_Transportu", "Project_Manager", "Faza_Procesu", "Akcept_Alicji", "Typ_Pojazdu", "Przewoznik", "Data_Zlecenia_Tr"]
     elif widok == "🏗️ Magazyn i Załadunek":
-        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Status_Magazyn", "Magazyn_Powod", "ETA_Wydania", "Wrzutka_PM", "Koszt_Dodatkowy"]
+        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Typ_Transportu", "Status_Magazyn", "Magazyn_Powod", "ETA_Wydania", "Wrzutka_PM", "Koszt_Dodatkowy"]
     elif widok == "📑 Dokumenty i Finanse":
-        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "CMR_Gotowe", "Nr_Zlecenia_Zewn", "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Typ_Transportu", "CMR_Gotowe", "Nr_Zlecenia_Zewn", "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
     else:
         kolumny = df.columns.tolist()
         
     konfiguracja_eventy = {
         **wspolna_konfiguracja,
-        "ID_Zlecenia": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie (Targi+Przewoźnik)!"),
+        "ID_Zlecenia": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie!"),
+        "Typ_Transportu": st.column_config.SelectboxColumn("Typ Auta", options=["Zewnętrzny", "Własny SQM"]),
         "Faza_Procesu": st.column_config.SelectboxColumn("Faza", options=["Inicjacja", "Flota", "Dokumenty", "Załadunek", "Trasa", "Zamknięte"]),
         "Status_Magazyn": st.column_config.SelectboxColumn("Magazyn", options=["100% Gotowe", "Częściowo", "Opóźnione", "Brak gotowości"]),
         "Akcept_Alicji": st.column_config.SelectboxColumn("Akcept", options=opcje_tak_nie),
@@ -169,7 +168,7 @@ if wybrany_modul == "🚚 Eventy / Targi":
 
 
 elif wybrany_modul == "📦 Subrenty":
-    st.title("Hub Subrentów")
+    st.title("Hub Subrentów (Zewnętrzne)")
     worksheet, df = load_data(sh, "DB_Subrenty")
     
     col1, col2 = st.columns(2)
@@ -198,7 +197,7 @@ elif wybrany_modul == "📦 Subrenty":
         
     konfiguracja_subrenty = {
         **wspolna_konfiguracja,
-        "ID_Zlecenia": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie (Dostawca+Rodzaj)!"),
+        "ID_Zlecenia": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie!"),
         "Rodzaj_Zlecenia": st.column_config.SelectboxColumn("Rodzaj", options=["Odbiór Pustych", "Subrent", "Zwrot Subrentu", "Dostawa Zaopatrzenia"]),
         "Status_Subrentu": st.column_config.SelectboxColumn("Status", options=["Oczekuje", "Na Magazynie", "Wysłane", "Zakończone"]),
     }
@@ -212,7 +211,7 @@ elif wybrany_modul == "📦 Subrenty":
 
 
 elif wybrany_modul == "🌍 YESTECH Export":
-    st.title("YESTECH Global")
+    st.title("YESTECH Global (Zewnętrzne)")
     worksheet, df = load_data(sh, "DB_Yestech")
     
     col1, col2 = st.columns(2)
@@ -241,7 +240,7 @@ elif wybrany_modul == "🌍 YESTECH Export":
         
     konfiguracja_yestech = {
         **wspolna_konfiguracja,
-        "ID_Yestech": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie (Destynacja+Przewoźnik)!"),
+        "ID_Yestech": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie!"),
         "Status_Ofertowy": st.column_config.SelectboxColumn("Status", options=["Nowe Zapytanie", "Czeka na akcept", "Akcept - szukam auta", "W drodze", "Zakończone"]),
         "Wycena_Dla_Basi": st.column_config.NumberColumn("Wycena", format="%d zł", min_value=0),
         "Koszt_Rzeczywisty": st.column_config.NumberColumn("Koszt", format="%d zł", min_value=0),
