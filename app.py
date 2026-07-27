@@ -27,10 +27,18 @@ def load_data(sh, sheet_name):
     worksheet = sh.worksheet(sheet_name)
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
+    
     if df.empty:
         headers = worksheet.row_values(1)
         if headers:
             df = pd.DataFrame(columns=headers)
+            
+    # ZABEZPIECZENIE: Automatyczne dodanie kluczowych kolumn, jeśli brakuje ich w Google Sheets
+    wymagane_kolumny = ["CMR_Gotowe", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+    for kol in wymagane_kolumny:
+        if kol not in df.columns:
+            df[kol] = ""
+            
     return worksheet, df
 
 def save_data(worksheet, edited_df):
@@ -41,6 +49,10 @@ def save_data(worksheet, edited_df):
 
 def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID_Zlecenia"):
     licznik_elementow = {}
+    
+    # Upewnij się, że kolumna ID istnieje w dataframe
+    if nazwa_kolumny_id not in df.columns:
+        df[nazwa_kolumny_id] = ""
     
     for idx, row in df.iterrows():
         wartosc1 = str(row.get(kolumna_glowna, '')).strip().upper()
@@ -93,7 +105,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 3.1.0 (Smart ID PRO)")
+    st.caption("Wersja systemu: 3.2.0 (Auto-Schema PRO)")
     st.caption("Użytkownik: PM / Logistics")
 
 # --- MODUŁY GŁÓWNE ---
