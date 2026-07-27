@@ -1,21 +1,22 @@
 import streamlit as st
 import gspread
 import pandas as pd
+import re
 
 # 1. KONFIGURACJA STRONY (Zawsze na górze)
 st.set_page_config(page_title="SQM Transport Hub", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
 
 # 2. ŁADOWANIE ZEWNĘTRZNEGO PLIKU CSS
 def load_css(file_name):
-    with open(file_name) as f:
-        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    try:
+        with open(file_name) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.warning("Plik style.css nie został znaleziony. Aplikacja używa domyślnego wyglądu.")
 
-try:
-    load_css("style.css")
-except FileNotFoundError:
-    st.warning("Plik style.css nie został znaleziony. Aplikacja używa domyślnego wyglądu.")
+load_css("style.css")
 
-# 3. FUNKCJE BAZODANOWE
+# 3. FUNKCJE BAZODANOWE I GENERATORY
 @st.cache_resource
 def init_connection():
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
@@ -38,13 +39,42 @@ def save_data(worksheet, edited_df):
         worksheet.update(values=[edited_df.columns.values.tolist()] + edited_df.values.tolist(), range_name='A1')
     st.toast("Zmiany zapisane pomyślnie!", icon="✅")
 
+def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID_Zlecenia"):
+    licznik_elementow = {}
+    
+    for idx, row in df.iterrows():
+        wartosc1 = str(row.get(kolumna_glowna, '')).strip().upper()
+        wartosc2 = str(row.get(kolumna_dodatkowa, '')).strip().upper()
+        
+        # Pomijanie pustych wierszy
+        if not wartosc1 and not wartosc2:
+            continue
+            
+        # Zliczanie wystąpień dla kolumny głównej, aby nadać numer
+        if wartosc1 not in licznik_elementow:
+            licznik_elementow[wartosc1] = 1
+        else:
+            licznik_elementow[wartosc1] += 1
+            
+        # Skracanie nazw do 4 liter, usuwanie spacji i znaków specjalnych
+        czesc1 = re.sub(r'[^A-Z0-9]', '', wartosc1)[:4] if wartosc1 else "BRAK"
+        czesc2 = re.sub(r'[^A-Z0-9]', '', wartosc2)[:4] if wartosc2 else "BRAK"
+        
+        # Formatowanie numeru do dwóch cyfr (01, 02...)
+        numer = str(licznik_elementow[wartosc1]).zfill(2)
+        
+        # Zapis do wskazanej kolumny ID
+        df.at[idx, nazwa_kolumny_id] = f"{czesc1}-{czesc2}-{numer}"
+        
+    return df
+
 try:
     sh = init_connection()
 except Exception as e:
     st.error(f"❌ Krytyczny błąd połączenia z bazą: {e}")
     st.stop()
 
-# 4. KONFIGURACJA KOLUMN (Dropdowns, Checkboxy, Formaty)
+# 4. KONFIGURACJA KOLUMN (Wspólne elementy)
 opcje_tak_nie = ["", "TAK", "NIE"]
 wspolna_konfiguracja = {
     "CMR_Gotowe": st.column_config.SelectboxColumn("📄 CMR", options=opcje_tak_nie),
@@ -63,7 +93,8 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 3.0.0 (Enterprise UI)")
+    st.caption("Wersja systemu: 3.1.0 (Smart ID PRO)")
+    st.caption("Użytkownik: PM / Logistics")
 
 # --- MODUŁY GŁÓWNE ---
 
@@ -72,7 +103,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
     
     worksheet, df = load_data(sh, "DB_Eventy")
     
-    # Kafelki KPI (Dashboard)
     col1, col2, col3 = st.columns(3)
     with col1:
         aktywne = len(df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"]) if not df.empty else 0
@@ -102,6 +132,7 @@ if wybrany_modul == "🚚 Eventy / Targi":
         
     konfiguracja_eventy = {
         **wspolna_konfiguracja,
+        "ID_Zlecenia": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie (Targi+Przewoźnik)!"),
         "Faza_Procesu": st.column_config.SelectboxColumn("Faza", options=["Inicjacja", "Flota", "Dokumenty", "Załadunek", "Trasa", "Zamknięte"]),
         "Status_Magazyn": st.column_config.SelectboxColumn("Magazyn", options=["100% Gotowe", "Częściowo", "Opóźnione", "Brak gotowości"]),
         "Akcept_Alicji": st.column_config.SelectboxColumn("Akcept", options=opcje_tak_nie),
@@ -121,7 +152,9 @@ if wybrany_modul == "🚚 Eventy / Targi":
     
     st.write("")
     if st.button("💾 Zapisz zmiany w bazie »", key="save_eventy"):
+        edited_df = generuj_smart_id(edited_df, kolumna_glowna="Nazwa_Targow", kolumna_dodatkowa="Przewoznik", nazwa_kolumny_id="ID_Zlecenia")
         save_data(worksheet, edited_df)
+
 
 elif wybrany_modul == "📦 Subrenty":
     st.title("Hub Subrentów")
@@ -153,6 +186,7 @@ elif wybrany_modul == "📦 Subrenty":
         
     konfiguracja_subrenty = {
         **wspolna_konfiguracja,
+        "ID_Zlecenia": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie (Dostawca+Rodzaj)!"),
         "Rodzaj_Zlecenia": st.column_config.SelectboxColumn("Rodzaj", options=["Odbiór Pustych", "Subrent", "Zwrot Subrentu", "Dostawa Zaopatrzenia"]),
         "Status_Subrentu": st.column_config.SelectboxColumn("Status", options=["Oczekuje", "Na Magazynie", "Wysłane", "Zakończone"]),
     }
@@ -161,7 +195,9 @@ elif wybrany_modul == "📦 Subrenty":
     
     st.write("")
     if st.button("💾 Zapisz zmiany w bazie »", key="save_subrenty"):
+        edited_df = generuj_smart_id(edited_df, kolumna_glowna="Dostawca", kolumna_dodatkowa="Rodzaj_Zlecenia", nazwa_kolumny_id="ID_Zlecenia")
         save_data(worksheet, edited_df)
+
 
 elif wybrany_modul == "🌍 YESTECH Export":
     st.title("YESTECH Global")
@@ -193,6 +229,7 @@ elif wybrany_modul == "🌍 YESTECH Export":
         
     konfiguracja_yestech = {
         **wspolna_konfiguracja,
+        "ID_Yestech": st.column_config.TextColumn("ID Zlecenia", disabled=True, help="Generuje się automatycznie przy zapisie (Destynacja+Przewoźnik)!"),
         "Status_Ofertowy": st.column_config.SelectboxColumn("Status", options=["Nowe Zapytanie", "Czeka na akcept", "Akcept - szukam auta", "W drodze", "Zakończone"]),
         "Wycena_Dla_Basi": st.column_config.NumberColumn("Wycena", format="%d zł", min_value=0),
         "Koszt_Rzeczywisty": st.column_config.NumberColumn("Koszt", format="%d zł", min_value=0),
@@ -203,7 +240,9 @@ elif wybrany_modul == "🌍 YESTECH Export":
     
     st.write("")
     if st.button("💾 Zapisz zmiany w bazie »", key="save_yestech"):
+        edited_df = generuj_smart_id(edited_df, kolumna_glowna="Destynacja", kolumna_dodatkowa="Przewoznik", nazwa_kolumny_id="ID_Yestech")
         save_data(worksheet, edited_df)
+
 
 elif wybrany_modul == "📊 Finanse i Raporty":
     st.title("Centrum Finansowe")
