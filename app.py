@@ -54,27 +54,87 @@ if wybrany_modul == "🚚 Eventy / Targi":
     st.markdown("Zarządzanie flotą, wrzutkami i gotowością magazynu.")
     
     worksheet, df = load_data(sh, "DB_Eventy")
-    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    
+    st.markdown("### ⚙️ Wybierz etap do edycji:")
+    widok = st.radio(
+        "Wybierz widok:",
+        ["1️⃣ Baza i Trasa", "2️⃣ Magazyn i Załadunek", "3️⃣ Dokumenty i Finanse", "👁️ Pokaż wszystko"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    if widok == "1️⃣ Baza i Trasa":
+        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Project_Manager", "Faza_Procesu", "Akcept_Alicji", "Typ_Pojazdu", "Przewoznik", "Data_Zlecenia_Tr"]
+    elif widok == "2️⃣ Magazyn i Załadunek":
+        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "Status_Magazyn", "Magazyn_Powod", "ETA_Wydania", "Wrzutka_PM", "Koszt_Dodatkowy"]
+    elif widok == "3️⃣ Dokumenty i Finanse":
+        kolumny = ["ID_Zlecenia", "Nazwa_Targow", "CMR_Gotowe", "Nr_Zlecenia_Zewn", "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+    else:
+        kolumny = df.columns.tolist()
+        
+    st.caption("💡 Zmiany wprowadzone w dowolnym widoku zapiszą się do całej bazy po kliknięciu zapisu.")
+    
+    edited_df = st.data_editor(df, column_order=kolumny, num_rows="dynamic", use_container_width=True, hide_index=True)
     
     if st.button("💾 Zapisz zmiany - Eventy"):
         save_data(worksheet, edited_df)
 
 elif wybrany_modul == "📦 Subrenty":
     st.title("📦 Panel Operacyjny: Subrenty")
-    st.markdown("Pilnowanie terminów zwrotów do Bartosza Krauze i zewnętrznych dostawców.")
+    st.markdown("Pilnowanie terminów zwrotów do partnerów i zewnętrznych dostawców.")
     
     worksheet, df = load_data(sh, "DB_Subrenty")
-    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    
+    st.markdown("### ⚙️ Wybierz etap do edycji:")
+    widok = st.radio(
+        "Wybierz widok:",
+        ["1️⃣ Szczegóły i Status", "2️⃣ Logistyka", "3️⃣ Finanse i Zamknięcie", "👁️ Pokaż wszystko"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    if widok == "1️⃣ Szczegóły i Status":
+        kolumny = ["ID_Zlecenia", "Rodzaj_Zlecenia", "Dostawca", "Co_Jedzie", "Data_Zlecenia", "Deadline_Zwrotu", "Status_Subrentu"]
+    elif widok == "2️⃣ Logistyka":
+        kolumny = ["ID_Zlecenia", "Przewoznik_OUT", "List_Przewozowy", "CMR_Gotowe", "Nr_Zlecenia_Zewn", "Data_Zlecenia_Tr", "Data_Zakonczenia_Uslugi"]
+    elif widok == "3️⃣ Finanse i Zamknięcie":
+        kolumny = ["ID_Zlecenia", "Nr_Faktury", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+    else:
+        kolumny = df.columns.tolist()
+        
+    st.caption("💡 Zmiany wprowadzone w dowolnym widoku zapiszą się do całej bazy po kliknięciu zapisu.")
+
+    edited_df = st.data_editor(df, column_order=kolumny, num_rows="dynamic", use_container_width=True, hide_index=True)
     
     if st.button("💾 Zapisz zmiany - Subrenty"):
         save_data(worksheet, edited_df)
 
 elif wybrany_modul == "🌍 YESTECH Export":
     st.title("🌍 Panel Operacyjny: YESTECH Export")
-    st.markdown("Lejek logistyczny dla działu handlowego (Basia).")
+    st.markdown("Lejek logistyczny dla działu handlowego.")
     
     worksheet, df = load_data(sh, "DB_Yestech")
-    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    
+    st.markdown("### ⚙️ Wybierz etap do edycji:")
+    widok = st.radio(
+        "Wybierz widok:",
+        ["1️⃣ Sprzedaż i Wycena", "2️⃣ Transport i Trasa", "3️⃣ Rozliczenia i Dokumenty", "👁️ Pokaż wszystko"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+    
+    if widok == "1️⃣ Sprzedaż i Wycena":
+        kolumny = ["ID_Yestech", "Data_Zgloszenia", "Destynacja", "Gabaryt", "Status_Ofertowy", "Wycena_Dla_Basi", "Koszt_Rzeczywisty", "Marza_Info"]
+    elif widok == "2️⃣ Transport i Trasa":
+        kolumny = ["ID_Yestech", "Przewoznik", "Nr_Zlecenia_Zewn", "Data_Zlecenia_Tr", "Data_Zakonczenia_Uslugi"]
+    elif widok == "3️⃣ Rozliczenia i Dokumenty":
+        kolumny = ["ID_Yestech", "CMR_Gotowe", "Nr_Faktury", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+    else:
+        kolumny = df.columns.tolist()
+        
+    st.caption("💡 Zmiany wprowadzone w dowolnym widoku zapiszą się do całej bazy po kliknięciu zapisu.")
+
+    edited_df = st.data_editor(df, column_order=kolumny, num_rows="dynamic", use_container_width=True, hide_index=True)
     
     if st.button("💾 Zapisz zmiany - YESTECH"):
         save_data(worksheet, edited_df)
