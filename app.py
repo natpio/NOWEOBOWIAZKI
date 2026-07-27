@@ -5,49 +5,15 @@ import pandas as pd
 # 1. KONFIGURACJA STRONY (Zawsze na górze)
 st.set_page_config(page_title="SQM Transport Hub", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
 
-# 2. WSTRZYKNIĘCIE CUSTOM CSS (Poziom 999 UI/UX)
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif !important;
-    }
-    
-    /* Ukrycie domyślnego paska i stopki Streamlit dla czystego wyglądu aplikacji */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Stylizacja głównego tytułu */
-    h1 {
-        font-weight: 700 !important;
-        color: #1E293B !important;
-        letter-spacing: -1px;
-    }
-    
-    /* Pływający, elegancki przycisk zapisu */
-    .stButton > button {
-        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
-        color: white !important;
-        font-weight: 600 !important;
-        border-radius: 8px !important;
-        border: none !important;
-        padding: 0.5rem 2rem !important;
-        box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2), 0 2px 4px -1px rgba(37, 99, 235, 0.1) !important;
-        transition: all 0.3s ease !important;
-    }
-    .stButton > button:hover {
-        transform: translateY(-2px) !important;
-        box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3), 0 4px 6px -2px rgba(37, 99, 235, 0.15) !important;
-    }
-    
-    /* Subtelne podświetlenie zakładek bocznych */
-    [data-testid="stSidebarNav"] {
-        background-color: #F8FAFC;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# 2. ŁADOWANIE ZEWNĘTRZNEGO PLIKU CSS
+def load_css(file_name):
+    with open(file_name) as f:
+        st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+
+try:
+    load_css("style.css")
+except FileNotFoundError:
+    st.warning("Plik style.css nie został znaleziony. Aplikacja używa domyślnego wyglądu.")
 
 # 3. FUNKCJE BAZODANOWE
 @st.cache_resource
@@ -89,7 +55,6 @@ wspolna_konfiguracja = {
 
 # --- MENU BOCZNE ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2769/2769339.png", width=60) # Ikona logo
     st.title("SQM TMS")
     st.markdown("---")
     wybrany_modul = st.radio(
@@ -98,32 +63,31 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 2.0.0 PRO")
-    st.caption("Użytkownik: PM / Logistics")
+    st.caption("Wersja systemu: 3.0.0 (Enterprise UI)")
 
 # --- MODUŁY GŁÓWNE ---
 
 if wybrany_modul == "🚚 Eventy / Targi":
-    st.title("🚚 Eventy & Flota")
-    st.markdown("Zarządzanie flotą, wrzutkami i gotowością magazynu.")
+    st.title("Eventy & Flota")
     
     worksheet, df = load_data(sh, "DB_Eventy")
     
     # Kafelki KPI (Dashboard)
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Liczba aut (Aktywne)", len(df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"]))
+        aktywne = len(df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"]) if not df.empty else 0
+        st.metric("Liczba aut (Aktywne)", aktywne)
     with col2:
-        st.metric("Oczekujące CMR", len(df[df.get("CMR_Gotowe", pd.Series()) == "NIE"]))
+        braki_cmr = len(df[df.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df.empty else 0
+        st.metric("Oczekujące CMR", braki_cmr)
     with col3:
-        st.metric("Status Magazynu", "Live 🟢")
+        st.metric("Status Serwera", "Online 🟢")
     
     st.divider()
 
-    # Logiczne filtry kolumn jako subtelne pigułki (Radio buttons)
     widok = st.radio(
         "🔎 Obszar roboczy:",
-        ["📍 Baza i Trasa", "🏗️ Magazyn i Załadunek", "📑 Dokumenty i Finanse", "👁️ Widok Pełny (Master)"],
+        ["📍 Baza i Trasa", "🏗️ Magazyn i Załadunek", "📑 Dokumenty i Finanse", "👁️ Widok Pełny"],
         horizontal=True
     )
     
@@ -136,7 +100,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
     else:
         kolumny = df.columns.tolist()
         
-    # Specyficzna konfiguracja kolumn dla Eventów
     konfiguracja_eventy = {
         **wspolna_konfiguracja,
         "Faza_Procesu": st.column_config.SelectboxColumn("Faza", options=["Inicjacja", "Flota", "Dokumenty", "Załadunek", "Trasa", "Zamknięte"]),
@@ -146,7 +109,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
         "Koszt_Dodatkowy": st.column_config.NumberColumn("Koszt Dod. (PLN)", format="%d zł", min_value=0),
     }
 
-    # Interaktywny edytor danych
     edited_df = st.data_editor(
         df, 
         column_order=kolumny,
@@ -154,23 +116,29 @@ if wybrany_modul == "🚚 Eventy / Targi":
         num_rows="dynamic", 
         use_container_width=True, 
         hide_index=True,
-        height=500
+        height=450
     )
     
-    st.write("") # Pusty odstęp
+    st.write("")
     if st.button("💾 Zapisz zmiany w bazie »", key="save_eventy"):
         save_data(worksheet, edited_df)
 
 elif wybrany_modul == "📦 Subrenty":
-    st.title("📦 Hub Subrentów")
-    st.markdown("Ścisła kontrola terminów zwrotów do partnerów i zewnętrznych dostawców.")
-    
+    st.title("Hub Subrentów")
     worksheet, df = load_data(sh, "DB_Subrenty")
     
+    col1, col2 = st.columns(2)
+    with col1:
+        aktywne_sub = len(df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"]) if not df.empty else 0
+        st.metric("Oczekujące Zwroty", aktywne_sub)
+    with col2:
+        braki_cmr_sub = len(df[df.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df.empty else 0
+        st.metric("Brakujące Listy Przewozowe", braki_cmr_sub)
+
     st.divider()
     widok = st.radio(
         "🔎 Obszar roboczy:",
-        ["📍 Szczegóły i Status", "🚚 Logistyka", "📑 Finanse i Zamknięcie", "👁️ Widok Pełny (Master)"],
+        ["📍 Szczegóły i Status", "🚚 Logistyka", "📑 Finanse i Zamknięcie", "👁️ Widok Pełny"],
         horizontal=True
     )
     
@@ -189,30 +157,28 @@ elif wybrany_modul == "📦 Subrenty":
         "Status_Subrentu": st.column_config.SelectboxColumn("Status", options=["Oczekuje", "Na Magazynie", "Wysłane", "Zakończone"]),
     }
 
-    edited_df = st.data_editor(
-        df, 
-        column_order=kolumny,
-        column_config=konfiguracja_subrenty,
-        num_rows="dynamic", 
-        use_container_width=True, 
-        hide_index=True,
-        height=500
-    )
+    edited_df = st.data_editor(df, column_order=kolumny, column_config=konfiguracja_subrenty, num_rows="dynamic", use_container_width=True, hide_index=True, height=450)
     
     st.write("")
     if st.button("💾 Zapisz zmiany w bazie »", key="save_subrenty"):
         save_data(worksheet, edited_df)
 
 elif wybrany_modul == "🌍 YESTECH Export":
-    st.title("🌍 YESTECH Global")
-    st.markdown("Zarządzanie lejkiem logistycznym dla działu handlowego.")
-    
+    st.title("YESTECH Global")
     worksheet, df = load_data(sh, "DB_Yestech")
     
+    col1, col2 = st.columns(2)
+    with col1:
+        aktywne_yes = len(df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"]) if not df.empty else 0
+        st.metric("Otwarte Transporty (Lejek)", aktywne_yes)
+    with col2:
+        braki_cmr_yes = len(df[df.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df.empty else 0
+        st.metric("Oczekujące CMR", braki_cmr_yes)
+
     st.divider()
     widok = st.radio(
         "🔎 Obszar roboczy:",
-        ["📍 Sprzedaż i Wycena", "🚚 Transport i Trasa", "📑 Rozliczenia i Dokumenty", "👁️ Widok Pełny (Master)"],
+        ["📍 Sprzedaż i Wycena", "🚚 Transport i Trasa", "📑 Rozliczenia i Dokumenty", "👁️ Widok Pełny"],
         horizontal=True
     )
     
@@ -233,20 +199,12 @@ elif wybrany_modul == "🌍 YESTECH Export":
         "Marza_Info": st.column_config.NumberColumn("Marża", format="%d zł"),
     }
 
-    edited_df = st.data_editor(
-        df, 
-        column_order=kolumny,
-        column_config=konfiguracja_yestech,
-        num_rows="dynamic", 
-        use_container_width=True, 
-        hide_index=True,
-        height=500
-    )
+    edited_df = st.data_editor(df, column_order=kolumny, column_config=konfiguracja_yestech, num_rows="dynamic", use_container_width=True, hide_index=True, height=450)
     
     st.write("")
     if st.button("💾 Zapisz zmiany w bazie »", key="save_yestech"):
         save_data(worksheet, edited_df)
 
 elif wybrany_modul == "📊 Finanse i Raporty":
-    st.title("📊 Centrum Finansowe")
-    st.info("Tutaj wdrożymy potężny skrypt skanujący wszystkie 3 bazy pod kątem zaległych płatności (wg daty i statusów PP_Otrzymane). Moduł przygotowywany w kolejnym etapie wdrożenia.")
+    st.title("Centrum Finansowe")
+    st.info("Gotowe pod wdrożenie modułu skanującego zaległości.")
