@@ -48,7 +48,6 @@ def load_data(sh, sheet_name):
             "Nazwa_Targow": "",
             "Project_Manager": "",
             "Faza_Procesu": "Inicjacja",
-            "Akcept_Alicji": "NIE",
             "Typ_Pojazdu": "",
             "Przewoznik": "",
             "Data_Zlecenia_Tr": str(datetime.date.today()),
@@ -116,7 +115,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 4.1.0 (POD & Smart Form)")
+    st.caption("Wersja systemu: 4.2.0 (Clean Process)")
     st.caption("Użytkownik: PM / Logistics")
 
 # --- MODUŁY GŁÓWNE ---
@@ -175,7 +174,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
             
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1:
-                # Rozróżnienie na podpisaną CMR / POD po zakończeniu usługi
                 podpisana_cmr_pod = st.selectbox("Podpisana CMR / POD (Dowód Dostawy)", ["NIE", "TAK"])
             with d_col2:
                 pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
@@ -207,7 +205,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "Typ_Transportu": typ_transportu,
                         "Project_Manager": project_manager,
                         "Faza_Procesu": faza_procesu,
-                        "Akcept_Alicji": "TAK" if typ_transportu == "Własny SQM" else "NIE",
                         "Typ_Pojazdu": typ_pojazdu,
                         "Przewoznik": przewoznik,
                         "Data_Zlecenia_Tr": str(datetime.date.today()),
@@ -216,7 +213,7 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "ETA_Wydania": "",
                         "Wrzutka_PM": "TAK",
                         "Koszt_Dodatkowy": koszt_dodatkowy,
-                        "CMR_Gotowe": podpisana_cmr_pod, # Zapisujemy status podpisanego POD
+                        "CMR_Gotowe": podpisana_cmr_pod, 
                         "Nr_Zlecenia_Zewn": nr_zlecenia_zewn,
                         "Nr_Faktury": nr_faktury,
                         "Data_Zakonczenia_Uslugi": "",
