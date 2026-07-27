@@ -2,49 +2,83 @@ import streamlit as st
 import gspread
 import pandas as pd
 
-# Konfiguracja strony
+# Konfiguracja strony (musi być na samej górze)
 st.set_page_config(page_title="SQM Transport Hub", page_icon="🚚", layout="wide")
-st.title("🚚 SQM Transport Hub - Panel Operacyjny")
 
 # Funkcja nawiązująca połączenie z Google Sheets
 @st.cache_resource
 def init_connection():
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-    # Łączenie bezpośrednio po ID arkusza
     sh = gc.open_by_key("1Vw72-HoJhhYMvI5FpcrmeFAhXfDF-mcjpSazyak9Tc4") 
     return sh
 
-try:
-    sh = init_connection()
-    worksheet = sh.worksheet("DB_Eventy") # Pamiętaj o utworzeniu takiej zakładki
-    
-    # Pobieranie danych z Google Sheets
+# Uniwersalna funkcja do pobierania danych i nagłówków z konkretnej zakładki
+def load_data(sh, sheet_name):
+    worksheet = sh.worksheet(sheet_name)
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
     
-    # Jeśli arkusz jest zupełnie pusty, system potrzebuje pustej tabeli do pokazania
+    # Jeśli arkusz ma tylko nagłówki (brak danych), pobieramy same nagłówki
     if df.empty:
-        df = pd.DataFrame(columns=["ID_Zlecenia", "Nazwa_Targow", "Project_Manager", "Typ_Pojazdu", "Zakonczone_Arch"])
-    
-    st.success("✅ Połączenie z bazą aktywne. Możesz edytować dane bezpośrednio w tabeli.")
-    
-    # Tworzenie interaktywnego edytora (num_rows="dynamic" pozwala dodawać nowe wiersze na dole)
-    edited_df = st.data_editor(
-        df, 
-        num_rows="dynamic", 
-        use_container_width=True,
-        hide_index=True
-    )
-    
-    # Przycisk wymuszający fizyczny zapis do Google Sheets
-    if st.button("💾 Zapisz zmiany w bazie"):
-        with st.spinner('Zapisywanie zmian...'):
-            # Najbezpieczniejsza metoda nadpisania danych: czyszczenie i wklejenie na nowo
-            worksheet.clear()
-            # Łączymy nagłówki kolumn z danymi i wysyłamy do arkusza
-            worksheet.update(values=[edited_df.columns.values.tolist()] + edited_df.values.tolist(), range_name='A1')
-        st.success("✅ Dane zostały zaktualizowane w Google Sheets!")
+        headers = worksheet.row_values(1)
+        if headers:
+            df = pd.DataFrame(columns=headers)
+            
+    return worksheet, df
 
+# Uniwersalna funkcja zapisu
+def save_data(worksheet, edited_df):
+    with st.spinner('Zapisywanie zmian w Google Sheets...'):
+        worksheet.clear()
+        worksheet.update(values=[edited_df.columns.values.tolist()] + edited_df.values.tolist(), range_name='A1')
+    st.success("✅ Dane zostały pomyślnie zaktualizowane!")
+
+# Inicjalizacja połączenia
+try:
+    sh = init_connection()
 except Exception as e:
-    st.error(f"❌ Błąd połączenia lub zapisu: {e}")
-    st.info("Upewnij się, że w Google Sheets istnieje zakładka o nazwie 'DB_Eventy' oraz że udostępniłeś plik kontu serwisowemu.")
+    st.error(f"❌ Błąd autoryzacji: {e}")
+    st.stop()
+
+# --- MENU BOCZNE (NAWIGACJA) ---
+st.sidebar.title("Moduły SQM")
+wybrany_modul = st.sidebar.radio(
+    "Przejdź do:",
+    ["🚚 Eventy / Targi", "📦 Subrenty", "🌍 YESTECH Export", "💰 Finanse i Płatności"]
+)
+
+# --- LOGIKA MODUŁÓW ---
+
+if wybrany_modul == "🚚 Eventy / Targi":
+    st.title("🚚 Panel Operacyjny: Eventy i Targi")
+    st.markdown("Zarządzanie flotą, wrzutkami i gotowością magazynu.")
+    
+    worksheet, df = load_data(sh, "DB_Eventy")
+    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    
+    if st.button("💾 Zapisz zmiany - Eventy"):
+        save_data(worksheet, edited_df)
+
+elif wybrany_modul == "📦 Subrenty":
+    st.title("📦 Panel Operacyjny: Subrenty")
+    st.markdown("Pilnowanie terminów zwrotów do Bartosza Krauze i zewnętrznych dostawców.")
+    
+    worksheet, df = load_data(sh, "DB_Subrenty")
+    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    
+    if st.button("💾 Zapisz zmiany - Subrenty"):
+        save_data(worksheet, edited_df)
+
+elif wybrany_modul == "🌍 YESTECH Export":
+    st.title("🌍 Panel Operacyjny: YESTECH Export")
+    st.markdown("Lejek logistyczny dla działu handlowego (Basia).")
+    
+    worksheet, df = load_data(sh, "DB_Yestech")
+    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True, hide_index=True)
+    
+    if st.button("💾 Zapisz zmiany - YESTECH"):
+        save_data(worksheet, edited_df)
+
+elif wybrany_modul == "💰 Finanse i Płatności":
+    st.title("💰 Moduł: Finanse i Płatności")
+    st.info("Ten moduł jest w budowie. Tutaj pojawi się globalne zestawienie opóźnionych i nadchodzących płatności ze wszystkich trzech powyższych zakładek naraz.")
