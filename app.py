@@ -116,7 +116,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 4.0.0 (Smart Form Engine)")
+    st.caption("Wersja systemu: 4.1.0 (POD & Smart Form)")
     st.caption("Użytkownik: PM / Logistics")
 
 # --- MODUŁY GŁÓWNE ---
@@ -133,13 +133,13 @@ if wybrany_modul == "🚚 Eventy / Targi":
         st.metric("Aktywne Transporty", len(df_aktywne))
     with col2:
         braki_cmr = len(df_aktywne[df_aktywne.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
-        st.metric("Oczekujące CMR", braki_cmr)
+        st.metric("Brakujące POD (CMR)", braki_cmr)
     with col3:
         st.metric("Status Bazy", "Synchronizowana 🟢")
     
     st.divider()
 
-    # Zakładki operacyjne zamiast jednej płaskiej tabeli
+    # Zakładki operacyjne
     tab_podglad, tab_formularz, tab_archiwum = st.tabs([
         "📊 Aktywne Transporty (Podgląd)", 
         "➕ Dodaj / Edytuj Zlecenie (Formularz)", 
@@ -171,12 +171,12 @@ if wybrany_modul == "🚚 Eventy / Targi":
                 koszt_dodatkowy = st.number_input("Koszt Dodatkowy (PLN)", min_value=0, value=0, format="%d")
 
             st.markdown("---")
-            st.markdown("### 📄 Dokumenty, CMR i Finanse")
+            st.markdown("### 📄 Rozliczenie i Dowód Dostawy (POD)")
             
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1:
-                # CMR jest wymagane niezależnie od typu (można zaznaczyć czy jest wystawione)
-                cmr_gotowe = st.selectbox("CMR Wystawione / Gotowe?", ["NIE", "TAK"])
+                # Rozróżnienie na podpisaną CMR / POD po zakończeniu usługi
+                podpisana_cmr_pod = st.selectbox("Podpisana CMR / POD (Dowód Dostawy)", ["NIE", "TAK"])
             with d_col2:
                 pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
             with d_col3:
@@ -201,9 +201,8 @@ if wybrany_modul == "🚚 Eventy / Targi":
                 if not nazwa_targow or not przewoznik:
                     st.error("❌ Musisz uzupełnić nazwę targów oraz przewoźnika/kierowcę!")
                 else:
-                    # Tworzenie nowego wiersza słownikowego
                     nowy_wiersz = {
-                        "ID_Zlecenia": "", # Wygeneruje się automatycznie
+                        "ID_Zlecenia": "", 
                         "Nazwa_Targow": nazwa_targow,
                         "Typ_Transportu": typ_transportu,
                         "Project_Manager": project_manager,
@@ -217,7 +216,7 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "ETA_Wydania": "",
                         "Wrzutka_PM": "TAK",
                         "Koszt_Dodatkowy": koszt_dodatkowy,
-                        "CMR_Gotowe": cmr_gotowe,
+                        "CMR_Gotowe": podpisana_cmr_pod, # Zapisujemy status podpisanego POD
                         "Nr_Zlecenia_Zewn": nr_zlecenia_zewn,
                         "Nr_Faktury": nr_faktury,
                         "Data_Zakonczenia_Uslugi": "",
@@ -227,13 +226,8 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "Zakonczone_Arch": "NIE"
                     }
                     
-                    # Dołączenie do DataFrame
                     df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                    
-                    # Generowanie inteligentnego ID
                     df = generuj_smart_id(df, kolumna_glowna="Nazwa_Targow", kolumna_dodatkowa="Przewoznik", nazwa_kolumny_id="ID_Zlecenia")
-                    
-                    # Zapis do Google Sheets
                     save_data(worksheet, df)
                     st.success("🎉 Zlecenie zostało pomyślnie dodane i zsynchronizowane z chmurą!")
                     st.rerun()
