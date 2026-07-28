@@ -40,22 +40,18 @@ def load_data(sh, sheet_name):
         if kol not in df.columns:
             df[kol] = ""
             
-    # Kolumny dedykowane dla Eventów
+    # Kolumny dedykowane dla Eventów - Uproszczone
     if sheet_name == "DB_Eventy":
         domyslne_kolumny_eventy = {
             "Typ_Transportu": "Zewnętrzny",
             "ID_Zlecenia": "",
             "Nazwa_Targow": "",
-            "Project_Manager": "",
             "Faza_Procesu": "Inicjacja",
             "Typ_Pojazdu": "",
             "Przewoznik": "",
             "Data_Zlecenia_Tr": str(datetime.date.today()),
             "Status_Magazyn": "Brak gotowości",
-            "Magazyn_Powod": "",
-            "ETA_Wydania": "",
-            "Wrzutka_PM": "NIE",
-            "Koszt_Dodatkowy": 0,
+            "Notatki": "",
             "Nr_Zlecenia_Zewn": "",
             "Nr_Faktury": "",
             "Data_Zakonczenia_Uslugi": "",
@@ -115,8 +111,8 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 4.3.0 (Start & End POD)")
-    st.caption("Użytkownik: PM / Logistics")
+    st.caption("Wersja systemu: 4.4.0 (Simplified UI)")
+    st.caption("Użytkownik: Logistics Manager")
 
 # --- MODUŁY GŁÓWNE ---
 
@@ -161,21 +157,18 @@ if wybrany_modul == "🚚 Eventy / Targi":
             with f_col1:
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 typ_transportu = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"])
-                project_manager = st.text_input("Project Manager (PM)")
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. Solówka 12t, Bus)")
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Kierowca *")
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Flota", "Dokumenty", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
+            notatki = st.text_area("Notatki Dodatkowe", placeholder="Wpisz ewentualne uwagi (np. dedykowany PM, wrzutki, powód opóźnienia)...")
+
             st.markdown("---")
-            st.markdown("### 🛫 Dokumenty Startowe i Koszty")
+            st.markdown("### 🛫 Dokumenty Startowe")
             
-            d_start_1, d_start_2 = st.columns(2)
-            with d_start_1:
-                cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"], help="Czy kierowca otrzymał dokument przewozowy na start?")
-            with d_start_2:
-                koszt_dodatkowy = st.number_input("Koszt Dodatkowy (PLN)", min_value=0, value=0, format="%d")
+            cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"], help="Czy kierowca otrzymał dokument przewozowy na start?")
 
             st.markdown("---")
             st.markdown("### 🏁 Rozliczenie i Dowód Dostawy (POD)")
@@ -211,16 +204,12 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "ID_Zlecenia": "", 
                         "Nazwa_Targow": nazwa_targow,
                         "Typ_Transportu": typ_transportu,
-                        "Project_Manager": project_manager,
                         "Faza_Procesu": faza_procesu,
                         "Typ_Pojazdu": typ_pojazdu,
                         "Przewoznik": przewoznik,
                         "Data_Zlecenia_Tr": str(datetime.date.today()),
                         "Status_Magazyn": status_magazyn,
-                        "Magazyn_Powod": "",
-                        "ETA_Wydania": "",
-                        "Wrzutka_PM": "TAK",
-                        "Koszt_Dodatkowy": koszt_dodatkowy,
+                        "Notatki": notatki,
                         "CMR_Gotowe": cmr_gotowe, 
                         "CMR_Podpisane_POD": cmr_podpisane,
                         "Nr_Zlecenia_Zewn": nr_zlecenia_zewn,
