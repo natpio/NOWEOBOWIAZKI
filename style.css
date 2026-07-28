@@ -5,26 +5,16 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
 #MainMenu, footer, header {visibility: hidden;}
 
 /* =========================================
-   1. GŁÓWNE TŁA (BŁĘKIT I GRANAT)
+   1. PASEK BOCZNY (GRANAT I ZŁOTO)
 ========================================= */
-/* Jasny błękit dla głównej części aplikacji */
-[data-testid="stAppViewContainer"] {
-    background-color: #F0F6FA !important; 
-    color: #0F172A !important;
-}
-
-/* Ciemny niebieski (granat) ze złotym wzorkiem dla paska bocznego */
+/* Tło w złote kropki na granacie (kolor tła pobierany z config.toml) */
 [data-testid="stSidebar"] {
-    background-color: #0A192F !important;
     background-image: radial-gradient(rgba(212, 175, 55, 0.15) 1px, transparent 1px) !important;
     background-size: 18px 18px !important;
-    border-right: 2px solid #D4AF37 !important; /* Złota linia odgradzająca */
-    padding-top: 1rem !important;
+    border-right: 2px solid #D4AF37 !important;
 }
 
-/* =========================================
-   2. PASEK BOCZNY - LOGO I STOPKA
-========================================= */
+/* Logo tekstowe */
 .sidebar-logo-text {
     font-size: 24px;
     font-weight: 800;
@@ -34,12 +24,12 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
     gap: 10px;
 }
 .sidebar-logo-text span {
-    /* Złoty gradient dla tekstu */
     background: linear-gradient(to right, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
+/* Stopka */
 .sidebar-footer {
     position: absolute;
     bottom: 20px;
@@ -48,61 +38,24 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
     line-height: 1.6;
 }
 
-/* =========================================
-   3. PANCERNE NAPRAWIENIE MENU (ST.RADIO)
-========================================= */
-/* Niezawodne ukrycie kółek wyboru we wszystkich wersjach Streamlit */
-[data-testid="stSidebar"] div[role="radiogroup"] [data-baseweb="radio"] > div:first-child,
-[data-testid="stSidebar"] div[role="radiogroup"] label div:first-of-type {
-    display: none !important;
-}
-
-[data-testid="stSidebar"] div[role="radiogroup"] {
-    gap: 8px !important;
-}
-
-/* Wygląd domyślny przycisku menu (Pigułka) */
+/* Wygląd tekstów w menu bocznym */
 [data-testid="stSidebar"] div[role="radiogroup"] label {
-    padding: 12px 16px !important;
-    border-radius: 8px !important;
-    background-color: rgba(255, 255, 255, 0.05) !important;
-    border: 1px solid rgba(212, 175, 55, 0.1) !important;
-    box-shadow: none !important;
-    width: 100% !important;
-    cursor: pointer !important;
-    transition: all 0.3s ease !important;
+    padding: 10px 0 !important;
 }
-
-[data-testid="stSidebar"] div[role="radiogroup"] label:hover {
-    background-color: rgba(212, 175, 55, 0.1) !important;
-}
-
-/* Wygląd aktywnego przycisku menu (Złoty Akcent) */
-[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {
-    background: linear-gradient(90deg, rgba(212, 175, 55, 0.2) 0%, transparent 100%) !important;
-    border-left: 4px solid #D4AF37 !important;
-    border-radius: 0 8px 8px 0 !important;
-    border-top: 1px solid rgba(212, 175, 55, 0.3) !important;
-    border-bottom: 1px solid rgba(212, 175, 55, 0.3) !important;
-}
-
-/* Kolory tekstów w menu */
 [data-testid="stSidebar"] div[role="radiogroup"] label p {
-    color: #93C5FD !important; /* Jasny błękit */
+    color: #93C5FD !important; 
     font-weight: 500 !important;
-    font-size: 14px !important;
-    margin: 0 !important;
+    font-size: 15px !important;
 }
-
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {
-    color: #FDE047 !important; /* Złoty / Żółty dla aktywnego */
+    color: #FDE047 !important; 
     font-weight: 700 !important;
 }
 
 /* =========================================
-   4. GŁÓWNA TREŚĆ APLIKACJI
+   2. GŁÓWNA TREŚĆ APLIKACJI
 ========================================= */
-h1, h2, h3 { color: #0A192F !important; font-weight: 700 !important; }
+h1, h2, h3 { color: #0A192F !important; font-weight: 800 !important; letter-spacing: -0.5px; }
 
 .section-title {
     font-size: 16px;
@@ -113,13 +66,24 @@ h1, h2, h3 { color: #0A192F !important; font-weight: 700 !important; }
     padding-bottom: 8px;
 }
 
-/* Zakładki (Tabs) dopasowane do jasnego tła */
-[data-baseweb="tab-list"] { gap: 25px; border-bottom: 2px solid #D6E4F0 !important; }
+/* Zakładki (Tabs) */
+[data-baseweb="tab-list"] { gap: 25px; border-bottom: 2px solid #CBD5E1 !important; }
 [data-baseweb="tab"] { background: transparent !important; color: #64748B !important; font-weight: 600 !important; }
 [data-baseweb="tab"][aria-selected="true"] { color: #0A192F !important; border-bottom: 3px solid #0A192F !important; }
 
+/* Kafelki statystyk (Domyślne z Eventów) */
+[data-testid="stMetric"] {
+    background-color: #FFFFFF;
+    border-radius: 12px;
+    padding: 15px 20px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border-left: 5px solid #0A192F;
+}
+[data-testid="stMetricLabel"] { font-size: 13px !important; font-weight: 600 !important; color: #64748B !important; }
+[data-testid="stMetricValue"] { font-size: 32px !important; font-weight: 800 !important; color: #0A192F !important; }
+
 /* =========================================
-   5. KARTY KPI (ALERTY FINANSOWE)
+   3. KARTY KPI (DLA CENTRUM FINANSOWEGO)
 ========================================= */
 .kpi-container { display: flex; gap: 20px; }
 
@@ -139,25 +103,19 @@ h1, h2, h3 { color: #0A192F !important; font-weight: 700 !important; }
 .kpi-red { border-top: 4px solid #EF4444; }
 .kpi-yellow { border-top: 4px solid #F59E0B; }
 
-.kpi-header {
-    font-size: 14px;
-    font-weight: 600;
-    color: #334155;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+.kpi-header { font-size: 14px; font-weight: 600; color: #334155; display: flex; align-items: center; gap: 8px; }
 
 .dot-red { height: 10px; width: 10px; background-color: #EF4444; border-radius: 50%; display: inline-block; box-shadow: 0 0 5px rgba(239,68,68,0.5); }
 .dot-yellow { height: 10px; width: 10px; background-color: #F59E0B; border-radius: 50%; display: inline-block; box-shadow: 0 0 5px rgba(245,158,11,0.5); }
 
 .kpi-value { font-size: 38px; font-weight: 800; margin: 5px 0; line-height: 1; }
 .val-red { color: #EF4444; }
-.val-dark { color: #0F172A; } /* Zamiast białego, bo tło karty jest białe */
+.val-dark { color: #0F172A; } 
 
 .kpi-subtext { font-size: 12px; font-weight: 500; margin-bottom: 12px; }
 .text-green { color: #10B981; }
 .text-gray { color: #64748B; }
+.text-yellow { color: #F59E0B; }
 
 .kpi-btn {
     background: #F1F5F9;
@@ -172,7 +130,6 @@ h1, h2, h3 { color: #0A192F !important; font-weight: 700 !important; }
     transition: 0.2s;
 }
 .kpi-btn:hover { background: #E2E8F0; color: #0F172A; }
-
 .kpi-icon { position: absolute; right: 15px; bottom: -10px; font-size: 90px; opacity: 0.05; }
 
 /* Tabele - info o braku dancyh */
