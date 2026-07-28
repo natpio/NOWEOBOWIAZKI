@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 import re
 
-# 1. KONFIGURACJA STRONY (Zawsze na górze)
+# 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM Transport Hub PRO", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
 
 # 2. ŁADOWANIE ZEWNĘTRZNEGO PLIKU CSS
@@ -25,7 +25,6 @@ def init_connection():
     return sh
 
 def load_data(sh, sheet_name):
-    # Automatyczne tworzenie zakładki w Google Sheets, jeśli nie istnieje
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
@@ -39,7 +38,7 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # Kolumny dedykowane dla Eventów - Uproszczone
+    # Kolumny dedykowane dla Eventów
     if sheet_name == "DB_Eventy":
         wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
         for kol in wymagane:
@@ -68,7 +67,18 @@ def load_data(sh, sheet_name):
             if kol not in df.columns:
                 df[kol] = val
                 
-    # Kolumny dla Książki Adresowej
+    # Kolumny dedykowane dla YESTECH Export (Tematy Basi)
+    elif sheet_name == "DB_Yestech":
+        domyslne_yestech = {
+            "ID_Projektu": "", "Nazwa_Projektu": "", "Etap_Procesu": "1. Zapytanie",
+            "Kraj_Docelowy": "", "Szacowany_Koszt": 0, "Rzeczywisty_Koszt": 0,
+            "Przewoznik_Kurier": "", "Tracking_Nr": "", "Notatki": "", "Zakonczone_Arch": "NIE"
+        }
+        for kol, val in domyslne_yestech.items():
+            if kol not in df.columns:
+                df[kol] = val
+
+    # Książka Adresowa
     elif sheet_name == "DB_Katalog_Firm":
         if "Nazwa_Firmy" not in df.columns:
             df["Nazwa_Firmy"] = ""
@@ -123,14 +133,13 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 5.0.0 (Address Book & Subrents)")
+    st.caption("Wersja systemu: 6.0.0 (Full 3-Module Architecture)")
     st.caption("Użytkownik: Logistics Manager")
 
 # --- MODUŁY GŁÓWNE ---
 
 if wybrany_modul == "🚚 Eventy / Targi":
     st.title("🚚 Eventy & Flota (Panel Zarządzania)")
-    
     worksheet, df = load_data(sh, "DB_Eventy")
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
@@ -145,9 +154,7 @@ if wybrany_modul == "🚚 Eventy / Targi":
     
     st.divider()
 
-    tab_podglad, tab_formularz, tab_archiwum = st.tabs([
-        "📊 Aktywne Transporty (Podgląd)", "➕ Dodaj Zlecenie (Formularz)", "📦 Archiwum"
-    ])
+    tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne", "➕ Dodaj Zlecenie", "📦 Archiwum"])
 
     with tab_podglad:
         if not df_aktywne.empty:
@@ -168,10 +175,10 @@ if wybrany_modul == "🚚 Eventy / Targi":
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
             notatki = st.text_area("Notatki Dodatkowe")
-
+            
             st.markdown("### 🛫 Dokumenty Startowe")
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
-
+            
             st.markdown("### 🏁 Rozliczenie i Dowód Dostawy (POD)")
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1:
@@ -220,12 +227,10 @@ if wybrany_modul == "🚚 Eventy / Targi":
 elif wybrany_modul == "📦 Subrenty":
     st.title("📦 Hub Wypożyczeń (Subrenty)")
     
-    # Inicjalizacja bazy Subrentów i Książki Adresowej
     worksheet_sub, df_sub = load_data(sh, "DB_Subrenty")
     worksheet_firmy, df_firmy = load_data(sh, "DB_Katalog_Firm")
     
     katalog_firm = df_firmy["Nazwa_Firmy"].dropna().unique().tolist() if not df_firmy.empty else []
-
     df_aktywne_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_sub.empty else df_sub
     
     col1, col2 = st.columns(2)
@@ -236,9 +241,7 @@ elif wybrany_modul == "📦 Subrenty":
         
     st.divider()
 
-    tab_podglad, tab_formularz, tab_archiwum = st.tabs([
-        "📊 Aktywne Wypożyczenia (Podgląd)", "➕ Dodaj Subrent (Formularz)", "📦 Archiwum"
-    ])
+    tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne Wypożyczenia", "➕ Dodaj Subrent", "📦 Archiwum"])
 
     with tab_podglad:
         if not df_aktywne_sub.empty:
@@ -247,14 +250,12 @@ elif wybrany_modul == "📦 Subrenty":
             st.info("Brak aktywnych wypożyczeń sprzętu.")
 
     with tab_formularz:
-        st.subheader("Formularz Rejestracji Sprzętu")
-        
         with st.form("form_subrent", clear_on_submit=True):
             s_col1, s_col2 = st.columns(2)
             with s_col1:
                 nazwa_sprzetu = st.text_input("Nazwa Sprzętu / Cel Wypożyczenia *")
-                wybor_firmy = st.selectbox("Wybierz z książki adresowej *", ["-- Dodaj nową firmę (wpisz poniżej) --"] + sorted(katalog_firm))
-                nowa_firma = st.text_input("Nowa firma (wypełnij, jeśli brak na liście wyżej)")
+                wybor_firmy = st.selectbox("Wybierz z książki adresowej *", ["-- Dodaj nową firmę --"] + sorted(katalog_firm))
+                nowa_firma = st.text_input("Nowa firma (jeśli brak na liście wyżej)")
             with s_col2:
                 status_sub = st.selectbox("Status", ["Zamówione", "Odebrane", "Zwrócone", "Rozliczone"])
                 koszt = st.number_input("Koszt całkowity (PLN)", min_value=0, value=0, format="%d")
@@ -268,18 +269,15 @@ elif wybrany_modul == "📦 Subrenty":
             notatki_sub = st.text_area("Dodatkowe Notatki")
 
             if st.form_submit_button("💾 Zapisz Subrent"):
-                # Logika weryfikująca, skąd bierzemy firmę
-                firma_docelowa = nowa_firma.strip() if wybor_firmy == "-- Dodaj nową firmę (wpisz poniżej) --" else wybor_firmy
+                firma_docelowa = nowa_firma.strip() if wybor_firmy == "-- Dodaj nową firmę --" else wybor_firmy
                 
                 if not nazwa_sprzetu or not firma_docelowa:
                     st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać firmę zewnętrzną!")
                 else:
-                    # Aktualizacja książki adresowej, jeśli firma jest nowa
                     if firma_docelowa not in katalog_firm:
                         df_firmy = pd.concat([df_firmy, pd.DataFrame([{"Nazwa_Firmy": firma_docelowa}])], ignore_index=True)
                         save_data(worksheet_firmy, df_firmy)
                         
-                    # Zapis Subrentu
                     czy_arch = "TAK" if status_sub in ["Zwrócone", "Rozliczone"] else "NIE"
                     nowy_wiersz = {
                         "ID_Subrentu": "", "Nazwa_Sprzetu": nazwa_sprzetu, "Firma_Zewnetrzna": firma_docelowa,
@@ -289,8 +287,7 @@ elif wybrany_modul == "📦 Subrenty":
                     df_sub = pd.concat([df_sub, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df_sub = generuj_smart_id(df_sub, "Firma_Zewnetrzna", "Nazwa_Sprzetu", "ID_Subrentu")
                     save_data(worksheet_sub, df_sub)
-                    
-                    st.success(f"🎉 Zapisano subrent na sprzęt z firmy {firma_docelowa}!")
+                    st.success(f"🎉 Zapisano subrent!")
                     st.rerun()
 
     with tab_archiwum:
@@ -301,11 +298,81 @@ elif wybrany_modul == "📦 Subrenty":
             st.info("Brak zarchiwizowanych wypożyczeń.")
 
 elif wybrany_modul == "🌍 YESTECH Export":
-    st.title("🌍 YESTECH Global")
-    worksheet, df = load_data(sh, "DB_Yestech")
-    st.info("Moduł lejka logistycznego handlowego.")
-    if not df.empty:
-        st.dataframe(df, use_container_width=True, hide_index=True)
+    st.title("🌍 YESTECH Global (Lejek Eksportowy)")
+    
+    worksheet_yt, df_yt = load_data(sh, "DB_Yestech")
+    
+    # Wyświetlamy aktywne jako te, które nie mają statusu końcowego
+    df_aktywne_yt = df_yt[df_yt.get("Etap_Procesu", pd.Series()) != "5. Rozliczone"] if not df_yt.empty else df_yt
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Aktywne Projekty (W toku)", len(df_aktywne_yt))
+    with col2:
+        oczekujace = len(df_aktywne_yt[df_aktywne_yt.get("Etap_Procesu", pd.Series()) == "1. Zapytanie"]) if not df_aktywne_yt.empty else 0
+        st.metric("Oczekujące na wycenę", oczekujace)
+        
+    st.divider()
+
+    tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Lejek (Podgląd)", "➕ Zgłoś / Aktualizuj Temat", "📦 Zamknięte i Rozliczone"])
+
+    with tab_podglad:
+        if not df_aktywne_yt.empty:
+            st.dataframe(df_aktywne_yt, use_container_width=True, hide_index=True)
+        else:
+            st.info("Brak otwartych tematów w lejku.")
+
+    with tab_formularz:
+        st.subheader("Formularz Ofertowo-Kosztowy (Dla Ciebie i Basi)")
+        with st.form("form_yestech", clear_on_submit=True):
+            y_col1, y_col2 = st.columns(2)
+            with y_col1:
+                nazwa_projektu = st.text_input("Nazwa Projektu / Klient *")
+                kraj_docelowy = st.text_input("Kraj Docelowy")
+            with y_col2:
+                etap_procesu = st.selectbox("Obecny Etap *", [
+                    "1. Zapytanie", 
+                    "2. Wycena", 
+                    "3. Akceptacja", 
+                    "4. Realizacja transportu", 
+                    "5. Rozliczone"
+                ])
+                przewoznik_kurier = st.text_input("Przewoźnik / Spedytor")
+
+            st.markdown("### 💰 Finanse i Kontrola Kosztów")
+            f_col1, f_col2 = st.columns(2)
+            with f_col1:
+                szacowany_koszt = st.number_input("Szacowany Koszt z Wyceny (PLN)", min_value=0, value=0, format="%d")
+            with f_col2:
+                rzeczywisty_koszt = st.number_input("Rzeczywisty Koszt po Fakcie (PLN)", min_value=0, value=0, format="%d")
+
+            st.markdown("### 📦 Logistyka")
+            tracking_nr = st.text_input("Numer Listu Przewozowego / Tracking")
+            notatki_yt = st.text_area("Informacje / Notatki dla Basi")
+
+            if st.form_submit_button("💾 Aktualizuj Lejek YESTECH"):
+                if not nazwa_projektu:
+                    st.error("❌ Musisz podać nazwę projektu lub klienta!")
+                else:
+                    czy_arch = "TAK" if etap_procesu == "5. Rozliczone" else "NIE"
+                    nowy_wiersz = {
+                        "ID_Projektu": "", "Nazwa_Projektu": nazwa_projektu, "Etap_Procesu": etap_procesu,
+                        "Kraj_Docelowy": kraj_docelowy, "Szacowany_Koszt": szacowany_koszt, 
+                        "Rzeczywisty_Koszt": rzeczywisty_koszt, "Przewoznik_Kurier": przewoznik_kurier, 
+                        "Tracking_Nr": tracking_nr, "Notatki": notatki_yt, "Zakonczone_Arch": czy_arch
+                    }
+                    df_yt = pd.concat([df_yt, pd.DataFrame([nowy_wiersz])], ignore_index=True)
+                    df_yt = generuj_smart_id(df_yt, "Nazwa_Projektu", "Kraj_Docelowy", "ID_Projektu")
+                    save_data(worksheet_yt, df_yt)
+                    st.success("🎉 Projekt zapisany w lejku!")
+                    st.rerun()
+
+    with tab_archiwum:
+        df_arch_yt = df_yt[df_yt.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_yt.empty else pd.DataFrame()
+        if not df_arch_yt.empty:
+            st.dataframe(df_arch_yt, use_container_width=True, hide_index=True)
+        else:
+            st.info("Brak rozliczonych i zamkniętych projektów.")
 
 elif wybrany_modul == "📊 Finanse i Raporty":
     st.title("📊 Centrum Finansowe")
