@@ -10,45 +10,188 @@ html, body, [class*="css"] {
 footer {visibility: hidden;}
 header {visibility: hidden;}
 
-/* Lekko szare tło całej aplikacji (jak w nowoczesnych apkach webowych) */
-.stApp {
-    background-color: #F8FAFC;
+/* --- GŁÓWNA KOLORYSTYKA APLIKACJI (DARK THEME) --- */
+[data-testid="stAppViewContainer"] {
+    background-color: #16171D;
+    color: #E2E8F0;
+}
+
+/* --- MENU BOCZNE (SIDEBAR) --- */
+[data-testid="stSidebar"] {
+    background-color: #1E212B !important;
+    border-right: 1px solid #2D313F !important;
+}
+
+/* Gradient Logo TEXT w Menu Bocznym */
+.sidebar-logo-text {
+    font-size: 24px;
+    font-weight: 800;
+    background: linear-gradient(90deg, #FFFFFF 0%, #E87A5D 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 10px;
+}
+
+/* Ukrywanie kółek (Radio buttons) w Nawigacji */
+[data-testid="stSidebar"] div[role="radiogroup"] label span:first-child {
+    display: none !important;
+}
+
+/* Stylizacja zakładek menu bocznego - Pigułki zamiast standardowych kółek */
+[data-testid="stSidebar"] div[role="radiogroup"] label {
+    padding: 12px 15px !important;
+    border-radius: 8px !important;
+    margin-bottom: 5px !important;
+    background-color: transparent !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Aktywna zakładka w menu (Gradient i obramowanie) */
+[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"]:has(input:checked) {
+    background: linear-gradient(90deg, rgba(65,40,40,1) 0%, rgba(30,33,43,1) 100%) !important;
+    border-left: 4px solid #E87A5D !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label p {
+    color: #9CA3AF !important;
+    font-weight: 500 !important;
+    font-size: 15px !important;
+}
+
+[data-testid="stSidebar"] div[role="radiogroup"] label[data-baseweb="radio"]:has(input:checked) p {
+    color: #FFFFFF !important;
+    font-weight: 600 !important;
 }
 
 /* --- NAGŁÓWKI --- */
 h1 {
     font-weight: 800 !important;
-    color: #0F172A !important;
-    letter-spacing: -1.5px !important;
+    color: #FFFFFF !important;
+    letter-spacing: -1px !important;
     padding-bottom: 1rem;
 }
 
 h2, h3 {
     font-weight: 600 !important;
-    color: #1E293B !important;
+    color: #E2E8F0 !important;
     letter-spacing: -0.5px !important;
 }
 
-/* --- KAFELKI WSKAŹNIKÓW (METRICS) --- */
-/* Zamieniamy domyślne liczniki na eleganckie, lewitujące karty z akcentem */
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #FFFFFF;
+    margin: 20px 0 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* --- KARTY KPI (ALERTY I BLOKADY) --- */
+.kpi-container {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 25px;
+}
+
+.kpi-card {
+    flex: 1;
+    padding: 20px;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.kpi-red {
+    background: linear-gradient(135deg, rgba(255, 75, 75, 0.15) 0%, rgba(35, 35, 45, 1) 100%);
+    border: 1px solid rgba(255, 75, 75, 0.2);
+}
+
+.kpi-yellow {
+    background: linear-gradient(135deg, rgba(250, 202, 43, 0.15) 0%, rgba(35, 35, 45, 1) 100%);
+    border: 1px solid rgba(250, 202, 43, 0.2);
+}
+
+.kpi-header {
+    font-size: 16px;
+    font-weight: 600;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+
+.kpi-value {
+    font-size: 48px;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 5px;
+}
+
+.text-red { color: #FF4B4B; }
+.text-yellow { color: #FACA2B; }
+
+.kpi-subtext {
+    font-size: 13px;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+
+.text-green { color: #4ADE80; }
+.text-gray { color: #9CA3AF; }
+
+.kpi-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #D1D5DB;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    width: fit-content;
+    transition: 0.3s;
+    cursor: pointer;
+}
+
+.kpi-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #FFFFFF;
+}
+
+.kpi-icon {
+    position: absolute;
+    right: 10px;
+    top: 20px;
+    font-size: 80px;
+    opacity: 0.2;
+    filter: grayscale(100%);
+}
+
+/* --- DOMYŚLNE WSKAŹNIKI STREAMLIT (ST.METRIC) - PRZEPISANE NA DARK --- */
 [data-testid="stMetric"] {
-    background-color: #FFFFFF;
+    background-color: #1E212B;
     border-radius: 12px;
     padding: 20px 24px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-    border-left: 5px solid #2563EB; /* Niebieski akcent z lewej strony */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+    border-left: 5px solid #E87A5D; /* Akcent w kolorze logo */
     transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 [data-testid="stMetric"]:hover {
     transform: translateY(-4px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
 }
 
 [data-testid="stMetricLabel"] {
     font-size: 0.9rem !important;
     font-weight: 500 !important;
-    color: #64748B !important;
+    color: #9CA3AF !important;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -56,20 +199,36 @@ h2, h3 {
 [data-testid="stMetricValue"] {
     font-size: 2.2rem !important;
     font-weight: 700 !important;
-    color: #0F172A !important;
+    color: #FFFFFF !important;
     padding-top: 5px;
+}
+
+/* --- ZAKŁADKI (TABS) W DARK UI --- */
+[data-baseweb="tab-list"] {
+    gap: 20px;
+}
+
+[data-baseweb="tab"] {
+    background: transparent !important;
+    color: #9CA3AF !important;
+    border-bottom: 2px solid transparent !important;
+}
+
+[data-baseweb="tab"][aria-selected="true"] {
+    color: #FFFFFF !important;
+    border-bottom: 2px solid #E87A5D !important;
 }
 
 /* --- PRZYCISK ZAPISU (CALL TO ACTION) --- */
 .stButton > button {
-    background: linear-gradient(135deg, #1E40AF 0%, #2563EB 100%) !important;
-    color: white !important;
+    background: linear-gradient(135deg, #2D313F 0%, #1E212B 100%) !important;
+    color: #E2E8F0 !important;
     font-size: 1rem !important;
     font-weight: 600 !important;
     border-radius: 8px !important;
-    border: none !important;
+    border: 1px solid #374151 !important;
     padding: 0.6rem 2.5rem !important;
-    box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.39) !important;
+    box-shadow: 0 4px 14px 0 rgba(0, 0, 0, 0.2) !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     text-transform: uppercase;
     letter-spacing: 1px;
@@ -77,52 +236,31 @@ h2, h3 {
 
 .stButton > button:hover {
     transform: translateY(-2px) !important;
-    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.23) !important;
-    background: linear-gradient(135deg, #1E3A8A 0%, #1D4ED8 100%) !important;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4) !important;
+    border-color: #E87A5D !important;
+    color: #FFFFFF !important;
 }
 
 .stButton > button:active {
     transform: translateY(1px) !important;
-    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2) !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* --- MENU BOCZNE (SIDEBAR) --- */
-[data-testid="stSidebar"] {
-    background-color: #FFFFFF !important;
-    border-right: 1px solid #E2E8F0;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.02);
-}
-
-[data-testid="stSidebarNav"] span {
+/* --- TABELE I ALERT Z "BRAKIEM DANYCH" --- */
+.empty-table-msg {
+    text-align: center;
+    color: #FF4B4B;
+    background-color: rgba(255,75,75,0.05);
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(255,75,75,0.2);
     font-weight: 500;
-    font-size: 1.05rem;
+    margin-top: 10px;
 }
 
-/* --- WYGLĄD PRZEŁĄCZNIKÓW (RADIO BUTTONS) --- */
-/* Robimy z nich ładne "pigułki" zamiast standardowych kółek */
-div[role="radiogroup"] {
-    gap: 10px;
-    padding: 5px 0 15px 0;
-}
-
-div[role="radiogroup"] > label {
-    background-color: #FFFFFF !important;
-    border: 1px solid #CBD5E1 !important;
-    border-radius: 8px !important;
-    padding: 10px 20px !important;
-    cursor: pointer !important;
-    transition: all 0.2s ease-in-out !important;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.02);
-}
-
-div[role="radiogroup"] > label:hover {
-    border-color: #94A3B8 !important;
-    background-color: #F1F5F9 !important;
-}
-
-/* --- KOMUNIKATY I ALERTY --- */
+/* --- KOMUNIKATY (ALERTS) --- */
 [data-testid="stAlert"] {
     border-radius: 8px !important;
     border: none !important;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.02) !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
 }
