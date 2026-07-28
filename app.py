@@ -4,7 +4,7 @@ import pandas as pd
 import datetime
 import re
 
-# 1. KONFIGURACJA STRONY (Zawsze na górze)
+# 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM Transport Hub PRO", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
 
 # 2. ŁADOWANIE ZEWNĘTRZNEGO PLIKU CSS
@@ -38,7 +38,7 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # --- KOLUMNY DLA EVENTÓW ---
+    # --- KOLUMNY DLA EVENTÓW (dodano Koszt_Transportu_EUR) ---
     if sheet_name == "DB_Eventy":
         wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
         for kol in wymagane:
@@ -49,7 +49,7 @@ def load_data(sh, sheet_name):
             "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
             "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
             "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
-            "Notatki": "", "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
+            "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
             "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
         }
         for kol, val in domyslne_kolumny.items():
@@ -61,13 +61,13 @@ def load_data(sh, sheet_name):
         domyslne_subrenty = {
             "ID_Subrentu": "", "Nazwa_Sprzetu": "", "Firma_Zewnetrzna": "",
             "Data_Odbioru": str(datetime.date.today()), "Data_Zwrotu": str(datetime.date.today()),
-            "Status": "Zamówione", "Koszt": 0, "Notatki": "", "Zakonczone_Arch": "NIE"
+            "Status": "Zamówione", "Koszt": 0.0, "Notatki": "", "Zakonczone_Arch": "NIE"
         }
         for kol, val in domyslne_subrenty.items():
             if kol not in df.columns:
                 df[kol] = val
                 
-    # --- KOLUMNY DLA YESTECH (DOKŁADNA STRUKTURA GOOGLE SHEETS) ---
+    # --- KOLUMNY DLA YESTECH ---
     elif sheet_name == "DB_Yestech":
         domyslne_yestech = {
             "ID_Yestech": "", "Data_Zgloszenia": str(datetime.date.today()),
@@ -78,13 +78,9 @@ def load_data(sh, sheet_name):
             "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "",
             "Zakonczone_Arch": "NIE"
         }
-        
-        # Tworzenie kolumn, jeśli nie istnieją
         for kol in domyslne_yestech.keys():
             if kol not in df.columns:
                 df[kol] = domyslne_yestech[kol]
-                
-        # Wymuszamy konkretną kolejność kolumn zgodną z arkuszem
         df = df[list(domyslne_yestech.keys())]
 
     # --- KOLUMNY DLA KSIĄŻKI ADRESOWEJ ---
@@ -102,28 +98,18 @@ def save_data(worksheet, edited_df):
 
 def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID_Zlecenia"):
     licznik_elementow = {}
-    
     if nazwa_kolumny_id not in df.columns:
         df[nazwa_kolumny_id] = ""
-    
     for idx, row in df.iterrows():
         wartosc1 = str(row.get(kolumna_glowna, '')).strip().upper()
         wartosc2 = str(row.get(kolumna_dodatkowa, '')).strip().upper()
-        
-        if not wartosc1 and not wartosc2:
-            continue
-            
-        if wartosc1 not in licznik_elementow:
-            licznik_elementow[wartosc1] = 1
-        else:
-            licznik_elementow[wartosc1] += 1
-            
+        if not wartosc1 and not wartosc2: continue
+        if wartosc1 not in licznik_elementow: licznik_elementow[wartosc1] = 1
+        else: licznik_elementow[wartosc1] += 1
         czesc1 = re.sub(r'[^A-Z0-9]', '', wartosc1)[:4] if wartosc1 else "BRAK"
         czesc2 = re.sub(r'[^A-Z0-9]', '', wartosc2)[:4] if wartosc2 else "BRAK"
         numer = str(licznik_elementow[wartosc1]).zfill(2)
-        
         df.at[idx, nazwa_kolumny_id] = f"{czesc1}-{czesc2}-{numer}"
-        
     return df
 
 try:
@@ -142,11 +128,12 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     st.markdown("---")
-    st.caption("Wersja systemu: 7.0.0 (Yestech Sync + Calc)")
+    st.caption("Wersja systemu: 8.0.0 (EUR Finance Hub)")
     st.caption("Użytkownik: Logistics Manager")
 
-# --- MODUŁY GŁÓWNE ---
-
+# ==========================================
+# 🚚 MODUŁ: EVENTY / TARGI
+# ==========================================
 if wybrany_modul == "🚚 Eventy / Targi":
     st.title("🚚 Eventy & Flota (Panel Zarządzania)")
     worksheet, df = load_data(sh, "DB_Eventy")
@@ -162,7 +149,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
         st.metric("Status Bazy", "Synchronizowana 🟢")
     
     st.divider()
-
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne", "➕ Dodaj Zlecenie", "📦 Archiwum"])
 
     with tab_podglad:
@@ -197,13 +183,18 @@ if wybrany_modul == "🚚 Eventy / Targi":
             with d_col3:
                 faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
 
+            # Koszty i dokumenty specyficzne dla zewnętrznych
             if typ_transportu == "Zewnętrzny":
-                e_col1, e_col2 = st.columns(2)
+                e_col1, e_col2, e_col3 = st.columns(3)
                 with e_col1:
-                    nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
+                    koszt_transportu = st.number_input("Koszt Transportu (€)", min_value=0.0, value=0.0, step=50.0)
                 with e_col2:
-                    nr_faktury = st.text_input("Nr Faktury Kosztowej Przewoźnika *")
+                    nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
+                with e_col3:
+                    nr_faktury = st.text_input("Nr Faktury Przewoźnika")
             else:
+                st.info("Flota własna - brak kosztów zewnętrznych faktur.")
+                koszt_transportu = 0.0
                 nr_zlecenia_zewn = "FLOTA WŁASNA"
                 nr_faktury = "N/A"
 
@@ -215,9 +206,9 @@ if wybrany_modul == "🚚 Eventy / Targi":
                         "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
                         "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
                         "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": status_magazyn,
-                        "Notatki": notatki, "CMR_Gotowe": cmr_gotowe, "CMR_Podpisane_POD": cmr_podpisane,
-                        "Nr_Zlecenia_Zewn": nr_zlecenia_zewn, "Nr_Faktury": nr_faktury,
-                        "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
+                        "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
+                        "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zlecenia_zewn, 
+                        "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
                     }
                     df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
@@ -233,6 +224,9 @@ if wybrany_modul == "🚚 Eventy / Targi":
         else:
             st.info("Brak zarchiwizowanych zleceń.")
 
+# ==========================================
+# 📦 MODUŁ: SUBRENTY
+# ==========================================
 elif wybrany_modul == "📦 Subrenty":
     st.title("📦 Hub Wypożyczeń (Subrenty)")
     
@@ -249,14 +243,11 @@ elif wybrany_modul == "📦 Subrenty":
         st.metric("Firmy w bazie (Książka)", len(katalog_firm))
         
     st.divider()
-
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne Wypożyczenia", "➕ Dodaj Subrent", "📦 Archiwum"])
 
     with tab_podglad:
         if not df_aktywne_sub.empty:
             st.dataframe(df_aktywne_sub, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak aktywnych wypożyczeń sprzętu.")
 
     with tab_formularz:
         with st.form("form_subrent", clear_on_submit=True):
@@ -267,7 +258,7 @@ elif wybrany_modul == "📦 Subrenty":
                 nowa_firma = st.text_input("Nowa firma (jeśli brak na liście wyżej)")
             with s_col2:
                 status_sub = st.selectbox("Status", ["Zamówione", "Odebrane", "Zwrócone", "Rozliczone"])
-                koszt = st.number_input("Koszt całkowity (PLN)", min_value=0, value=0, format="%d")
+                koszt = st.number_input("Koszt całkowity (€)", min_value=0.0, value=0.0, step=50.0)
 
             d_col1, d_col2 = st.columns(2)
             with d_col1:
@@ -279,7 +270,6 @@ elif wybrany_modul == "📦 Subrenty":
 
             if st.form_submit_button("💾 Zapisz Subrent"):
                 firma_docelowa = nowa_firma.strip() if wybor_firmy == "-- Dodaj nową firmę --" else wybor_firmy
-                
                 if not nazwa_sprzetu or not firma_docelowa:
                     st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać firmę zewnętrzną!")
                 else:
@@ -296,24 +286,22 @@ elif wybrany_modul == "📦 Subrenty":
                     df_sub = pd.concat([df_sub, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df_sub = generuj_smart_id(df_sub, "Firma_Zewnetrzna", "Nazwa_Sprzetu", "ID_Subrentu")
                     save_data(worksheet_sub, df_sub)
-                    st.success(f"🎉 Zapisano subrent!")
+                    st.success("🎉 Zapisano subrent!")
                     st.rerun()
 
     with tab_archiwum:
         df_arch_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_sub.empty else pd.DataFrame()
         if not df_arch_sub.empty:
             st.dataframe(df_arch_sub, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych wypożyczeń.")
 
+# ==========================================
+# 🌍 MODUŁ: YESTECH EXPORT
+# ==========================================
 elif wybrany_modul == "🌍 YESTECH Export":
     st.title("🌍 YESTECH Global (Lejek Eksportowy)")
-    
     worksheet_yt, df_yt = load_data(sh, "DB_Yestech")
     
-    # Wyświetlamy aktywne jako te, które nie są wybrane w archiwum
     df_aktywne_yt = df_yt[df_yt.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_yt.empty else df_yt
-    
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Aktywne Projekty (W toku)", len(df_aktywne_yt))
@@ -322,41 +310,30 @@ elif wybrany_modul == "🌍 YESTECH Export":
         st.metric("Oczekujące na wycenę", oczekujace)
         
     st.divider()
-
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Lejek (Podgląd)", "➕ Zgłoś / Aktualizuj Temat", "📦 Archiwum"])
 
     with tab_podglad:
         if not df_aktywne_yt.empty:
             st.dataframe(df_aktywne_yt, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak otwartych tematów w lejku.")
 
     with tab_formularz:
-        st.subheader("Formularz Ofertowo-Kosztowy (Dla Basi)")
         with st.form("form_yestech", clear_on_submit=True):
-            
             y_col1, y_col2 = st.columns(2)
             with y_col1:
                 destynacja = st.text_input("Destynacja *")
                 gabaryt = st.text_input("Gabaryt (np. 2 palety, 150kg)")
                 przewoznik = st.text_input("Przewoźnik")
             with y_col2:
-                status_ofertowy = st.selectbox("Status Ofertowy", [
-                    "1. Zapytanie", 
-                    "2. Wycenione", 
-                    "3. Akceptacja", 
-                    "4. Zlecone", 
-                    "5. Zakończone"
-                ])
+                status_ofertowy = st.selectbox("Status Ofertowy", ["1. Zapytanie", "2. Wycenione", "3. Akceptacja", "4. Zlecone", "5. Zakończone"])
                 data_zgloszenia = st.date_input("Data Zgłoszenia", value=datetime.date.today())
                 data_zlecenia_tr = st.date_input("Data Zlecenia Transportu", value=None)
 
-            st.markdown("### 💰 Finanse")
+            st.markdown("### 💰 Finanse (€)")
             f_col1, f_col2, f_col3 = st.columns(3)
             with f_col1:
-                wycena_dla_basi = st.number_input("Wycena dla Basi (PLN)", min_value=0.0, value=0.0, step=50.0)
+                wycena_dla_basi = st.number_input("Wycena dla Basi (€)", min_value=0.0, value=0.0, step=50.0)
             with f_col2:
-                koszt_rzeczywisty = st.number_input("Koszt Rzeczywisty (PLN)", min_value=0.0, value=0.0, step=50.0)
+                koszt_rzeczywisty = st.number_input("Koszt Rzeczywisty (€)", min_value=0.0, value=0.0, step=50.0)
             with f_col3:
                 marza_info = st.text_input("Marża / Info dodatkowe")
 
@@ -377,46 +354,128 @@ elif wybrany_modul == "🌍 YESTECH Export":
                 if not destynacja:
                     st.error("❌ Musisz podać destynację!")
                 else:
-                    # Obliczanie automatycznej daty płatności (+30 dni od daty zakończenia)
                     data_platnosci = str(data_zakonczenia + datetime.timedelta(days=30)) if data_zakonczenia else ""
-                    
                     nowy_wiersz = {
-                        "ID_Yestech": "", 
-                        "Data_Zgloszenia": str(data_zgloszenia) if data_zgloszenia else "",
-                        "Destynacja": destynacja, 
-                        "Gabaryt": gabaryt, 
-                        "Status_Ofertowy": status_ofertowy,
-                        "Wycena_Dla_Basi": wycena_dla_basi, 
-                        "Koszt_Rzeczywisty": koszt_rzeczywisty, 
-                        "Marza_Info": marza_info,
-                        "Przewoznik": przewoznik, 
-                        "CMR_Gotowe": cmr_gotowe, 
-                        "Nr_Zlecenia_Zewn": nr_zlecenia_zewn,
-                        "Nr_Faktury": nr_faktury, 
-                        "Data_Zlecenia_Tr": str(data_zlecenia_tr) if data_zlecenia_tr else "",
+                        "ID_Yestech": "", "Data_Zgloszenia": str(data_zgloszenia) if data_zgloszenia else "",
+                        "Destynacja": destynacja, "Gabaryt": gabaryt, "Status_Ofertowy": status_ofertowy,
+                        "Wycena_Dla_Basi": wycena_dla_basi, "Koszt_Rzeczywisty": koszt_rzeczywisty, "Marza_Info": marza_info,
+                        "Przewoznik": przewoznik, "CMR_Gotowe": cmr_gotowe, "Nr_Zlecenia_Zewn": nr_zlecenia_zewn,
+                        "Nr_Faktury": nr_faktury, "Data_Zlecenia_Tr": str(data_zlecenia_tr) if data_zlecenia_tr else "",
                         "Data_Zakonczenia_Uslugi": str(data_zakonczenia) if data_zakonczenia else "", 
-                        "Data_Platnosci": data_platnosci,
-                        "Faktura_Oplacona": faktura_opl, 
-                        "PP_Otrzymane": pp_otrzymane, 
-                        "Zakonczone_Arch": zakonczone_arch
+                        "Data_Platnosci": data_platnosci, "Faktura_Oplacona": faktura_opl, 
+                        "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": zakonczone_arch
                     }
-                    
-                    # Konwersja nowego wiersza i upewnienie się, że zachowuje kolejność
                     df_yt = pd.concat([df_yt, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df_yt = df_yt[list(nowy_wiersz.keys())] 
                     df_yt = generuj_smart_id(df_yt, "Destynacja", "Przewoznik", "ID_Yestech")
                     save_data(worksheet_yt, df_yt)
-                    
-                    st.success("🎉 Projekt zapisany w lejku Basi!")
+                    st.success("🎉 Projekt zapisany!")
                     st.rerun()
 
     with tab_archiwum:
         df_arch_yt = df_yt[df_yt.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_yt.empty else pd.DataFrame()
         if not df_arch_yt.empty:
             st.dataframe(df_arch_yt, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych projektów.")
 
+# ==========================================
+# 📊 MODUŁ: FINANSE I RAPORTY
+# ==========================================
 elif wybrany_modul == "📊 Finanse i Raporty":
-    st.title("📊 Centrum Finansowe")
-    st.info("Moduł globalnego zestawienia płatności w przygotowaniu.")
+    st.title("📊 Centrum Finansowe (Waluta: EUR €)")
+    
+    # Pobieranie danych ze wszystkich baz
+    _, df_ev = load_data(sh, "DB_Eventy")
+    _, df_yt = load_data(sh, "DB_Yestech")
+    _, df_sub = load_data(sh, "DB_Subrenty")
+    
+    dzisiaj = datetime.date.today()
+
+    tab_alerty, tab_koszty, tab_rentownosc = st.tabs([
+        "🚨 Alerty i Braki (Windykacja)", "💶 Wydatki per Przewoźnik", "📈 Rentowność YESTECH"
+    ])
+
+    # --- ZAKŁADKA 1: ALERTY ---
+    with tab_alerty:
+        st.subheader("🔴 Przeterminowane płatności (Brak opłaconej faktury po terminie)")
+        
+        # Filtrowanie Eventów
+        if not df_ev.empty and "Data_Platnosci" in df_ev.columns:
+            df_ev_plat = df_ev.copy()
+            df_ev_plat['Data_DT'] = pd.to_datetime(df_ev_plat['Data_Platnosci'], errors='coerce').dt.date
+            spoznione_ev = df_ev_plat[(df_ev_plat['Data_DT'] < dzisiaj) & (df_ev_plat['Faktura_Oplacona'] != "TAK")]
+            if not spoznione_ev.empty:
+                st.error("**Eventy / Targi - Spóźnione płatności:**")
+                st.dataframe(spoznione_ev[['ID_Zlecenia', 'Nazwa_Targow', 'Przewoznik', 'Koszt_Transportu_EUR', 'Data_Platnosci']])
+        
+        # Filtrowanie Yestech
+        if not df_yt.empty and "Data_Platnosci" in df_yt.columns:
+            df_yt_plat = df_yt.copy()
+            df_yt_plat['Data_DT'] = pd.to_datetime(df_yt_plat['Data_Platnosci'], errors='coerce').dt.date
+            spoznione_yt = df_yt_plat[(df_yt_plat['Data_DT'] < dzisiaj) & (df_yt_plat['Faktura_Oplacona'] != "TAK")]
+            if not spoznione_yt.empty:
+                st.error("**YESTECH Export - Spóźnione płatności:**")
+                st.dataframe(spoznione_yt[['ID_Yestech', 'Destynacja', 'Przewoznik', 'Koszt_Rzeczywisty', 'Data_Platnosci']])
+                
+        if (df_ev.empty or spoznione_ev.empty) and (df_yt.empty or spoznione_yt.empty):
+            st.success("Brak przeterminowanych płatności! 🎉")
+
+        st.divider()
+        
+        st.subheader("🟡 Blokady Rozliczeń (Brak POD lub nr Faktury w zakończonych)")
+        # Filtrowanie braków w archiwum (zakończonych zleceniach)
+        if not df_ev.empty:
+            braki_ev = df_ev[(df_ev['Zakonczone_Arch'] == 'TAK') & ((df_ev['CMR_Podpisane_POD'] == 'NIE') | (df_ev['Nr_Faktury'] == ''))]
+            if not braki_ev.empty:
+                st.warning("**Eventy - Braki dokumentacji powstrzymujące zamknięcie:**")
+                st.dataframe(braki_ev[['ID_Zlecenia', 'Przewoznik', 'CMR_Podpisane_POD', 'Nr_Faktury']])
+
+    # --- ZAKŁADKA 2: WYDATKI PER PRZEWOŹNIK ---
+    with tab_koszty:
+        st.subheader("Zestawienie kosztów u partnerów zewnętrznych")
+        
+        k_col1, k_col2 = st.columns(2)
+        
+        with k_col1:
+            st.markdown("**🚚 Transport (Eventy)**")
+            if not df_ev.empty:
+                df_ev['Koszt_Transportu_EUR'] = pd.to_numeric(df_ev['Koszt_Transportu_EUR'], errors='coerce').fillna(0)
+                koszty_ev = df_ev.groupby("Przewoznik")["Koszt_Transportu_EUR"].sum().reset_index()
+                koszty_ev = koszty_ev[koszty_ev["Koszt_Transportu_EUR"] > 0].sort_values(by="Koszt_Transportu_EUR", ascending=False)
+                if not koszty_ev.empty:
+                    st.dataframe(koszty_ev, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Brak zarejestrowanych kosztów w Eventach.")
+                    
+        with k_col2:
+            st.markdown("**📦 Sprzęt (Subrenty)**")
+            if not df_sub.empty:
+                df_sub['Koszt'] = pd.to_numeric(df_sub['Koszt'], errors='coerce').fillna(0)
+                koszty_sub = df_sub.groupby("Firma_Zewnetrzna")["Koszt"].sum().reset_index()
+                koszty_sub = koszty_sub[koszty_sub["Koszt"] > 0].sort_values(by="Koszt", ascending=False)
+                if not koszty_sub.empty:
+                    st.dataframe(koszty_sub, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Brak zarejestrowanych kosztów w Subrentach.")
+
+    # --- ZAKŁADKA 3: RENTOWNOŚĆ YESTECH ---
+    with tab_rentownosc:
+        st.subheader("Wycena vs. Rzeczywistość (Eksport Basi)")
+        if not df_yt.empty:
+            df_yt['Wycena_Dla_Basi'] = pd.to_numeric(df_yt['Wycena_Dla_Basi'], errors='coerce').fillna(0)
+            df_yt['Koszt_Rzeczywisty'] = pd.to_numeric(df_yt['Koszt_Rzeczywisty'], errors='coerce').fillna(0)
+            df_yt['Bilans (Zysk/Strata) €'] = df_yt['Wycena_Dla_Basi'] - df_yt['Koszt_Rzeczywisty']
+            
+            rentownosc = df_yt[['ID_Yestech', 'Destynacja', 'Wycena_Dla_Basi', 'Koszt_Rzeczywisty', 'Bilans (Zysk/Strata) €']]
+            
+            # Wyróżnianie zysku na zielono, straty na czerwono
+            def color_bilans(val):
+                if val > 0: return 'color: green; font-weight: bold'
+                elif val < 0: return 'color: red; font-weight: bold'
+                return ''
+                
+            st.dataframe(rentownosc.style.map(color_bilans, subset=['Bilans (Zysk/Strata) €']), use_container_width=True, hide_index=True)
+            
+            suma_zysk = rentownosc['Bilans (Zysk/Strata) €'].sum()
+            st.metric("Łączny bilans na projektach YESTECH", f"{suma_zysk:.2f} €")
+        else:
+            st.info("Brak danych w bazie YESTECH.")
