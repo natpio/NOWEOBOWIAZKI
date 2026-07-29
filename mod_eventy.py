@@ -52,7 +52,7 @@ def render(sh):
             
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
             with f_col1:
-                if st.button(f"🌍 Wszystkie Aktywne", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
+                if st.button(f"🌍 Wszystkie", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
                     st.session_state["filtr_eventow"] = "Wszystkie"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
@@ -97,22 +97,42 @@ def render(sh):
                         elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
                         else: badge_class += " domyslny"
                         
+                        # --- GENEROWANIE ALERTÓW (TAGÓW) DLA LISTY ---
+                        is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
+                        braki_tagi_html = ""
+                        
+                        tag_style = "padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;"
+                        if str(row.get('CMR_Gotowe', '')) == 'NIE':
+                            braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>🚨 WYSTAW CMR</span>"
+                        if not is_sqm_row:
+                            if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
+                                braki_tagi_html += f"<span style='background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); {tag_style}'>📄 BRAK POD</span>"
+                            if str(row.get('Faktura_Oplacona', '')) == 'NIE':
+                                braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>💰 NIEOPŁACONE</span>"
+                            if str(row.get('PP_Otrzymane', '')) == 'NIE':
+                                braki_tagi_html += f"<span style='background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); {tag_style}'>💳 BRAK PP</span>"
+
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
                         with c_karta:
                             st.markdown(f"""
-                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px;">
-                                <div class="cr-col" style="width: 40%;">
-                                    <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
-                                    <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
+                                <div style="display: flex; width: 100%; justify-content: space-between;">
+                                    <div class="cr-col" style="width: 40%;">
+                                        <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
+                                        <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+                                    </div>
+                                    <div class="cr-col" style="width: 25%;">
+                                        <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
+                                        <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
+                                    </div>
+                                    <div class="cr-col" style="width: 35%; align-items: flex-end;">
+                                        <span class="cr-text" style="margin-bottom: 5px;">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
+                                        <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                                    </div>
                                 </div>
-                                <div class="cr-col" style="width: 25%;">
-                                    <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-                                    <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
-                                </div>
-                                <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                    <span class="cr-text" style="margin-bottom: 5px;">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
-                                    <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                                <div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">
+                                    {braki_tagi_html}
                                 </div>
                             </div>
                             """, unsafe_allow_html=True)
@@ -128,6 +148,7 @@ def render(sh):
             with col_detale:
                 if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
                     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
+                    is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
                     
                     st.markdown("""
                         <div style="background: rgba(30, 41, 59, 0.5); padding: 25px; border-radius: 16px; border: 1px solid rgba(212, 175, 55, 0.3);">
@@ -150,6 +171,38 @@ def render(sh):
                         st.markdown(f"""
                         <div style="width: 100%; height: 150px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
                             <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # --- WIZUALNA TABLICA "TO-DO" (ANALIZA BRAKÓW) ---
+                    braki_zlecenia = []
+                    if dane_eventu.get("CMR_Gotowe") == "NIE":
+                        braki_zlecenia.append("📝 <b>Wystawić dokument CMR</b> dla kierowcy")
+                    if not is_sqm:
+                        if dane_eventu.get("CMR_Podpisane_POD") == "NIE":
+                            braki_zlecenia.append("📄 <b>Odzyskać podpisane CMR (POD)</b> po dostawie")
+                        if dane_eventu.get("Faktura_Oplacona") == "NIE":
+                            braki_zlecenia.append("💰 <b>Opłacić fakturę</b> zewnętrznego przewoźnika")
+                        if dane_eventu.get("PP_Otrzymane") == "NIE":
+                            braki_zlecenia.append("💳 Zdobyć i wgrać <b>Potwierdzenie Przelewu (PP)</b>")
+                        if str(dane_eventu.get("Nr_Faktury", "")).strip() in ["", "None"]:
+                            braki_zlecenia.append("🔢 Wprowadzić <b>Numer Faktury Zewnętrznej</b>")
+
+                    if braki_zlecenia:
+                        lista_brakow = "".join([f"<li style='margin-bottom: 5px;'>{b}</li>" for b in braki_zlecenia])
+                        st.markdown(f"""
+                        <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.4); padding: 15px 20px; border-radius: 8px; margin: 15px 0;">
+                            <h4 style="color: #ef4444; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">⚠️ Wymagane Akcje (Do załatwienia):</h4>
+                            <ul style="color: #F8FAFC; font-size: 13px; margin: 0; padding-left: 20px;">
+                                {lista_brakow}
+                            </ul>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.3); padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 18px;">✅</span>
+                            <span style="color: #22c55e; font-size: 13px; font-weight: 600;">Wszystkie dokumenty i rozliczenia dla tego etapu są kompletne.</span>
                         </div>
                         """, unsafe_allow_html=True)
 
@@ -212,8 +265,6 @@ def render(sh):
                                 st.rerun()
                         
                     with det_fin:
-                        is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
-                        
                         with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
                             st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
                             
