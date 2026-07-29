@@ -1,9 +1,17 @@
-/* Tło główne aplikacji */
+/* =========================================
+   1. GLOBALNE TŁO I UKRYWANIE ELEMENTÓW
+========================================= */
 .stApp {
     background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
+    color: #F8FAFC;
 }
 
-/* Stylizacja paska bocznego (Sidebar) z efektem szkła */
+#MainMenu, footer { visibility: hidden; }
+[data-testid="stHeader"] { background-color: transparent !important; }
+
+/* =========================================
+   2. PASEK BOCZNY (SIDEBAR) I LOGO
+========================================= */
 [data-testid="stSidebar"] {
     background-color: rgba(15, 23, 42, 0.4) !important;
     backdrop-filter: blur(15px) !important;
@@ -22,7 +30,16 @@
     color: #D4AF37;
 }
 
-/* Karty KPI - Glassmorphism */
+/* Nowoczesne Menu Boczne (Option Menu) */
+.nav-link { 
+    font-weight: 600 !important; 
+    font-size: 14px !important; 
+    border-radius: 8px !important; 
+}
+
+/* =========================================
+   3. KARTY KPI (GLASSMORPHISM)
+========================================= */
 .kpi-container {
     display: flex;
     gap: 20px;
@@ -54,7 +71,70 @@
 .kpi-green { border-left: 3px solid #10b981; }
 .kpi-red { border-left: 3px solid #ef4444; }
 
-/* Customizacja przycisków */
+/* =========================================
+   4. KAFELKI ZLECEŃ (ZAMIAST TABELI)
+========================================= */
+.custom-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(30, 41, 59, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 18px 25px;
+    border-radius: 12px;
+    margin-bottom: -15px;
+    color: #94a3b8;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+.custom-row:hover {
+    border: 1px solid rgba(212, 175, 55, 0.4);
+    background: rgba(30, 41, 59, 0.7);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+.cr-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.cr-title { color: #f8fafc; font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
+.cr-text { color: #f8fafc; font-weight: 500; font-size: 13px; }
+
+/* Pigułki Statusów (Badges) */
+.cr-badge {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+}
+.cr-badge.inicjacja { border: 1px solid rgba(59, 130, 246, 0.5); color: #60a5fa; background: rgba(59, 130, 246, 0.1); }
+.cr-badge.planowanie { border: 1px solid rgba(139, 92, 246, 0.5); color: #a78bfa; background: rgba(139, 92, 246, 0.1); }
+.cr-badge.zaladunek { border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; background: rgba(245, 158, 11, 0.1); }
+.cr-badge.trasa { border: 1px solid rgba(212, 175, 55, 0.5); color: #d4af37; background: rgba(212, 175, 55, 0.1); }
+.cr-badge.zamkniete { border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; background: rgba(16, 185, 129, 0.1); }
+.cr-badge.domyslny { border: 1px solid rgba(255, 255, 255, 0.2); color: #f8fafc; background: rgba(255, 255, 255, 0.05); }
+
+/* Wyrównanie przycisków akcji obok kart */
+div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-weight: 600; }
+
+/* =========================================
+   5. ELEMENTY FORMULARZY I PRZYCISKI GŁÓWNE
+========================================= */
+/* Ekran Logowania */
+.login-box {
+    background-color: rgba(30, 41, 59, 0.5);
+    backdrop-filter: blur(15px);
+    padding: 40px;
+    border-radius: 16px;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+}
+
+/* Przyciski typu Primary (Złote) */
 .stButton>button[kind="primary"] {
     background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
     color: #000;
@@ -66,15 +146,4 @@
 .stButton>button[kind="primary"]:hover {
     box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
     transform: scale(1.02);
-}
-
-/* Pole logowania - efekt szkła */
-.login-box {
-    background-color: rgba(30, 41, 59, 0.5);
-    backdrop-filter: blur(15px);
-    padding: 40px;
-    border-radius: 16px;
-    border: 1px solid rgba(212, 175, 55, 0.3);
-    text-align: center;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
 }
