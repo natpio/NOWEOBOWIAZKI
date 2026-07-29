@@ -157,7 +157,7 @@ except Exception as e:
 with st.sidebar:
     st.markdown("""
         <div class="sidebar-logo-text">
-            🌍 <span>SQM TMS</span>
+            🌍 <span>LOGISTICS ADMINISTRATION</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -170,7 +170,7 @@ with st.sidebar:
     st.markdown("""
         <div class="sidebar-footer">
             Wersja systemu: 9.5.0 (Global Vision UI)<br><br>
-            Użytkownik: Piotr Dukiel | Logistics Manager
+            Użytkownik: Piotr Dukiel |
         </div>
     """, unsafe_allow_html=True)
 
