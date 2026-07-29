@@ -67,14 +67,14 @@ load_css("style.css")
 set_backgrounds()
 
 # ==========================================
-# 3. WERYFIKACJA STANU LOGOWANIA
+# 3. WERYFIKACJA STANU LOGOWANIA (GOOGLE AUTH)
 # ==========================================
 if "zalogowany" not in st.session_state:
     st.session_state["zalogowany"] = False
 
 # Jeśli użytkownik NIE JEST zalogowany - POKAŻ EKRAN LOGOWANIA
 if not st.session_state["zalogowany"]:
-    # Pobieramy klucz z pliku secrets.toml
+    # Pobieramy klucz z ustawień Secrets w Streamlit Cloud
     TOTP_SECRET = st.secrets.get("totp_secret", "BRAK_KLUCZA_W_SECRETS")
     
     # Ukrywamy całkowicie boczny panel na ekranie logowania
