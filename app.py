@@ -46,10 +46,15 @@ def set_backgrounds():
         """
     if sidebar_bg_base64:
         css += f"""
-        [data-testid="stSidebar"] {{
+        [data-testid="stSidebar"] > div:first-child {{
             background-image: url("data:image/png;base64,{sidebar_bg_base64}") !important;
             background-size: cover !important;
             background-position: bottom center !important;
+            background-repeat: no-repeat !important;
+            background-color: transparent !important;
+        }}
+        [data-testid="stSidebar"] {{
+            background-color: transparent !important;
         }}
         """
     css += "</style>"
@@ -71,7 +76,7 @@ def load_data(sh, sheet_name):
     try:
         worksheet = sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=20)
+        worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=25)
 
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
@@ -96,10 +101,14 @@ def load_data(sh, sheet_name):
             if kol not in df.columns: df[kol] = val
 
     elif sheet_name == "DB_Subrenty":
+        # Zaktualizowana struktura Subrentów (IN / OUT)
         domyslne_subrenty = {
-            "ID_Subrentu": "", "Nazwa_Sprzetu": "", "Firma_Zewnetrzna": "",
-            "Data_Odbioru": str(datetime.date.today()), "Data_Zwrotu": str(datetime.date.today()),
-            "Status": "Zamówione", "Koszt": 0.0, "Notatki": "", "Zakonczone_Arch": "NIE"
+            "ID_Subrentu": "", "Rodzaj_Zlecenia": "Dry Hire", "Dostawca": "", "Co_Jedzie": "",
+            "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()),
+            "Status_Subrentu": "1. Zamówione (Oczekuje na IN)", "Transport_IN_Kto": "", "Transport_IN_Dokumenty": "",
+            "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": 0.0,
+            "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
+            "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
         }
         for kol, val in domyslne_subrenty.items():
             if kol not in df.columns: df[kol] = val
@@ -157,7 +166,7 @@ except Exception as e:
 with st.sidebar:
     st.markdown("""
         <div class="sidebar-logo-text">
-            🌍 <span>LOGISTICS ADMINISTRATION</span>
+            🌍 <span>SQM TMS</span>
         </div>
     """, unsafe_allow_html=True)
     
@@ -169,8 +178,8 @@ with st.sidebar:
     
     st.markdown("""
         <div class="sidebar-footer">
-            Wersja systemu: 9.5.0 (Global Vision UI)<br><br>
-            Użytkownik: Piotr Dukiel
+            Wersja systemu: 10.0 (Logistics Lifecycle)<br><br>
+            Użytkownik: Piotr Dukiel | Logistics Manager
         </div>
     """, unsafe_allow_html=True)
 
@@ -270,10 +279,10 @@ if wybrany_modul == "🚚 Eventy / Targi":
             st.dataframe(df_arch, use_container_width=True, hide_index=True)
 
 # ==========================================
-# 📦 MODUŁ: SUBRENTY
+# 📦 MODUŁ: SUBRENTY (NOWA ARCHITEKTURA CYKLU ŻYCIA)
 # ==========================================
 elif wybrany_modul == "📦 Subrenty":
-    st.title("📦 Hub Wypożyczeń (Subrenty)")
+    st.title("📦 Hub Wypożyczeń (Lifecycle)")
     
     worksheet_sub, df_sub = load_data(sh, "DB_Subrenty")
     worksheet_firmy, df_firmy = load_data(sh, "DB_Katalog_Firm")
@@ -281,63 +290,143 @@ elif wybrany_modul == "📦 Subrenty":
     katalog_firm = df_firmy["Nazwa_Firmy"].dropna().unique().tolist() if not df_firmy.empty else []
     df_aktywne_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_sub.empty else df_sub
     
+    na_stanie = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "3. Na stanie SQM (Pracuje)"]) if not df_aktywne_sub.empty else 0
+    gotowe_do_zwrotu = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "4. Gotowe do zwrotu (Alert)"]) if not df_aktywne_sub.empty else 0
+    
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card kpi-blue">
-                <div class="kpi-header">Aktywne Wypożyczenia</div>
+                <div class="kpi-header">Łącznie Aktywne</div>
                 <div class="kpi-value">{len(df_aktywne_sub)}</div>
                 <div class="kpi-icon-bg">📦</div>
             </div>
-            <div class="kpi-card kpi-gold">
-                <div class="kpi-header">Firmy Zewnętrzne (Baza)</div>
-                <div class="kpi-value">{len(katalog_firm)}</div>
-                <div class="kpi-icon-bg">🏢</div>
+            <div class="kpi-card kpi-green">
+                <div class="kpi-header">U nas na magazynie</div>
+                <div class="kpi-value">{na_stanie}</div>
+                <div class="kpi-icon-bg">✅</div>
+            </div>
+            <div class="kpi-card kpi-red">
+                <div class="kpi-header">Do pilnego zwrotu</div>
+                <div class="kpi-value">{gotowe_do_zwrotu}</div>
+                <div class="kpi-icon-bg">⚠️</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne Wypożyczenia", "➕ Dodaj Subrent", "📦 Archiwum"])
+    tab_podglad, tab_nowy, tab_zwrot, tab_archiwum = st.tabs([
+        "📊 Podgląd Cyklu", "➕ Dodaj (Inicjuj IN)", "🔄 Zwróć / Aktualizuj (OUT)", "📦 Archiwum"
+    ])
 
     with tab_podglad:
-        if not df_aktywne_sub.empty: st.dataframe(df_aktywne_sub, use_container_width=True, hide_index=True)
+        if not df_aktywne_sub.empty: 
+            # Kolejność kolumn ułatwiająca przeglądanie
+            widok_kolumn = ["ID_Subrentu", "Dostawca", "Co_Jedzie", "Status_Subrentu", "Deadline_Zwrotu", "Transport_IN_Kto", "Transport_OUT_Kto"]
+            st.dataframe(df_aktywne_sub[[c for c in widok_kolumn if c in df_aktywne_sub.columns]], use_container_width=True, hide_index=True)
+        else:
+            st.info("Brak aktywnych wypożyczeń sprzętu.")
 
-    with tab_formularz:
-        with st.form("form_subrent", clear_on_submit=True):
+    # TWORZENIE NOWEGO SUBRENTU (ETAP: IN)
+    with tab_nowy:
+        st.subheader("1. Faza: Inicjacja Wypożyczenia i Transport do SQM")
+        with st.form("form_subrent_in", clear_on_submit=True):
             s_col1, s_col2 = st.columns(2)
             with s_col1:
-                nazwa_sprzetu = st.text_input("Nazwa Sprzętu / Cel Wypożyczenia *")
-                wybor_firmy = st.selectbox("Wybierz z książki adresowej *", ["-- Dodaj nową firmę --"] + sorted(katalog_firm))
+                co_jedzie = st.text_input("Co wypożyczamy? (Nazwa Sprzętu) *")
+                wybor_firmy = st.selectbox("Dostawca (z książki) *", ["-- Dodaj nową firmę --"] + sorted(katalog_firm))
                 nowa_firma = st.text_input("Nowa firma (jeśli brak na liście wyżej)")
             with s_col2:
-                status_sub = st.selectbox("Status", ["Zamówione", "Odebrane", "Zwrócone", "Rozliczone"])
-                koszt = st.number_input("Koszt całkowity (€)", min_value=0.0, value=0.0, step=50.0)
+                rodzaj_zlecenia = st.selectbox("Rodzaj", ["Dry Hire", "Cross-rent", "Zastępczy"])
+                status_sub = st.selectbox("Status Początkowy", [
+                    "1. Zamówione (Oczekuje na IN)", 
+                    "2. W drodze do SQM (IN)", 
+                    "3. Na stanie SQM (Pracuje)"
+                ])
 
+            st.markdown("### 📅 Terminarz Wynajmu")
             d_col1, d_col2 = st.columns(2)
-            with d_col1: data_od = st.date_input("Data Odbioru")
-            with d_col2: data_do = st.date_input("Data Zwrotu")
-                
-            notatki_sub = st.text_area("Dodatkowe Notatki")
+            with d_col1: data_odbioru = st.date_input("Data rozpoczęcia wynajmu (Odbiór)")
+            with d_col2: deadline_zwrotu = st.date_input("Deadline ZWROTU (do kiedy musi oddać)")
+            
+            st.markdown("### 🚚 Logistyka Odbioru (Etap IN)")
+            i_col1, i_col2 = st.columns(2)
+            with i_col1: transport_in_kto = st.text_input("Kto nam to przywozi? (np. Kurier DPD, Flota SQM, Odbiór osobisty)")
+            with i_col2: transport_in_dok = st.text_input("Nr listu przewozowego / Dokument IN")
 
-            if st.form_submit_button("💾 Zapisz Subrent"):
+            if st.form_submit_button("🚀 Zainicjuj Subrent"):
                 firma_docelowa = nowa_firma.strip() if wybor_firmy == "-- Dodaj nową firmę --" else wybor_firmy
-                if not nazwa_sprzetu or not firma_docelowa:
-                    st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać firmę zewnętrzną!")
+                if not co_jedzie or not firma_docelowa:
+                    st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać dostawcę!")
                 else:
                     if firma_docelowa not in katalog_firm:
                         df_firmy = pd.concat([df_firmy, pd.DataFrame([{"Nazwa_Firmy": firma_docelowa}])], ignore_index=True)
                         save_data(worksheet_firmy, df_firmy)
                         
-                    czy_arch = "TAK" if status_sub in ["Zwrócone", "Rozliczone"] else "NIE"
                     nowy_wiersz = {
-                        "ID_Subrentu": "", "Nazwa_Sprzetu": nazwa_sprzetu, "Firma_Zewnetrzna": firma_docelowa,
-                        "Data_Odbioru": str(data_od), "Data_Zwrotu": str(data_do),
-                        "Status": status_sub, "Koszt": koszt, "Notatki": notatki_sub, "Zakonczone_Arch": czy_arch
+                        "ID_Subrentu": "", "Rodzaj_Zlecenia": rodzaj_zlecenia, "Dostawca": firma_docelowa, "Co_Jedzie": co_jedzie,
+                        "Data_Odbioru": str(data_odbioru), "Deadline_Zwrotu": str(deadline_zwrotu),
+                        "Status_Subrentu": status_sub, "Transport_IN_Kto": transport_in_kto, "Transport_IN_Dokumenty": transport_in_dok,
+                        "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": 0.0,
+                        "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
+                        "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
                     }
                     df_sub = pd.concat([df_sub, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                    df_sub = generuj_smart_id(df_sub, "Firma_Zewnetrzna", "Nazwa_Sprzetu", "ID_Subrentu")
+                    df_sub = generuj_smart_id(df_sub, "Dostawca", "Co_Jedzie", "ID_Subrentu")
                     save_data(worksheet_sub, df_sub)
-                    st.success(f"🎉 Zapisano subrent!")
+                    st.success(f"🎉 Zainicjowano wypożyczenie!")
                     st.rerun()
+
+    # AKTUALIZACJA I ZWROT SUBRENTU (ETAP: OUT)
+    with tab_zwrot:
+        st.subheader("2. Faza: Aktualizacja statusu i ZWROT sprzętu")
+        if not df_aktywne_sub.empty:
+            wybrany_id = st.selectbox("Wybierz Aktywny Subrent", df_aktywne_sub["ID_Subrentu"].tolist())
+            
+            # Pobieranie danych wybranego rekordu
+            dane_sub = df_aktywne_sub[df_aktywne_sub["ID_Subrentu"] == wybrany_id].iloc[0]
+            
+            st.info(f"**Wybrano:** {dane_sub['Co_Jedzie']} (Dostawca: {dane_sub['Dostawca']}) | Deadline: {dane_sub['Deadline_Zwrotu']}")
+            
+            with st.form("form_subrent_out", clear_on_submit=False):
+                obecny_status = dane_sub["Status_Subrentu"]
+                opcje_statusu = [
+                    "1. Zamówione (Oczekuje na IN)", "2. W drodze do SQM (IN)", "3. Na stanie SQM (Pracuje)",
+                    "4. Gotowe do zwrotu (Alert)", "5. W drodze powrotnej (OUT)", "6. Zakończone i Rozliczone"
+                ]
+                idx_statusu = opcje_statusu.index(obecny_status) if obecny_status in opcje_statusu else 0
+                
+                nowy_status = st.selectbox("Aktualizuj Status Cyklu", opcje_statusu, index=idx_statusu)
+                
+                st.markdown("### 🚚 Logistyka Zwrotu (Etap OUT)")
+                o_col1, o_col2, o_col3 = st.columns(3)
+                with o_col1: t_out_kto = st.text_input("Kto organizuje zwrot? (np. Flota SQM, Kurier dostawcy)", value=dane_sub.get("Transport_OUT_Kto", ""))
+                with o_col2: t_out_dok = st.text_input("Nr listu zwrotnego / CMR", value=dane_sub.get("Transport_OUT_Dokumenty", ""))
+                with o_col3: data_zwrotu = st.date_input("Faktyczna Data Zwrotu", value=None)
+                
+                st.markdown("### 💰 Finanse i Zakończenie")
+                f_col1, f_col2, f_col3 = st.columns(3)
+                with f_col1: koszt = st.number_input("Koszt Całkowity Wypożyczenia (€)", min_value=0.0, value=float(dane_sub.get("Koszt_Calkowity_EUR", 0.0)), step=50.0)
+                with f_col2: f_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_sub.get("Faktura_Oplacona", "")) if dane_sub.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
+                with f_col3: nr_fak = st.text_input("Nr Faktury od Dostawcy", value=dane_sub.get("Nr_Faktury", ""))
+                
+                if st.form_submit_button("💾 Zapisz Zmiany / Zatwierdź Zwrot"):
+                    idx = df_sub[df_sub['ID_Subrentu'] == wybrany_id].index[0]
+                    
+                    df_sub.at[idx, 'Status_Subrentu'] = nowy_status
+                    df_sub.at[idx, 'Transport_OUT_Kto'] = t_out_kto
+                    df_sub.at[idx, 'Transport_OUT_Dokumenty'] = t_out_dok
+                    if data_zwrotu: df_sub.at[idx, 'Data_Faktycznego_Zwrotu'] = str(data_zwrotu)
+                    df_sub.at[idx, 'Koszt_Calkowity_EUR'] = float(koszt)
+                    df_sub.at[idx, 'Faktura_Oplacona'] = f_opl
+                    df_sub.at[idx, 'Nr_Faktury'] = nr_fak
+                    
+                    if nowy_status == "6. Zakończone i Rozliczone":
+                        df_sub.at[idx, 'Zakonczone_Arch'] = "TAK"
+                        
+                    save_data(worksheet_sub, df_sub)
+                    st.success("Aktualizacja zapisana!")
+                    st.rerun()
+        else:
+            st.info("Brak aktywnych rekordów do edycji.")
 
     with tab_archiwum:
         df_arch_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_sub.empty else pd.DataFrame()
@@ -460,7 +549,7 @@ elif wybrany_modul == "📊 Finanse i Raporty":
         braki_ev = df_ev[(df_ev['Zakonczone_Arch'] == 'TAK') & ((df_ev['CMR_Podpisane_POD'] == 'NIE') | (df_ev['Nr_Faktury'] == ''))]
     braki_count = len(braki_ev)
 
-    tab_alerty, tab_koszty, tab_rentownosc = st.tabs(["🚨 Alerty i Braki", "💶 Wydatki per Przewoźnik", "📈 Rentowność YESTECH"])
+    tab_alerty, tab_koszty, tab_rentownosc = st.tabs(["🚨 Alerty i Braki", "💶 Wydatki per Partner", "📈 Rentowność YESTECH"])
 
     with tab_alerty:
         t_spozn = "Brak przeterminowanych płatności!" if spoznione_count == 0 else f"Wykryto {spoznione_count} spóźnień!"
@@ -545,10 +634,10 @@ elif wybrany_modul == "📊 Finanse i Raporty":
                 else: st.info("Brak zarejestrowanych kosztów w Eventach.")
         with k_col2:
             st.markdown("**📦 Sprzęt (Subrenty)**")
-            if not df_sub.empty and "Koszt" in df_sub.columns:
-                df_sub['Koszt'] = pd.to_numeric(df_sub['Koszt'], errors='coerce').fillna(0)
-                koszty_sub = df_sub.groupby("Firma_Zewnetrzna")["Koszt"].sum().reset_index()
-                koszty_sub = koszty_sub[koszty_sub["Koszt"] > 0].sort_values(by="Koszt", ascending=False)
+            if not df_sub.empty and "Koszt_Calkowity_EUR" in df_sub.columns:
+                df_sub['Koszt_Calkowity_EUR'] = pd.to_numeric(df_sub['Koszt_Calkowity_EUR'], errors='coerce').fillna(0)
+                koszty_sub = df_sub.groupby("Dostawca")["Koszt_Calkowity_EUR"].sum().reset_index()
+                koszty_sub = koszty_sub[koszty_sub["Koszt_Calkowity_EUR"] > 0].sort_values(by="Koszt_Calkowity_EUR", ascending=False)
                 if not koszty_sub.empty: st.dataframe(koszty_sub, use_container_width=True, hide_index=True)
                 else: st.info("Brak zarejestrowanych kosztów w Subrentach.")
 
