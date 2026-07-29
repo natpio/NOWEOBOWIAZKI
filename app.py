@@ -45,13 +45,10 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # --- KOLUMNY DLA EVENTÓW ---
     if sheet_name == "DB_Eventy":
         wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
         for kol in wymagane:
-            if kol not in df.columns:
-                df[kol] = ""
-                
+            if kol not in df.columns: df[kol] = ""
         domyslne_kolumny = {
             "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
             "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
@@ -60,10 +57,8 @@ def load_data(sh, sheet_name):
             "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
         }
         for kol, val in domyslne_kolumny.items():
-            if kol not in df.columns:
-                df[kol] = val
+            if kol not in df.columns: df[kol] = val
 
-    # --- KOLUMNY DLA SUBRENTÓW ---
     elif sheet_name == "DB_Subrenty":
         domyslne_subrenty = {
             "ID_Subrentu": "", "Nazwa_Sprzetu": "", "Firma_Zewnetrzna": "",
@@ -71,10 +66,8 @@ def load_data(sh, sheet_name):
             "Status": "Zamówione", "Koszt": 0.0, "Notatki": "", "Zakonczone_Arch": "NIE"
         }
         for kol, val in domyslne_subrenty.items():
-            if kol not in df.columns:
-                df[kol] = val
+            if kol not in df.columns: df[kol] = val
                 
-    # --- KOLUMNY DLA YESTECH ---
     elif sheet_name == "DB_Yestech":
         domyslne_yestech = {
             "ID_Yestech": "", "Data_Zgloszenia": str(datetime.date.today()),
@@ -86,14 +79,11 @@ def load_data(sh, sheet_name):
             "Zakonczone_Arch": "NIE"
         }
         for kol in domyslne_yestech.keys():
-            if kol not in df.columns:
-                df[kol] = domyslne_yestech[kol]
+            if kol not in df.columns: df[kol] = domyslne_yestech[kol]
         df = df[list(domyslne_yestech.keys())]
 
-    # --- KOLUMNY DLA KSIĄŻKI ADRESOWEJ ---
     elif sheet_name == "DB_Katalog_Firm":
-        if "Nazwa_Firmy" not in df.columns:
-            df["Nazwa_Firmy"] = ""
+        if "Nazwa_Firmy" not in df.columns: df["Nazwa_Firmy"] = ""
                 
     return worksheet, df
 
@@ -126,7 +116,7 @@ except Exception as e:
     st.stop()
 
 # ==========================================
-# 4. PASEK BOCZNY (DARK UI)
+# 4. PASEK BOCZNY
 # ==========================================
 with st.sidebar:
     st.markdown("""
@@ -143,7 +133,7 @@ with st.sidebar:
     
     st.markdown("""
         <div class="sidebar-footer">
-            Wersja systemu: 8.5.0 (Dark UI Full)<br><br>
+            Wersja systemu: 9.1.0 (Bespoke Dashboard)<br><br>
             Użytkownik: Piotr Dukiel | Logistics Manager
         </div>
     """, unsafe_allow_html=True)
@@ -152,18 +142,32 @@ with st.sidebar:
 # 🚚 MODUŁ: EVENTY / TARGI
 # ==========================================
 if wybrany_modul == "🚚 Eventy / Targi":
-    st.title("🚚 Eventy & Flota (Panel Zarządzania)")
+    st.title("🚚 Eventy & Flota")
     worksheet, df = load_data(sh, "DB_Eventy")
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
-    col1, col2, col3 = st.columns(3)
-    with col1: st.metric("Aktywne Transporty", len(df_aktywne))
-    with col2:
-        braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
-        st.metric("Oczekujące Zwroty POD", braki_pod)
-    with col3: st.metric("Status Bazy", "Synchronizowana 🟢")
+    braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    st.divider()
+    # NOWE KARTY HTML ZAMIAST ST.METRIC
+    st.markdown(f"""
+        <div class="kpi-container">
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-header">Aktywne Transporty</div>
+                <div class="kpi-value">{len(df_aktywne)}</div>
+                <div class="kpi-icon-bg">🚚</div>
+            </div>
+            <div class="kpi-card kpi-gold">
+                <div class="kpi-header">Oczekujące Zwroty POD</div>
+                <div class="kpi-value">{braki_pod}</div>
+                <div class="kpi-icon-bg">📄</div>
+            </div>
+            <div class="kpi-card kpi-green">
+                <div class="kpi-header">Status Bazy Danych</div>
+                <div class="kpi-value" style="font-size: 26px; padding-top: 5px;">Synchronizowana</div>
+                <div class="kpi-icon-bg">✅</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne", "➕ Dodaj Zlecenie", "📦 Archiwum"])
 
@@ -202,14 +206,13 @@ if wybrany_modul == "🚚 Eventy / Targi":
                 with e_col2: nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
                 with e_col3: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
             else:
-                st.info("Flota własna - brak kosztów zewnętrznych faktur.")
                 koszt_transportu = 0.0
                 nr_zlecenia_zewn = "FLOTA WŁASNA"
                 nr_faktury = "N/A"
 
             if st.form_submit_button("🚀 Zapisz Zlecenie"):
                 if not nazwa_targow or not przewoznik:
-                    st.error("❌ Musisz uzupełnić nazwę targów oraz przewoźnika/kierowcę!")
+                    st.error("❌ Musisz uzupełnić nazwę targów oraz przewoźnika!")
                 else:
                     nowy_wiersz = {
                         "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
@@ -230,8 +233,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
         df_arch = df[df.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df.empty else pd.DataFrame()
         if not df_arch.empty:
             st.dataframe(df_arch, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych zleceń.")
 
 # ==========================================
 # 📦 MODUŁ: SUBRENTY
@@ -245,19 +246,25 @@ elif wybrany_modul == "📦 Subrenty":
     katalog_firm = df_firmy["Nazwa_Firmy"].dropna().unique().tolist() if not df_firmy.empty else []
     df_aktywne_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_sub.empty else df_sub
     
-    col1, col2 = st.columns(2)
-    with col1: st.metric("Aktywne Wypożyczenia", len(df_aktywne_sub))
-    with col2: st.metric("Firmy w bazie (Książka)", len(katalog_firm))
-        
-    st.divider()
+    st.markdown(f"""
+        <div class="kpi-container">
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-header">Aktywne Wypożyczenia</div>
+                <div class="kpi-value">{len(df_aktywne_sub)}</div>
+                <div class="kpi-icon-bg">📦</div>
+            </div>
+            <div class="kpi-card kpi-gold">
+                <div class="kpi-header">Firmy Zewnętrzne (Baza)</div>
+                <div class="kpi-value">{len(katalog_firm)}</div>
+                <div class="kpi-icon-bg">🏢</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne Wypożyczenia", "➕ Dodaj Subrent", "📦 Archiwum"])
 
     with tab_podglad:
-        if not df_aktywne_sub.empty:
-            st.dataframe(df_aktywne_sub, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak aktywnych wypożyczeń sprzętu.")
+        if not df_aktywne_sub.empty: st.dataframe(df_aktywne_sub, use_container_width=True, hide_index=True)
 
     with tab_formularz:
         with st.form("form_subrent", clear_on_submit=True):
@@ -299,10 +306,7 @@ elif wybrany_modul == "📦 Subrenty":
 
     with tab_archiwum:
         df_arch_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_sub.empty else pd.DataFrame()
-        if not df_arch_sub.empty:
-            st.dataframe(df_arch_sub, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych wypożyczeń.")
+        if not df_arch_sub.empty: st.dataframe(df_arch_sub, use_container_width=True, hide_index=True)
 
 # ==========================================
 # 🌍 MODUŁ: YESTECH EXPORT
@@ -312,25 +316,29 @@ elif wybrany_modul == "🌍 YESTECH Export":
     
     worksheet_yt, df_yt = load_data(sh, "DB_Yestech")
     df_aktywne_yt = df_yt[df_yt.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_yt.empty else df_yt
+    oczekujace = len(df_aktywne_yt[df_aktywne_yt.get("Status_Ofertowy", pd.Series()) == "1. Zapytanie"]) if not df_aktywne_yt.empty else 0
     
-    col1, col2 = st.columns(2)
-    with col1: st.metric("Aktywne Projekty (W toku)", len(df_aktywne_yt))
-    with col2:
-        oczekujace = len(df_aktywne_yt[df_aktywne_yt.get("Status_Ofertowy", pd.Series()) == "1. Zapytanie"]) if not df_aktywne_yt.empty else 0
-        st.metric("Oczekujące na wycenę", oczekujace)
-        
-    st.divider()
+    st.markdown(f"""
+        <div class="kpi-container">
+            <div class="kpi-card kpi-blue">
+                <div class="kpi-header">Aktywne Projekty (W toku)</div>
+                <div class="kpi-value">{len(df_aktywne_yt)}</div>
+                <div class="kpi-icon-bg">🌍</div>
+            </div>
+            <div class="kpi-card kpi-gold">
+                <div class="kpi-header">Oczekujące na wycenę</div>
+                <div class="kpi-value">{oczekujace}</div>
+                <div class="kpi-icon-bg">⏳</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
 
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Lejek (Podgląd)", "➕ Zgłoś / Aktualizuj Temat", "📦 Archiwum"])
 
     with tab_podglad:
-        if not df_aktywne_yt.empty:
-            st.dataframe(df_aktywne_yt, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak otwartych tematów w lejku.")
+        if not df_aktywne_yt.empty: st.dataframe(df_aktywne_yt, use_container_width=True, hide_index=True)
 
     with tab_formularz:
-        st.subheader("Formularz Ofertowo-Kosztowy (Dla Basi)")
         with st.form("form_yestech", clear_on_submit=True):
             y_col1, y_col2 = st.columns(2)
             with y_col1:
@@ -385,20 +393,16 @@ elif wybrany_modul == "🌍 YESTECH Export":
 
     with tab_archiwum:
         df_arch_yt = df_yt[df_yt.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_yt.empty else pd.DataFrame()
-        if not df_arch_yt.empty:
-            st.dataframe(df_arch_yt, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych projektów.")
+        if not df_arch_yt.empty: st.dataframe(df_arch_yt, use_container_width=True, hide_index=True)
 
 # ==========================================
-# 📊 MODUŁ: FINANSE I RAPORTY (DARK UI)
+# 📊 MODUŁ: FINANSE I RAPORTY
 # ==========================================
 elif wybrany_modul == "📊 Finanse i Raporty":
     
     col_title, col_currency = st.columns([5, 1])
     with col_title: st.markdown('<h2 style="margin: 0; padding-top: 10px;">📊 Centrum Finansowe</h2>', unsafe_allow_html=True)
     with col_currency: st.selectbox("Waluta", ["Waluta: EUR €"], label_visibility="collapsed")
-    
     st.markdown("<br>", unsafe_allow_html=True)
     
     _, df_ev = load_data(sh, "DB_Eventy")
@@ -421,51 +425,36 @@ elif wybrany_modul == "📊 Finanse i Raporty":
         braki_ev = df_ev[(df_ev['Zakonczone_Arch'] == 'TAK') & ((df_ev['CMR_Podpisane_POD'] == 'NIE') | (df_ev['Nr_Faktury'] == ''))]
     braki_count = len(braki_ev)
 
-    tab_alerty, tab_koszty, tab_rentownosc = st.tabs([
-        "🚨 Alerty i Braki", "💶 Wydatki per Przewoźnik", "📈 Rentowność YESTECH"
-    ])
+    tab_alerty, tab_koszty, tab_rentownosc = st.tabs(["🚨 Alerty i Braki", "💶 Wydatki per Przewoźnik", "📈 Rentowność YESTECH"])
 
-    # --- ZAKŁADKA 1: ALERTY (UI) ---
     with tab_alerty:
-        st.markdown("<br>", unsafe_allow_html=True)
-        col_headers, col_cards = st.columns([1.2, 1.5])
+        t_spozn = "Brak przeterminowanych płatności!" if spoznione_count == 0 else f"Wykryto {spoznione_count} spóźnień!"
+        c_spozn = "text-green" if spoznione_count == 0 else "text-red"
         
-        with col_headers:
-            st.markdown('<div class="section-title"><span class="dot-red" style="margin-right:8px;"></span> Przeterminowane płatności (Brak opłaconej faktury po terminie)</div>', unsafe_allow_html=True)
-            st.markdown('<br><br>', unsafe_allow_html=True)
-            st.markdown('<div class="section-title"><span class="dot-yellow" style="margin-right:8px;"></span> Blokady Rozliczeń (Brak POD lub nr Faktury w zakończonych)</div>', unsafe_allow_html=True)
-            
-        with col_cards:
-            t_spozn = "Brak przeterminowanych płatności! 🎉" if spoznione_count == 0 else f"Wykryto {spoznione_count} spóźnień!"
-            c_spozn = "text-green" if spoznione_count == 0 else "val-red"
-            v_spozn = "val-red"
-            
-            t_braki = "Brak blokad rozliczeń!" if braki_count == 0 else f"Wykryto {braki_count} blokad!"
-            c_braki = "text-gray" if braki_count == 0 else "text-yellow"
+        t_braki = "Brak blokad rozliczeń!" if braki_count == 0 else f"Wykryto {braki_count} blokad!"
+        c_braki = "text-gray" if braki_count == 0 else "text-yellow"
 
-            st.markdown(f"""
-            <div class="kpi-container">
-                <div class="kpi-card kpi-red">
-                    <div class="kpi-header"><span class="dot-red"></span> Przeterminowane płatności</div>
-                    <div class="kpi-value {v_spozn}">{spoznione_count}</div>
-                    <div class="kpi-subtext {c_spozn}">{t_spozn}</div>
-                    <div class="kpi-btn">Pokaż szczegóły (Faktury)</div>
-                    <div class="kpi-icon">💰</div>
-                </div>
-                <div class="kpi-card kpi-yellow">
-                    <div class="kpi-header"><span class="dot-yellow"></span> Blokady Rozliczeń</div>
-                    <div class="kpi-value val-white">{braki_count}</div>
-                    <div class="kpi-subtext {c_braki}">{t_braki}</div>
-                    <div class="kpi-btn">Pokaż szczegóły (Zlecenia)</div>
-                    <div class="kpi-icon">📄</div>
-                </div>
+        st.markdown(f"""
+        <div class="kpi-container">
+            <div class="kpi-card kpi-red">
+                <div class="kpi-header">Przeterminowane płatności</div>
+                <div class="kpi-value">{spoznione_count}</div>
+                <div class="kpi-subtext {c_spozn}">{t_spozn}</div>
+                <div class="kpi-btn">Pokaż szczegóły</div>
+                <div class="kpi-icon-bg">💰</div>
             </div>
-            """, unsafe_allow_html=True)
+            <div class="kpi-card kpi-yellow">
+                <div class="kpi-header">Blokady Rozliczeń (Brak POD/Faktury)</div>
+                <div class="kpi-value">{braki_count}</div>
+                <div class="kpi-subtext {c_braki}">{t_braki}</div>
+                <div class="kpi-btn">Pokaż szczegóły</div>
+                <div class="kpi-icon-bg">📄</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown('<div class="section-title" style="margin-top:0;">Monthly Financial Flow</div>', unsafe_allow_html=True)
-        
+        # Naprawione kolory Plotly (Dopasowane do jasnego tła)
+        st.markdown('<div class="section-title">Monthly Financial Flow</div>', unsafe_allow_html=True)
         miesiace = ['01.2026', '02.2026', '03.2026', '04.2026', '05.2026', '06.2026']
         przychody = [600, 850, 750, 680, 700, 750]
         koszty = [200, 250, 220, 180, 240, 150]
@@ -479,27 +468,26 @@ elif wybrany_modul == "📊 Finanse i Raporty":
         fig.update_layout(
             plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#9CA3AF'),
+            font=dict(color='#334155'),
             margin=dict(l=0, r=0, t=10, b=0),
             height=250,
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
-            xaxis=dict(showgrid=False, linecolor='#2D313F'),
-            yaxis=dict(showgrid=True, gridcolor='#2D313F', zerolinecolor='#2D313F'),
+            xaxis=dict(showgrid=False, linecolor='#CBD5E1', tickfont=dict(color='#64748B')),
+            yaxis=dict(showgrid=True, gridcolor='#E2E8F0', zerolinecolor='#CBD5E1', tickfont=dict(color='#64748B')),
             barmode='group'
         )
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         st.markdown('<div class="section-title">Ostatnie Płatności i Blokady</div>', unsafe_allow_html=True)
-        
         if spoznione_count == 0 and braki_count == 0:
             st.markdown("""
-            <table style="width:100%; border-collapse: collapse;">
-                <tr style="color: #6B7280; font-size: 12px; border-bottom: 1px solid #2D313F; text-align: left;">
-                    <th style="padding: 10px;">ID Płatności</th>
-                    <th style="padding: 10px;">Klient</th>
-                    <th style="padding: 10px;">Kwota</th>
-                    <th style="padding: 10px;">Status</th>
-                    <th style="padding: 10px;">Powód Blokady</th>
+            <table style="width:100%; border-collapse: collapse; background: #FFFFFF; border: 1px solid #E2E8F0; border-bottom: none; border-radius: 8px 8px 0 0;">
+                <tr style="color: #64748B; font-size: 12px; border-bottom: 2px solid #E2E8F0; text-align: left;">
+                    <th style="padding: 12px;">ID Płatności</th>
+                    <th style="padding: 12px;">Klient</th>
+                    <th style="padding: 12px;">Kwota</th>
+                    <th style="padding: 12px;">Status</th>
+                    <th style="padding: 12px;">Powód Blokady</th>
                 </tr>
             </table>
             <div class="empty-table-msg">Brak aktywnych pozycji</div>
@@ -508,35 +496,26 @@ elif wybrany_modul == "📊 Finanse i Raporty":
             if not spoznione_ev.empty: st.dataframe(spoznione_ev[['ID_Zlecenia', 'Przewoznik', 'Koszt_Transportu_EUR', 'Data_Platnosci']], use_container_width=True)
             if not braki_ev.empty: st.dataframe(braki_ev[['ID_Zlecenia', 'Przewoznik', 'CMR_Podpisane_POD', 'Nr_Faktury']], use_container_width=True)
 
-    # --- ZAKŁADKA 2: KOSZTY PER PRZEWOŹNIK ---
     with tab_koszty:
         st.subheader("Zestawienie kosztów u partnerów zewnętrznych")
-        
         k_col1, k_col2 = st.columns(2)
-        
         with k_col1:
             st.markdown("**🚚 Transport (Eventy)**")
             if not df_ev.empty and "Koszt_Transportu_EUR" in df_ev.columns:
                 df_ev['Koszt_Transportu_EUR'] = pd.to_numeric(df_ev['Koszt_Transportu_EUR'], errors='coerce').fillna(0)
                 koszty_ev = df_ev.groupby("Przewoznik")["Koszt_Transportu_EUR"].sum().reset_index()
                 koszty_ev = koszty_ev[koszty_ev["Koszt_Transportu_EUR"] > 0].sort_values(by="Koszt_Transportu_EUR", ascending=False)
-                if not koszty_ev.empty:
-                    st.dataframe(koszty_ev, use_container_width=True, hide_index=True)
-                else:
-                    st.info("Brak zarejestrowanych kosztów w Eventach.")
-                    
+                if not koszty_ev.empty: st.dataframe(koszty_ev, use_container_width=True, hide_index=True)
+                else: st.info("Brak zarejestrowanych kosztów w Eventach.")
         with k_col2:
             st.markdown("**📦 Sprzęt (Subrenty)**")
             if not df_sub.empty and "Koszt" in df_sub.columns:
                 df_sub['Koszt'] = pd.to_numeric(df_sub['Koszt'], errors='coerce').fillna(0)
                 koszty_sub = df_sub.groupby("Firma_Zewnetrzna")["Koszt"].sum().reset_index()
                 koszty_sub = koszty_sub[koszty_sub["Koszt"] > 0].sort_values(by="Koszt", ascending=False)
-                if not koszty_sub.empty:
-                    st.dataframe(koszty_sub, use_container_width=True, hide_index=True)
-                else:
-                    st.info("Brak zarejestrowanych kosztów w Subrentach.")
+                if not koszty_sub.empty: st.dataframe(koszty_sub, use_container_width=True, hide_index=True)
+                else: st.info("Brak zarejestrowanych kosztów w Subrentach.")
 
-    # --- ZAKŁADKA 3: RENTOWNOŚĆ YESTECH ---
     with tab_rentownosc:
         st.subheader("Wycena vs. Rzeczywistość (Eksport Basi)")
         if not df_yt.empty and "Wycena_Dla_Basi" in df_yt.columns and "Koszt_Rzeczywisty" in df_yt.columns:
@@ -545,16 +524,19 @@ elif wybrany_modul == "📊 Finanse i Raporty":
             df_yt['Bilans (Zysk/Strata) €'] = df_yt['Wycena_Dla_Basi'] - df_yt['Koszt_Rzeczywisty']
             
             rentownosc = df_yt[['ID_Yestech', 'Destynacja', 'Wycena_Dla_Basi', 'Koszt_Rzeczywisty', 'Bilans (Zysk/Strata) €']]
-            
-            # Wyróżnianie zysku na zielono, straty na czerwono
             def color_bilans(val):
                 if val > 0: return 'color: #10B981; font-weight: bold'
                 elif val < 0: return 'color: #EF4444; font-weight: bold'
                 return ''
-                
             st.dataframe(rentownosc.style.map(color_bilans, subset=['Bilans (Zysk/Strata) €']), use_container_width=True, hide_index=True)
-            
             suma_zysk = rentownosc['Bilans (Zysk/Strata) €'].sum()
-            st.metric("Łączny bilans na projektach YESTECH", f"{suma_zysk:.2f} €")
+            
+            # Karta podsumowania zysku
+            st.markdown(f"""
+            <div class="kpi-card kpi-gold" style="width: 50%; margin-top: 20px;">
+                <div class="kpi-header">Łączny bilans na projektach YESTECH</div>
+                <div class="kpi-value">{suma_zysk:.2f} €</div>
+            </div>
+            """, unsafe_allow_html=True)
         else:
             st.info("Brak danych w bazie YESTECH.")
