@@ -61,7 +61,7 @@ def render(sh):
             with f_col1:
                 if st.button(f"🌍 Wszystkie Aktywne", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
                     st.session_state["filtr_eventow"] = "Wszystkie"
-                    st.session_state["wybrany_event_id"] = None # Resetujemy prawy panel przy zmianie filtra
+                    st.session_state["wybrany_event_id"] = None
                     st.rerun()
             with f_col2:
                 if st.button(f"📝 Brak CMR ({braki_cmr})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakCMR" else "secondary"):
@@ -137,7 +137,7 @@ def render(sh):
                                 st.rerun()
 
             with col_detale:
-                # Zabezpieczenie na wypadek zmiany filtra gdy event jest otwarty, ale już nie spełnia kryteriów
+                # Zabezpieczenie na wypadek zmiany filtra gdy event jest otwarty
                 if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
                     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
                     
@@ -169,6 +169,7 @@ def render(sh):
                     det_info, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
+                        # 1. Statyczny podgląd danych niezmiennych
                         st.markdown(f"""
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
                             <div>
@@ -180,26 +181,50 @@ def render(sh):
                                 <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Typ_Transportu', '-')}</div>
                             </div>
                             <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Data Logistyczna</div>
-                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Data_Zlecenia_Tr', '-')}</div>
-                            </div>
-                            <div>
                                 <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Nr Zlecenia Zewn.</div>
                                 <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Nr_Zlecenia_Zewn', '-')}</div>
                             </div>
-                            <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Status Magazynu</div>
-                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Status_Magazyn', '-')}</div>
-                            </div>
-                            <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Faza Procesu</div>
-                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Faza_Procesu', '-')}</div>
-                            </div>
                         </div>
                         <hr style="border-color: rgba(255,255,255,0.05); margin: 15px 0;">
-                        <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Notatki</div>
-                        <div style="color: #F8FAFC; font-size: 13px; margin-top: 5px;">{dane_eventu.get('Notatki', 'Brak notatek.')}</div>
                         """, unsafe_allow_html=True)
+                        
+                        # 2. Formularz edycji dynamicznych statusów logistycznych
+                        with st.form(key=f"edit_status_{dane_eventu['ID_Zlecenia']}"):
+                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🔄 Aktualizacja Statusu Operacyjnego</p>", unsafe_allow_html=True)
+                            
+                            c_stat1, c_stat2, c_stat3 = st.columns(3)
+                            
+                            fazy_lista = ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"]
+                            akt_faza = dane_eventu.get("Faza_Procesu", "Inicjacja")
+                            idx_fazy = fazy_lista.index(akt_faza) if akt_faza in fazy_lista else 0
+                            
+                            mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
+                            akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
+                            idx_mag = mag_lista.index(akt_mag) if akt_mag in mag_lista else 0
+
+                            with c_stat1:
+                                u_faza = st.selectbox("Faza Procesu", fazy_lista, index=idx_fazy)
+                            with c_stat2:
+                                u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
+                            with c_stat3:
+                                dp_trasa = dane_eventu.get("Data_Zlecenia_Tr", "")
+                                try:
+                                    dp_parsed = datetime.datetime.strptime(str(dp_trasa), "%Y-%m-%d").date() if dp_trasa and dp_trasa != "N/A" else datetime.date.today()
+                                except:
+                                    dp_parsed = datetime.date.today()
+                                u_data_tr = st.date_input("Data Logistyczna", value=dp_parsed)
+
+                            u_notatki = st.text_area("Notatki", value=dane_eventu.get('Notatki', ''))
+                            
+                            if st.form_submit_button("💾 Zapisz Zmiany"):
+                                idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
+                                df.at[idx, 'Faza_Procesu'] = u_faza
+                                df.at[idx, 'Status_Magazyn'] = u_status_mag
+                                df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr)
+                                df.at[idx, 'Notatki'] = u_notatki
+                                save_data(worksheet, df)
+                                st.success("Status operacyjny został zaktualizowany!")
+                                st.rerun()
                         
                     with det_fin:
                         with st.form(key=f"update_{dane_eventu['ID_Zlecenia']}"):
