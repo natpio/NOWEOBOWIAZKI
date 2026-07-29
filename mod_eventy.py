@@ -4,12 +4,15 @@ import datetime
 from db import load_data, save_data, generuj_smart_id
 
 def render(sh):
-    st.title("🚚 Eventy & Flota")
+    # Nowoczesny, mroczny nagłówek modułu
+    st.markdown("<h2 style='color: #F8FAFC; margin-bottom: 20px;'>🚚 Moduł Operacyjny: Eventy & Flota</h2>", unsafe_allow_html=True)
+    
     worksheet, df = load_data(sh, "DB_Eventy")
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
+    # Karty KPI - Automatycznie zaciągną efekt szkła z pliku style.css
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card kpi-blue">
@@ -24,22 +27,21 @@ def render(sh):
             </div>
             <div class="kpi-card kpi-green">
                 <div class="kpi-header">Status Bazy Danych</div>
-                <div class="kpi-value" style="font-size: 26px; padding-top: 5px;">Synchronizowana</div>
+                <div class="kpi-value" style="font-size: 26px; padding-top: 5px;">Online</div>
                 <div class="kpi-icon-bg">✅</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
-    # Usunęliśmy zakładkę Zakończ (tab_zakoncz), wszystko robimy w podglądzie
     tab_podglad, tab_formularz, tab_archiwum = st.tabs([
-        "📊 Aktywne", "➕ Dodaj Zlecenie", "📦 Archiwum"
+        "📊 Aktywne Operacje", "➕ Nowe Zlecenie Transportowe", "📦 Archiwum Historyczne"
     ])
 
     with tab_podglad:
         if not df_aktywne.empty:
-            st.info("💡 Zaznacz pole '🏁 Zakończ' przy wierszu i kliknij zapisz, aby zamknąć zlecenie (system sam uzupełni N/A dla floty własnej).")
+            st.markdown("<p style='color: #94A3B8; font-size: 14px;'>Zaznacz pole <b>'🏁 Zakończ'</b> przy wierszu i zapisz, aby zarchiwizować zlecenie. System automatycznie wyczyści komórki finansowe (N/A) dla floty SQM.</p>", unsafe_allow_html=True)
             
-            # Tworzymy tymczasową kopię do wyświetlenia i dodajemy kolumnę Checkbox na start
+            # Tymczasowa kolumna "🏁 Zakończ" na czas edycji
             df_display = df_aktywne.copy()
             df_display.insert(0, "🏁 Zakończ", False)
             
@@ -57,17 +59,17 @@ def render(sh):
                 }
             )
             
-            if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
-                # 1. Wyłapujemy, które ID zostały zaznaczone do zamknięcia
+            if st.button("💾 Zatwierdź Zmiany w Bazie", type="primary"):
+                # Wyciągamy ID zaznaczone do zamknięcia
                 zakonczone_id = edited_df[edited_df["🏁 Zakończ"] == True]["ID_Zlecenia"].tolist()
                 
-                # 2. Usuwamy tymczasową kolumnę "🏁 Zakończ" przed złączeniem z główną bazą
+                # Usuwamy techniczną kolumnę z widoku
                 edited_df = edited_df.drop(columns=["🏁 Zakończ"])
                 
-                # 3. Aktualizujemy zwykłe zmiany wpisane w tabeli
+                # Aktualizujemy ewentualne inne poprawki zrobione w locie
                 df.update(edited_df)
                 
-                # 4. Aplikujemy logikę ZAMYKANIA do zaznaczonych wierszy
+                # Uruchamiamy logikę zamykania i czyszczenia finansów dla floty
                 for z_id in zakonczone_id:
                     idx = df[df['ID_Zlecenia'] == z_id].index[0]
                     
@@ -82,15 +84,16 @@ def render(sh):
                     df.at[idx, 'Faza_Procesu'] = "Zamknięte"
                     df.at[idx, 'Zakonczone_Arch'] = "TAK"
 
-                # 5. Zapis i odświeżenie
+                # Zapis i reload
                 save_data(worksheet, df)
                 st.success(f"Pomyślnie zaktualizowano! Zakończono {len(zakonczone_id)} zleceń.")
                 st.rerun()
         else:
-            st.info("Brak aktywnych transportów w bazie.")
+            st.info("Brak aktywnych transportów w bazie danych.")
 
     with tab_formularz:
         with st.form("form_event_pro", clear_on_submit=True):
+            st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
             f_col1, f_col2 = st.columns(2)
             with f_col1:
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
@@ -103,15 +106,19 @@ def render(sh):
 
             notatki = st.text_area("Notatki Dodatkowe")
             
-            st.markdown("### 🛫 Dokumenty Startowe")
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #D4AF37;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
             
-            st.markdown("### 🏁 Rozliczenie i Dowód Dostawy (POD)")
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #D4AF37;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
             with d_col2: pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
             with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
 
+            st.markdown("<br>", unsafe_allow_html=True)
+            
             if typ_transportu == "Zewnętrzny":
                 e_col1, e_col2, e_col3 = st.columns(3)
                 with e_col1: koszt_transportu = st.number_input("Koszt Transportu (€)", min_value=0.0, value=0.0, step=50.0)
@@ -122,9 +129,11 @@ def render(sh):
                 nr_zlecenia_zewn = "FLOTA WŁASNA"
                 nr_faktury = "N/A"
 
-            if st.form_submit_button("🚀 Zapisz Zlecenie"):
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.form_submit_button("🚀 Zainicjuj Zlecenie Systemowe"):
                 if not nazwa_targow or not przewoznik:
-                    st.error("❌ Musisz uzupełnić nazwę targów oraz przewoźnika!")
+                    st.error("❌ Błąd krytyczny: Uzupełnij nazwę targów oraz przewoźnika!")
                 else:
                     nowy_wiersz = {
                         "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
@@ -147,7 +156,7 @@ def render(sh):
                     df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                     save_data(worksheet, df)
-                    st.success("🎉 Dodano zlecenie!")
+                    st.success("🎉 Zlecenie zapisane w bazie chmurowej!")
                     st.rerun()
 
     with tab_archiwum:
@@ -155,4 +164,4 @@ def render(sh):
         if not df_arch.empty: 
             st.dataframe(df_arch, use_container_width=True, hide_index=True)
         else:
-            st.info("Archiwum jest puste.")
+            st.info("Brak zarchiwizowanych transportów.")
