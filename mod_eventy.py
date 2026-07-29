@@ -215,22 +215,21 @@ def render(sh):
                         is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
                         
                         with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
-                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji</p>", unsafe_allow_html=True)
+                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
                             
                             if is_sqm:
                                 u_cmr = st.selectbox("CMR Gotowe (Wystawione)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
-                                st.info("🚚 Pojazd własnej floty SQM. Pola kosztów, zewnętrznych faktur oraz statusu POD/PP są automatycznie wyłączone (N/A).")
+                                st.info("🚚 Pojazd własnej floty SQM. Pola kosztów, zewnętrznych faktur oraz statusu Potwierdzenia Przelewu są automatycznie wyłączone (N/A).")
                                 
-                                # Przypisanie N/A "w tle" bez pytania użytkownika
                                 u_pod, u_pp, u_koszt, u_nr_fak, u_faktura_opl, u_data_platnosci = "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
                             else:
                                 col_d1, col_d2, col_d3 = st.columns(3)
                                 with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
                                 with col_d2: u_pod = st.selectbox("CMR POD?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
-                                with col_d3: u_pp = st.selectbox("Przepustki (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
+                                with col_d3: u_pp = st.selectbox("Potw. Przelewu (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
                                 
                                 st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'>", unsafe_allow_html=True)
-                                st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Rozliczenia</p>", unsafe_allow_html=True)
+                                st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Faktury</p>", unsafe_allow_html=True)
                                 
                                 col_f1, col_f2 = st.columns(2)
                                 with col_f1: 
@@ -269,7 +268,6 @@ def render(sh):
                         if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ ZLECENIE", type="primary", use_container_width=True):
                             idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                             
-                            # Upewnienie się że dla floty SQM wszystko co zbędne ląduje jako N/A
                             if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
                                 df.at[idx, 'Faktura_Oplacona'] = "N/A"
                                 df.at[idx, 'PP_Otrzymane'] = "N/A"
@@ -301,7 +299,6 @@ def render(sh):
     with tab_formularz:
         st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
         
-        # Przełącznik wyciągnięty na zewnątrz, aby dynamicznie przeładowywał formularz!
         typ_transportu = st.radio("Rodzaj transportu (zmienia układ interfejsu):", ["Zewnętrzny", "Własny SQM"], horizontal=True)
         
         with st.form("form_event_pro", clear_on_submit=True):
@@ -320,13 +317,12 @@ def render(sh):
             st.markdown("<h4 style='color: #D4AF37;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
             
-            # Własny SQM ukrywa niepotrzebne pytania na etapie tworzenia
             if typ_transportu == "Zewnętrzny":
                 st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
                 st.markdown("<h4 style='color: #D4AF37;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
                 d_col1, d_col2, d_col3 = st.columns(3)
                 with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
-                with d_col2: pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
+                with d_col2: pp_otrzymane = st.selectbox("Potw. Przelewu (PP)?", ["", "NIE", "TAK"])
                 with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
 
                 st.markdown("<br>", unsafe_allow_html=True)
