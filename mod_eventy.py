@@ -4,15 +4,13 @@ import datetime
 from db import load_data, save_data, generuj_smart_id
 
 def render(sh):
-    # Nowoczesny, mroczny nagłówek modułu
     st.markdown("<h2 style='color: #F8FAFC; margin-bottom: 20px;'>🚚 Moduł Operacyjny: Eventy & Flota</h2>", unsafe_allow_html=True)
-    
     worksheet, df = load_data(sh, "DB_Eventy")
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    # Karty KPI - Automatycznie zaciągną efekt szkła z pliku style.css
+    # Karty KPI nad głównym widokiem
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card kpi-blue">
@@ -26,68 +24,81 @@ def render(sh):
                 <div class="kpi-icon-bg">📄</div>
             </div>
             <div class="kpi-card kpi-green">
-                <div class="kpi-header">Status Bazy Danych</div>
-                <div class="kpi-value" style="font-size: 26px; padding-top: 5px;">Online</div>
+                <div class="kpi-header">Status Systemu</div>
+                <div class="kpi-value" style="font-size: 26px; padding-top: 5px;">Synchronizowany</div>
                 <div class="kpi-icon-bg">✅</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     tab_podglad, tab_formularz, tab_archiwum = st.tabs([
-        "📊 Aktywne Operacje", "➕ Nowe Zlecenie Transportowe", "📦 Archiwum Historyczne"
+        "🗂️ Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum Historyczne"
     ])
 
     with tab_podglad:
         if not df_aktywne.empty:
-            st.markdown("<p style='color: #94A3B8; font-size: 14px;'>Zaznacz pole <b>'🏁 Zakończ'</b> przy wierszu i zapisz, aby zarchiwizować zlecenie. System automatycznie wyczyści komórki finansowe (N/A) dla floty SQM.</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #94A3B8; font-size: 14px; margin-bottom: 20px;'>Lista aktywnych transportów. Użyj przycisku akcji po prawej stronie, aby zakończyć proces.</p>", unsafe_allow_html=True)
             
-            # Tymczasowa kolumna "🏁 Zakończ" na czas edycji
-            df_display = df_aktywne.copy()
-            df_display.insert(0, "🏁 Zakończ", False)
-            
-            edited_df = st.data_editor(
-                df_display, 
-                use_container_width=True, 
-                hide_index=True, 
-                key="edit_eventy",
-                column_config={
-                    "🏁 Zakończ": st.column_config.CheckboxColumn(
-                        "🏁 Zakończ",
-                        help="Zaznacz, aby zakończyć i zarchiwizować to zlecenie",
-                        default=False,
-                    )
-                }
-            )
-            
-            if st.button("💾 Zatwierdź Zmiany w Bazie", type="primary"):
-                # Wyciągamy ID zaznaczone do zamknięcia
-                zakonczone_id = edited_df[edited_df["🏁 Zakończ"] == True]["ID_Zlecenia"].tolist()
+            # Pętla generująca karty (zamiast tradycyjnej tabeli)
+            for index, row in df_aktywne.iterrows():
                 
-                # Usuwamy techniczną kolumnę z widoku
-                edited_df = edited_df.drop(columns=["🏁 Zakończ"])
+                # Rozpoznawanie statusu i przypisanie odpowiedniego koloru CSS
+                faza = str(row.get('Faza_Procesu', '')).lower()
+                badge_class = "cr-badge"
+                if "inicjacja" in faza: badge_class += " inicjacja"
+                elif "planowanie" in faza: badge_class += " planowanie"
+                elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
+                elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
+                else: badge_class += " domyslny"
                 
-                # Aktualizujemy ewentualne inne poprawki zrobione w locie
-                df.update(edited_df)
+                # Podział wiersza na sekcję z kartą (80%) i przycisk (20%)
+                c1, c2 = st.columns([8, 2], vertical_alignment="center")
                 
-                # Uruchamiamy logikę zamykania i czyszczenia finansów dla floty
-                for z_id in zakonczone_id:
-                    idx = df[df['ID_Zlecenia'] == z_id].index[0]
+                with c1:
+                    st.markdown(f"""
+                    <div class="custom-row">
+                        <div class="cr-col" style="width: 25%;">
+                            <span class="cr-title">{row.get('Nazwa_Targow', '-')}</span>
+                            <span>📍 ID: {row.get('ID_Zlecenia', '-')}</span>
+                        </div>
+                        <div class="cr-col" style="width: 20%;">
+                            <span>Pojazd & Zespół</span>
+                            <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
+                            <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
+                        </div>
+                        <div class="cr-col" style="width: 20%;">
+                            <span>Data Logistyczna</span>
+                            <span class="cr-text">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
+                        </div>
+                        <div class="cr-col" style="width: 15%; align-items: flex-end;">
+                            <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
-                    if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
-                        df.at[idx, 'Data_Zlecenia_Tr'] = "N/A"
-                        df.at[idx, 'Faktura_Oplacona'] = "N/A"
-                        df.at[idx, 'PP_Otrzymane'] = "N/A"
-                        df.at[idx, 'Data_Platnosci'] = "N/A"
-                        df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
-                        df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
+                with c2:
+                    # Unikalny klucz dla przycisku wymagany przez Streamlit
+                    if st.button("🏁 Zakończ i Archiwizuj", key=f"btn_{row['ID_Zlecenia']}", use_container_width=True):
+                        idx = df[df['ID_Zlecenia'] == row['ID_Zlecenia']].index[0]
                         
-                    df.at[idx, 'Faza_Procesu'] = "Zamknięte"
-                    df.at[idx, 'Zakonczone_Arch'] = "TAK"
-
-                # Zapis i reload
-                save_data(worksheet, df)
-                st.success(f"Pomyślnie zaktualizowano! Zakończono {len(zakonczone_id)} zleceń.")
-                st.rerun()
+                        # Logika czyszczenia komórek finansowych dla floty własnej
+                        if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
+                            df.at[idx, 'Data_Zlecenia_Tr'] = "N/A"
+                            df.at[idx, 'Faktura_Oplacona'] = "N/A"
+                            df.at[idx, 'PP_Otrzymane'] = "N/A"
+                            df.at[idx, 'Data_Platnosci'] = "N/A"
+                            df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
+                            df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
+                            
+                        df.at[idx, 'Faza_Procesu'] = "Zamknięte"
+                        df.at[idx, 'Zakonczone_Arch'] = "TAK"
+                        
+                        save_data(worksheet, df)
+                        st.success(f"Zlecenie {row['Nazwa_Targow']} pomyślnie zarchiwizowane!")
+                        st.rerun()
+                        
+            st.markdown("<br><br>", unsafe_allow_html=True)
+            
         else:
             st.info("Brak aktywnych transportów w bazie danych.")
 
@@ -101,16 +112,16 @@ def render(sh):
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. Solówka 12t, Bus)")
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Kierowca *")
-                faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Flota", "Dokumenty", "Załadunek", "Trasa", "Zamknięte"])
+                faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
             notatki = st.text_area("Notatki Dodatkowe")
             
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
             st.markdown("<h4 style='color: #D4AF37;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
             
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.1);'>", unsafe_allow_html=True)
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
             st.markdown("<h4 style='color: #D4AF37;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
@@ -162,6 +173,7 @@ def render(sh):
     with tab_archiwum:
         df_arch = df[df.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df.empty else pd.DataFrame()
         if not df_arch.empty: 
+            # W archiwum zostawiamy klasyczną tabelę dla wygodnego przeglądania dużych ilości starych danych
             st.dataframe(df_arch, use_container_width=True, hide_index=True)
         else:
             st.info("Brak zarchiwizowanych transportów.")
