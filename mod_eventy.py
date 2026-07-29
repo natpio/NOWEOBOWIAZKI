@@ -9,24 +9,32 @@ def render(sh):
     worksheet, df = load_data(sh, "DB_Eventy")
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
-    braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
+    # Zliczanie nowych metryk (wąskich gardeł)
+    braki_cmr = len(df_aktywne[df_aktywne.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
+    braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
+    braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
+    
+    # Dynamiczny kolor dla faktur (czerwony jeśli są braki, zielony jeśli czysto)
+    kpi3_color = "kpi-red" if braki_faktury > 0 else "kpi-green"
+    
+    # Wizualne Karty KPI z nowymi metrykami
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card kpi-blue">
-                <div class="kpi-header">Aktywne Transporty</div>
-                <div class="kpi-value">{len(df_aktywne)}</div>
-                <div class="kpi-icon-bg">🚚</div>
+                <div class="kpi-header">Do wystawienia CMR</div>
+                <div class="kpi-value">{braki_cmr}</div>
+                <div class="kpi-icon-bg">📝</div>
             </div>
             <div class="kpi-card kpi-gold">
-                <div class="kpi-header">Oczekujące Zwroty POD</div>
+                <div class="kpi-header">Brakujące zwroty POD</div>
                 <div class="kpi-value">{braki_pod}</div>
                 <div class="kpi-icon-bg">📄</div>
             </div>
-            <div class="kpi-card kpi-green">
-                <div class="kpi-header">Status Systemu</div>
-                <div class="kpi-value" style="font-size: 26px; padding-top: 5px;">Synchronizowany</div>
-                <div class="kpi-icon-bg">✅</div>
+            <div class="kpi-card {kpi3_color}">
+                <div class="kpi-header">Nieopłacone faktury</div>
+                <div class="kpi-value">{braki_faktury}</div>
+                <div class="kpi-icon-bg">💰</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
@@ -37,54 +45,101 @@ def render(sh):
 
     with tab_podglad:
         if not df_aktywne.empty:
-            st.markdown("<p style='color: #94A3B8; font-size: 14px; margin-bottom: 20px;'>Kliknij 'Szczegóły' przy zleceniu, aby otworzyć panel boczny z pełnymi danymi i akcjami.</p>", unsafe_allow_html=True)
             
+            # Pamięć sesji dla detali i filtra
             if "wybrany_event_id" not in st.session_state:
                 st.session_state["wybrany_event_id"] = None
+            if "filtr_eventow" not in st.session_state:
+                st.session_state["filtr_eventow"] = "Wszystkie"
 
+            # ==========================================
+            # INTERAKTYWNE FILTROWANIE (LINKI DO BRAKÓW)
+            # ==========================================
+            st.markdown("<p style='color: #94A3B8; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;'>⚡ Filtruj listę według braków operacyjnych:</p>", unsafe_allow_html=True)
+            
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            with f_col1:
+                if st.button(f"🌍 Wszystkie Aktywne", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
+                    st.session_state["filtr_eventow"] = "Wszystkie"
+                    st.session_state["wybrany_event_id"] = None # Resetujemy prawy panel przy zmianie filtra
+                    st.rerun()
+            with f_col2:
+                if st.button(f"📝 Brak CMR ({braki_cmr})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakCMR" else "secondary"):
+                    st.session_state["filtr_eventow"] = "BrakCMR"
+                    st.session_state["wybrany_event_id"] = None
+                    st.rerun()
+            with f_col3:
+                if st.button(f"📥 Brak POD ({braki_pod})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakPOD" else "secondary"):
+                    st.session_state["filtr_eventow"] = "BrakPOD"
+                    st.session_state["wybrany_event_id"] = None
+                    st.rerun()
+            with f_col4:
+                if st.button(f"💰 Nieopłacone ({braki_faktury})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakFaktury" else "secondary"):
+                    st.session_state["filtr_eventow"] = "BrakFaktury"
+                    st.session_state["wybrany_event_id"] = None
+                    st.rerun()
+            
+            # Przetwarzanie i aplikowanie aktywnego filtra na dane
+            df_widok = df_aktywne.copy()
+            if st.session_state["filtr_eventow"] == "BrakCMR":
+                df_widok = df_widok[df_widok.get("CMR_Gotowe", pd.Series()) == "NIE"]
+            elif st.session_state["filtr_eventow"] == "BrakPOD":
+                df_widok = df_widok[df_widok.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
+            elif st.session_state["filtr_eventow"] == "BrakFaktury":
+                df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
+
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
+            
+            # ==========================================
+            # MASTER-DETAIL VIEW (WIDOK DZIELONY)
+            # ==========================================
             col_lista, col_detale = st.columns([55, 45], gap="large")
             
             with col_lista:
-                for index, row in df_aktywne.iterrows():
-                    faza = str(row.get('Faza_Procesu', '')).lower()
-                    badge_class = "cr-badge"
-                    if "inicjacja" in faza: badge_class += " inicjacja"
-                    elif "planowanie" in faza: badge_class += " planowanie"
-                    elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
-                    elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
-                    else: badge_class += " domyslny"
-                    
-                    c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
-                    
-                    with c_karta:
-                        st.markdown(f"""
-                        <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px;">
-                            <div class="cr-col" style="width: 40%;">
-                                <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
-                                <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
-                            </div>
-                            <div class="cr-col" style="width: 25%;">
-                                <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-                                <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
-                            </div>
-                            <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                <span class="cr-text" style="margin-bottom: 5px;">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
-                                <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                if df_widok.empty:
+                    st.info("Brak zleceń spełniających wybrane kryteria filtra.")
+                else:
+                    for index, row in df_widok.iterrows():
+                        faza = str(row.get('Faza_Procesu', '')).lower()
+                        badge_class = "cr-badge"
+                        if "inicjacja" in faza: badge_class += " inicjacja"
+                        elif "planowanie" in faza: badge_class += " planowanie"
+                        elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
+                        elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
+                        else: badge_class += " domyslny"
                         
-                    with c_btn:
-                        is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
-                        btn_type = "primary" if is_primary else "secondary"
+                        c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
-                        if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
-                            st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
-                            st.rerun()
+                        with c_karta:
+                            st.markdown(f"""
+                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px;">
+                                <div class="cr-col" style="width: 40%;">
+                                    <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
+                                    <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+                                </div>
+                                <div class="cr-col" style="width: 25%;">
+                                    <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
+                                    <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
+                                </div>
+                                <div class="cr-col" style="width: 35%; align-items: flex-end;">
+                                    <span class="cr-text" style="margin-bottom: 5px;">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
+                                    <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                        with c_btn:
+                            is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
+                            btn_type = "primary" if is_primary else "secondary"
+                            
+                            if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
+                                st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
+                                st.rerun()
 
             with col_detale:
-                if st.session_state["wybrany_event_id"]:
-                    dane_eventu = df_aktywne[df_aktywne["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
+                # Zabezpieczenie na wypadek zmiany filtra gdy event jest otwarty, ale już nie spełnia kryteriów
+                if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
+                    dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
                     
                     st.markdown("""
                         <div style="background: rgba(30, 41, 59, 0.5); padding: 25px; border-radius: 16px; border: 1px solid rgba(212, 175, 55, 0.3);">
@@ -180,7 +235,6 @@ def render(sh):
                                 df.at[idx, 'PP_Otrzymane'] = u_pp
                                 df.at[idx, 'Nr_Faktury'] = u_nr_fak
                                 
-                                # Aktualizujemy finanse tylko jeśli to nie jest flota własna (dla własnej trzymamy N/A)
                                 if dane_eventu['Typ_Transportu'] != "Własny SQM":
                                     df.at[idx, 'Koszt_Transportu_EUR'] = float(u_koszt)
                                     df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
