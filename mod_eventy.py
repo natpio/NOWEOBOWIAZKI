@@ -34,7 +34,14 @@ def render(sh):
 
     with tab_podglad:
         if not df_aktywne.empty:
-            st.dataframe(df_aktywne, use_container_width=True, hide_index=True)
+            st.info("💡 Możesz edytować dane bezpośrednio w tabeli poniżej (jak w Excelu). Po zakończeniu kliknij 'Zapisz zmiany'.")
+            edited_df = st.data_editor(df_aktywne, use_container_width=True, hide_index=True, key="edit_eventy")
+            
+            if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
+                df.update(edited_df) # Magicznie łączy zmienione komórki z główną bazą
+                save_data(worksheet, df)
+                st.success("Pomyślnie zaktualizowano bazę danych Eventów!")
+                st.rerun()
         else:
             st.info("Brak aktywnych transportów w bazie.")
 
@@ -51,8 +58,10 @@ def render(sh):
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
             notatki = st.text_area("Notatki Dodatkowe")
+            
             st.markdown("### 🛫 Dokumenty Startowe")
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
+            
             st.markdown("### 🏁 Rozliczenie i Dowód Dostawy (POD)")
             d_col1, d_col2, d_col3 = st.columns(3)
             with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
