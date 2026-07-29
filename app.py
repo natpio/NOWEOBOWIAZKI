@@ -170,7 +170,7 @@ with st.sidebar:
     st.markdown("""
         <div class="sidebar-footer">
             Wersja systemu: 9.5.0 (Global Vision UI)<br><br>
-            Użytkownik: Piotr Dukiel |
+            Użytkownik: Piotr Dukiel
         </div>
     """, unsafe_allow_html=True)
 
