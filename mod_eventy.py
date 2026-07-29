@@ -30,7 +30,9 @@ def render(sh):
         </div>
     """, unsafe_allow_html=True)
 
-    tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Aktywne", "➕ Dodaj Zlecenie", "📦 Archiwum"])
+    tab_podglad, tab_formularz, tab_zakoncz, tab_archiwum = st.tabs([
+        "📊 Aktywne", "➕ Dodaj Zlecenie", "🏁 Zakończ Zlecenie", "📦 Archiwum"
+    ])
 
     with tab_podglad:
         if not df_aktywne.empty:
@@ -38,7 +40,7 @@ def render(sh):
             edited_df = st.data_editor(df_aktywne, use_container_width=True, hide_index=True, key="edit_eventy")
             
             if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
-                df.update(edited_df) # Magicznie łączy zmienione komórki z główną bazą
+                df.update(edited_df)
                 save_data(worksheet, df)
                 st.success("Pomyślnie zaktualizowano bazę danych Eventów!")
                 st.rerun()
@@ -74,7 +76,7 @@ def render(sh):
                 with e_col2: nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
                 with e_col3: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
             else:
-                koszt_transportu = 0.0
+                koszt_transportu = "N/A"
                 nr_zlecenia_zewn = "FLOTA WŁASNA"
                 nr_faktury = "N/A"
 
@@ -91,12 +93,57 @@ def render(sh):
                         "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
                     }
+                    
+                    # Logika wstawiająca 'N/A' dla transportu wewnętrznego SQM
+                    if typ_transportu == "Własny SQM":
+                        nowy_wiersz["Data_Zlecenia_Tr"] = "N/A"
+                        nowy_wiersz["Faktura_Oplacona"] = "N/A"
+                        nowy_wiersz["PP_Otrzymane"] = "N/A"
+                        nowy_wiersz["Data_Platnosci"] = "N/A"
+                        nowy_wiersz["Koszt_Transportu_EUR"] = "N/A"
+                        nowy_wiersz["CMR_Podpisane_POD"] = "N/A"
+
                     df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                     save_data(worksheet, df)
                     st.success("🎉 Dodano zlecenie!")
                     st.rerun()
 
+    with tab_zakoncz:
+        st.subheader("🏁 Zamknięcie Zlecenia i Archiwizacja")
+        if not df_aktywne.empty:
+            wybrany_id = st.selectbox("Wybierz Event do zamknięcia", df_aktywne["ID_Zlecenia"].tolist())
+            dane_eventu = df_aktywne[df_aktywne["ID_Zlecenia"] == wybrany_id].iloc[0]
+            
+            st.info(f"**Wybrano:** {dane_eventu.get('Nazwa_Targow', '')} (Przewoźnik: {dane_eventu.get('Przewoznik', '')}) | Typ: {dane_eventu.get('Typ_Transportu', '')}")
+            
+            with st.form("form_zakoncz_event", clear_on_submit=False):
+                st.markdown("Kliknięcie przycisku zmieni fazę na **Zamknięte**, przeniesie event do Archiwum oraz automatycznie wyczyści nieużywane komórki finansowe dla floty własnej.")
+                
+                if st.form_submit_button("🏁 Zakończ Event", type="primary"):
+                    idx = df[df['ID_Zlecenia'] == wybrany_id].index[0]
+                    
+                    # Dodatkowe zabezpieczenie: wymuszenie 'N/A' przy archiwizacji floty SQM
+                    if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
+                        df.at[idx, 'Data_Zlecenia_Tr'] = "N/A"
+                        df.at[idx, 'Faktura_Oplacona'] = "N/A"
+                        df.at[idx, 'PP_Otrzymane'] = "N/A"
+                        df.at[idx, 'Data_Platnosci'] = "N/A"
+                        df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
+                        df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
+                        
+                    df.at[idx, 'Faza_Procesu'] = "Zamknięte"
+                    df.at[idx, 'Zakonczone_Arch'] = "TAK"
+                    
+                    save_data(worksheet, df)
+                    st.success("🎉 Event zakończony i zarchiwizowany prawidłowo!")
+                    st.rerun()
+        else:
+            st.info("Brak aktywnych eventów do zamknięcia.")
+
     with tab_archiwum:
         df_arch = df[df.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df.empty else pd.DataFrame()
-        if not df_arch.empty: st.dataframe(df_arch, use_container_width=True, hide_index=True)
+        if not df_arch.empty: 
+            st.dataframe(df_arch, use_container_width=True, hide_index=True)
+        else:
+            st.info("Archiwum jest puste.")
