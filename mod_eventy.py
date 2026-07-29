@@ -10,15 +10,12 @@ def render(sh):
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
     
-    # Zliczanie nowych metryk (wąskich gardeł)
     braki_cmr = len(df_aktywne[df_aktywne.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    # Dynamiczny kolor dla faktur (czerwony jeśli są braki, zielony jeśli czysto)
     kpi3_color = "kpi-red" if braki_faktury > 0 else "kpi-green"
     
-    # Wizualne Karty KPI z nowymi metrykami
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card kpi-blue">
@@ -46,15 +43,11 @@ def render(sh):
     with tab_podglad:
         if not df_aktywne.empty:
             
-            # Pamięć sesji dla detali i filtra
             if "wybrany_event_id" not in st.session_state:
                 st.session_state["wybrany_event_id"] = None
             if "filtr_eventow" not in st.session_state:
                 st.session_state["filtr_eventow"] = "Wszystkie"
 
-            # ==========================================
-            # INTERAKTYWNE FILTROWANIE (LINKI DO BRAKÓW)
-            # ==========================================
             st.markdown("<p style='color: #94A3B8; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;'>⚡ Filtruj listę według braków operacyjnych:</p>", unsafe_allow_html=True)
             
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
@@ -79,7 +72,6 @@ def render(sh):
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
             
-            # Przetwarzanie i aplikowanie aktywnego filtra na dane
             df_widok = df_aktywne.copy()
             if st.session_state["filtr_eventow"] == "BrakCMR":
                 df_widok = df_widok[df_widok.get("CMR_Gotowe", pd.Series()) == "NIE"]
@@ -90,9 +82,6 @@ def render(sh):
 
             st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
             
-            # ==========================================
-            # MASTER-DETAIL VIEW (WIDOK DZIELONY)
-            # ==========================================
             col_lista, col_detale = st.columns([55, 45], gap="large")
             
             with col_lista:
@@ -137,7 +126,6 @@ def render(sh):
                                 st.rerun()
 
             with col_detale:
-                # Zabezpieczenie na wypadek zmiany filtra gdy event jest otwarty
                 if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
                     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
                     
@@ -149,7 +137,6 @@ def render(sh):
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
                     
-                    # SYSTEM ROZPOZNAWANIA GRAFIKI
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
                     if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
                     elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
@@ -169,7 +156,6 @@ def render(sh):
                     det_info, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
-                        # 1. Statyczny podgląd danych niezmiennych
                         st.markdown(f"""
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
                             <div>
@@ -188,7 +174,6 @@ def render(sh):
                         <hr style="border-color: rgba(255,255,255,0.05); margin: 15px 0;">
                         """, unsafe_allow_html=True)
                         
-                        # 2. Formularz edycji dynamicznych statusów logistycznych
                         with st.form(key=f"edit_status_{dane_eventu['ID_Zlecenia']}"):
                             st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🔄 Aktualizacja Statusu Operacyjnego</p>", unsafe_allow_html=True)
                             
@@ -227,30 +212,40 @@ def render(sh):
                                 st.rerun()
                         
                     with det_fin:
-                        with st.form(key=f"update_{dane_eventu['ID_Zlecenia']}"):
+                        is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
+                        
+                        with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
                             st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji</p>", unsafe_allow_html=True)
-                            col_d1, col_d2, col_d3 = st.columns(3)
-                            with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
-                            with col_d2: u_pod = st.selectbox("CMR POD?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
-                            with col_d3: u_pp = st.selectbox("Przepustki (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
                             
-                            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'>", unsafe_allow_html=True)
-                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Rozliczenia</p>", unsafe_allow_html=True)
-                            
-                            col_f1, col_f2 = st.columns(2)
-                            with col_f1: 
-                                koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
-                                koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
-                                u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
-                                u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
-                            with col_f2:
-                                u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
-                                dp_val = dane_eventu.get("Data_Platnosci", "")
-                                try:
-                                    dp_val_parsed = datetime.datetime.strptime(str(dp_val), "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
-                                except:
-                                    dp_val_parsed = None
-                                u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
+                            if is_sqm:
+                                u_cmr = st.selectbox("CMR Gotowe (Wystawione)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
+                                st.info("🚚 Pojazd własnej floty SQM. Pola kosztów, zewnętrznych faktur oraz statusu POD/PP są automatycznie wyłączone (N/A).")
+                                
+                                # Przypisanie N/A "w tle" bez pytania użytkownika
+                                u_pod, u_pp, u_koszt, u_nr_fak, u_faktura_opl, u_data_platnosci = "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+                            else:
+                                col_d1, col_d2, col_d3 = st.columns(3)
+                                with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
+                                with col_d2: u_pod = st.selectbox("CMR POD?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
+                                with col_d3: u_pp = st.selectbox("Przepustki (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
+                                
+                                st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'>", unsafe_allow_html=True)
+                                st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Rozliczenia</p>", unsafe_allow_html=True)
+                                
+                                col_f1, col_f2 = st.columns(2)
+                                with col_f1: 
+                                    koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
+                                    koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
+                                    u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
+                                    u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
+                                with col_f2:
+                                    u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
+                                    dp_val = dane_eventu.get("Data_Platnosci", "")
+                                    try:
+                                        dp_val_parsed = datetime.datetime.strptime(str(dp_val), "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
+                                    except:
+                                        dp_val_parsed = None
+                                    u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
 
                             st.markdown("<br>", unsafe_allow_html=True)
                             if st.form_submit_button("💾 Zapisz Aktualizacje"):
@@ -260,7 +255,7 @@ def render(sh):
                                 df.at[idx, 'PP_Otrzymane'] = u_pp
                                 df.at[idx, 'Nr_Faktury'] = u_nr_fak
                                 
-                                if dane_eventu['Typ_Transportu'] != "Własny SQM":
+                                if not is_sqm:
                                     df.at[idx, 'Koszt_Transportu_EUR'] = float(u_koszt)
                                     df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
                                     df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
@@ -270,17 +265,19 @@ def render(sh):
                                 st.rerun()
 
                     with det_arch:
-                        st.info("Kliknięcie poniższego przycisku zarchiwizuje transport. System automatycznie zabezpieczy i wyczyści pola finansowe dla floty własnej SQM.")
+                        st.info("Kliknięcie poniższego przycisku zarchiwizuje transport. System usunie go z widoku aktywnych operacji.")
                         if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ ZLECENIE", type="primary", use_container_width=True):
                             idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                             
+                            # Upewnienie się że dla floty SQM wszystko co zbędne ląduje jako N/A
                             if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
-                                df.at[idx, 'Data_Zlecenia_Tr'] = "N/A"
                                 df.at[idx, 'Faktura_Oplacona'] = "N/A"
                                 df.at[idx, 'PP_Otrzymane'] = "N/A"
                                 df.at[idx, 'Data_Platnosci'] = "N/A"
                                 df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
                                 df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
+                                df.at[idx, 'Nr_Faktury'] = "N/A"
+                                df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
                                 
                             df.at[idx, 'Faza_Procesu'] = "Zamknięte"
                             df.at[idx, 'Zakonczone_Arch'] = "TAK"
@@ -302,15 +299,18 @@ def render(sh):
             st.info("Brak aktywnych transportów w bazie danych.")
 
     with tab_formularz:
+        st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
+        
+        # Przełącznik wyciągnięty na zewnątrz, aby dynamicznie przeładowywał formularz!
+        typ_transportu = st.radio("Rodzaj transportu (zmienia układ interfejsu):", ["Zewnętrzny", "Własny SQM"], horizontal=True)
+        
         with st.form("form_event_pro", clear_on_submit=True):
-            st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
             f_col1, f_col2 = st.columns(2)
             with f_col1:
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
-                typ_transportu = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"])
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
             with f_col2:
-                przewoznik = st.text_input("Przewoźnik / Kierowca *")
+                przewoznik = st.text_input("Przewoźnik / Kierowca * (Dla SQM wpisz nazwisko)")
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
@@ -320,24 +320,24 @@ def render(sh):
             st.markdown("<h4 style='color: #D4AF37;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
             
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color: #D4AF37;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
-            d_col1, d_col2, d_col3 = st.columns(3)
-            with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
-            with d_col2: pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
-            with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            
+            # Własny SQM ukrywa niepotrzebne pytania na etapie tworzenia
             if typ_transportu == "Zewnętrzny":
+                st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
+                st.markdown("<h4 style='color: #D4AF37;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
+                d_col1, d_col2, d_col3 = st.columns(3)
+                with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
+                with d_col2: pp_otrzymane = st.selectbox("PP Otrzymane?", ["", "NIE", "TAK"])
+                with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
+
+                st.markdown("<br>", unsafe_allow_html=True)
                 e_col1, e_col2, e_col3 = st.columns(3)
                 with e_col1: koszt_transportu = st.number_input("Koszt Transportu (€)", min_value=0.0, value=0.0, step=50.0)
                 with e_col2: nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
                 with e_col3: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
             else:
-                koszt_transportu = "N/A"
-                nr_zlecenia_zewn = "FLOTA WŁASNA"
-                nr_faktury = "N/A"
+                st.info("💡 Wybrano Flotę Własną SQM. Sekcja finansowa (faktury, zlecenia zewn., zwroty POD) została ukryta i przyjmie wartość N/A.")
+                cmr_podpisane, pp_otrzymane, faktura_opl = "N/A", "N/A", "N/A"
+                koszt_transportu, nr_zlecenia_zewn, nr_faktury = "N/A", "FLOTA WŁASNA", "N/A"
 
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -351,17 +351,9 @@ def render(sh):
                         "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": status_magazyn,
                         "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
                         "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zlecenia_zewn, 
-                        "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
+                        "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
                     }
-                    
-                    if typ_transportu == "Własny SQM":
-                        nowy_wiersz["Data_Zlecenia_Tr"] = "N/A"
-                        nowy_wiersz["Faktura_Oplacona"] = "N/A"
-                        nowy_wiersz["PP_Otrzymane"] = "N/A"
-                        nowy_wiersz["Data_Platnosci"] = "N/A"
-                        nowy_wiersz["Koszt_Transportu_EUR"] = "N/A"
-                        nowy_wiersz["CMR_Podpisane_POD"] = "N/A"
 
                     df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
