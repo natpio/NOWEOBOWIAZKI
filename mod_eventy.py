@@ -30,19 +30,61 @@ def render(sh):
         </div>
     """, unsafe_allow_html=True)
 
-    tab_podglad, tab_formularz, tab_zakoncz, tab_archiwum = st.tabs([
-        "📊 Aktywne", "➕ Dodaj Zlecenie", "🏁 Zakończ Zlecenie", "📦 Archiwum"
+    # Usunęliśmy zakładkę Zakończ (tab_zakoncz), wszystko robimy w podglądzie
+    tab_podglad, tab_formularz, tab_archiwum = st.tabs([
+        "📊 Aktywne", "➕ Dodaj Zlecenie", "📦 Archiwum"
     ])
 
     with tab_podglad:
         if not df_aktywne.empty:
-            st.info("💡 Możesz edytować dane bezpośrednio w tabeli poniżej (jak w Excelu). Po zakończeniu kliknij 'Zapisz zmiany'.")
-            edited_df = st.data_editor(df_aktywne, use_container_width=True, hide_index=True, key="edit_eventy")
+            st.info("💡 Zaznacz pole '🏁 Zakończ' przy wierszu i kliknij zapisz, aby zamknąć zlecenie (system sam uzupełni N/A dla floty własnej).")
+            
+            # Tworzymy tymczasową kopię do wyświetlenia i dodajemy kolumnę Checkbox na start
+            df_display = df_aktywne.copy()
+            df_display.insert(0, "🏁 Zakończ", False)
+            
+            edited_df = st.data_editor(
+                df_display, 
+                use_container_width=True, 
+                hide_index=True, 
+                key="edit_eventy",
+                column_config={
+                    "🏁 Zakończ": st.column_config.CheckboxColumn(
+                        "🏁 Zakończ",
+                        help="Zaznacz, aby zakończyć i zarchiwizować to zlecenie",
+                        default=False,
+                    )
+                }
+            )
             
             if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
+                # 1. Wyłapujemy, które ID zostały zaznaczone do zamknięcia
+                zakonczone_id = edited_df[edited_df["🏁 Zakończ"] == True]["ID_Zlecenia"].tolist()
+                
+                # 2. Usuwamy tymczasową kolumnę "🏁 Zakończ" przed złączeniem z główną bazą
+                edited_df = edited_df.drop(columns=["🏁 Zakończ"])
+                
+                # 3. Aktualizujemy zwykłe zmiany wpisane w tabeli
                 df.update(edited_df)
+                
+                # 4. Aplikujemy logikę ZAMYKANIA do zaznaczonych wierszy
+                for z_id in zakonczone_id:
+                    idx = df[df['ID_Zlecenia'] == z_id].index[0]
+                    
+                    if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
+                        df.at[idx, 'Data_Zlecenia_Tr'] = "N/A"
+                        df.at[idx, 'Faktura_Oplacona'] = "N/A"
+                        df.at[idx, 'PP_Otrzymane'] = "N/A"
+                        df.at[idx, 'Data_Platnosci'] = "N/A"
+                        df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
+                        df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
+                        
+                    df.at[idx, 'Faza_Procesu'] = "Zamknięte"
+                    df.at[idx, 'Zakonczone_Arch'] = "TAK"
+
+                # 5. Zapis i odświeżenie
                 save_data(worksheet, df)
-                st.success("Pomyślnie zaktualizowano bazę danych Eventów!")
+                st.success(f"Pomyślnie zaktualizowano! Zakończono {len(zakonczone_id)} zleceń.")
                 st.rerun()
         else:
             st.info("Brak aktywnych transportów w bazie.")
@@ -94,7 +136,6 @@ def render(sh):
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
                     }
                     
-                    # Logika wstawiająca 'N/A' dla transportu wewnętrznego SQM
                     if typ_transportu == "Własny SQM":
                         nowy_wiersz["Data_Zlecenia_Tr"] = "N/A"
                         nowy_wiersz["Faktura_Oplacona"] = "N/A"
@@ -108,38 +149,6 @@ def render(sh):
                     save_data(worksheet, df)
                     st.success("🎉 Dodano zlecenie!")
                     st.rerun()
-
-    with tab_zakoncz:
-        st.subheader("🏁 Zamknięcie Zlecenia i Archiwizacja")
-        if not df_aktywne.empty:
-            wybrany_id = st.selectbox("Wybierz Event do zamknięcia", df_aktywne["ID_Zlecenia"].tolist())
-            dane_eventu = df_aktywne[df_aktywne["ID_Zlecenia"] == wybrany_id].iloc[0]
-            
-            st.info(f"**Wybrano:** {dane_eventu.get('Nazwa_Targow', '')} (Przewoźnik: {dane_eventu.get('Przewoznik', '')}) | Typ: {dane_eventu.get('Typ_Transportu', '')}")
-            
-            with st.form("form_zakoncz_event", clear_on_submit=False):
-                st.markdown("Kliknięcie przycisku zmieni fazę na **Zamknięte**, przeniesie event do Archiwum oraz automatycznie wyczyści nieużywane komórki finansowe dla floty własnej.")
-                
-                if st.form_submit_button("🏁 Zakończ Event", type="primary"):
-                    idx = df[df['ID_Zlecenia'] == wybrany_id].index[0]
-                    
-                    # Dodatkowe zabezpieczenie: wymuszenie 'N/A' przy archiwizacji floty SQM
-                    if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
-                        df.at[idx, 'Data_Zlecenia_Tr'] = "N/A"
-                        df.at[idx, 'Faktura_Oplacona'] = "N/A"
-                        df.at[idx, 'PP_Otrzymane'] = "N/A"
-                        df.at[idx, 'Data_Platnosci'] = "N/A"
-                        df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
-                        df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
-                        
-                    df.at[idx, 'Faza_Procesu'] = "Zamknięte"
-                    df.at[idx, 'Zakonczone_Arch'] = "TAK"
-                    
-                    save_data(worksheet, df)
-                    st.success("🎉 Event zakończony i zarchiwizowany prawidłowo!")
-                    st.rerun()
-        else:
-            st.info("Brak aktywnych eventów do zamknięcia.")
 
     with tab_archiwum:
         df_arch = df[df.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df.empty else pd.DataFrame()
