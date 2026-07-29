@@ -28,7 +28,17 @@ def render(sh):
     tab_podglad, tab_formularz, tab_archiwum = st.tabs(["📊 Lejek (Podgląd)", "➕ Zgłoś / Aktualizuj Temat", "📦 Archiwum"])
 
     with tab_podglad:
-        if not df_aktywne_yt.empty: st.dataframe(df_aktywne_yt, use_container_width=True, hide_index=True)
+        if not df_aktywne_yt.empty: 
+            st.info("💡 Edytuj projekty bezpośrednio w tabeli (jak w Excelu). Pamiętaj o zapisie po wprowadzonych zmianach!")
+            edited_df_yt = st.data_editor(df_aktywne_yt, use_container_width=True, hide_index=True, key="edit_yestech")
+            
+            if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
+                df_yt.update(edited_df_yt)
+                save_data(worksheet_yt, df_yt)
+                st.success("Pomyślnie zaktualizowano bazę YESTECH!")
+                st.rerun()
+        else:
+            st.info("Brak aktywnych projektów w bazie.")
 
     with tab_formularz:
         with st.form("form_yestech", clear_on_submit=True):
@@ -42,11 +52,13 @@ def render(sh):
                 data_zgloszenia = st.date_input("Data Zgłoszenia", value=datetime.date.today())
                 data_zlecenia_tr = st.date_input("Data Zlecenia Transportu", value=None)
 
+            st.markdown("### 💰 Finanse (€)")
             f_col1, f_col2, f_col3 = st.columns(3)
             with f_col1: wycena_dla_basi = st.number_input("Wycena dla Basi (€)", min_value=0.0, value=0.0, step=50.0)
             with f_col2: koszt_rzeczywisty = st.number_input("Koszt Rzeczywisty (€)", min_value=0.0, value=0.0, step=50.0)
             with f_col3: marza_info = st.text_input("Marża / Info dodatkowe")
 
+            st.markdown("### 📄 Dokumenty i Daty")
             d_col1, d_col2 = st.columns(2)
             with d_col1:
                 nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
