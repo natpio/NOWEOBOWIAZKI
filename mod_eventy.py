@@ -39,12 +39,10 @@ def render(sh):
         if not df_aktywne.empty:
             st.markdown("<p style='color: #94A3B8; font-size: 14px; margin-bottom: 20px;'>Kliknij 'Szczegóły' przy zleceniu, aby otworzyć panel boczny z pełnymi danymi i akcjami.</p>", unsafe_allow_html=True)
             
-            # Pamięć sesji dla wybranego zlecenia
             if "wybrany_event_id" not in st.session_state:
                 st.session_state["wybrany_event_id"] = None
 
-            # DZIELIMY EKRAN: 60% lewa strona (lista), 40% prawa strona (szczegóły)
-            col_lista, col_detale = st.columns([6, 4], gap="large")
+            col_lista, col_detale = st.columns([55, 45], gap="large")
             
             with col_lista:
                 for index, row in df_aktywne.iterrows():
@@ -60,26 +58,23 @@ def render(sh):
                     
                     with c_karta:
                         st.markdown(f"""
-                        <div class="custom-row" style="margin-bottom: 5px;">
-                            <div class="cr-col" style="width: 35%;">
-                                <span class="cr-title">{row.get('Nazwa_Targow', '-')}</span>
-                                <span>📍 {row.get('ID_Zlecenia', '-')}</span>
+                        <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px;">
+                            <div class="cr-col" style="width: 40%;">
+                                <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
+                                <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
                             </div>
                             <div class="cr-col" style="width: 25%;">
                                 <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
                                 <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
                             </div>
-                            <div class="cr-col" style="width: 25%;">
-                                <span class="cr-text">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
-                            </div>
-                            <div class="cr-col" style="width: 15%; align-items: flex-end;">
+                            <div class="cr-col" style="width: 35%; align-items: flex-end;">
+                                <span class="cr-text" style="margin-bottom: 5px;">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
                                 <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
                         
                     with c_btn:
-                        # Jeśli ID zgadza się z wybranym, oznaczamy przycisk jako Primary (aktywny)
                         is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
                         btn_type = "primary" if is_primary else "secondary"
                         
@@ -89,18 +84,17 @@ def render(sh):
 
             with col_detale:
                 if st.session_state["wybrany_event_id"]:
-                    # Pobieranie danych wybranego eventu
                     dane_eventu = df_aktywne[df_aktywne["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
                     
                     st.markdown("""
                         <div style="background: rgba(30, 41, 59, 0.5); padding: 25px; border-radius: 16px; border: 1px solid rgba(212, 175, 55, 0.3);">
-                            <p style="color: #94A3B8; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;">Event Details</p>
+                            <p style="color: #94A3B8; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;">Szczegóły Operacji</p>
                     """, unsafe_allow_html=True)
                     
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
                     
-                    # LOGIKA WYŚWIETLANIA OBRAZKA NA BAZIE TYPU POJAZDU
+                    # SYSTEM ROZPOZNAWANIA GRAFIKI
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
                     if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
                     elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
@@ -112,44 +106,93 @@ def render(sh):
                         st.image(plik_img, use_container_width=True)
                     else:
                         st.markdown(f"""
-                        <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
-                            <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak pliku: {plik_img}</span>
+                        <div style="width: 100%; height: 150px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
+                            <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # ZAKŁADKI W DETALACH
-                    det_info, det_dok, det_fin = st.tabs(["INFO & STATUS", "DOKUMENTY", "ZAMKNIJ EVENT"])
+                    det_info, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
                         st.markdown(f"""
-                        **Pojazd:** {dane_eventu.get('Typ_Pojazdu', '-')}  
-                        **Data Transportu:** {dane_eventu.get('Data_Zlecenia_Tr', '-')}  
-                        **Faza Procesu:** {dane_eventu.get('Faza_Procesu', '-')}  
-                        **Status Magazynu:** {dane_eventu.get('Status_Magazyn', '-')}  
-                        **Typ:** {dane_eventu.get('Typ_Transportu', '-')}  
-                        <hr style="border-color: rgba(255,255,255,0.1); margin: 10px 0;">
-                        **Notatki:** {dane_eventu.get('Notatki', 'Brak notatek.')}
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Typ Pojazdu</div>
+                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Typ_Pojazdu', '-')}</div>
+                            </div>
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Typ Transportu</div>
+                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Typ_Transportu', '-')}</div>
+                            </div>
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Data Logistyczna</div>
+                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Data_Zlecenia_Tr', '-')}</div>
+                            </div>
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Nr Zlecenia Zewn.</div>
+                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Nr_Zlecenia_Zewn', '-')}</div>
+                            </div>
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Status Magazynu</div>
+                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Status_Magazyn', '-')}</div>
+                            </div>
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Faza Procesu</div>
+                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Faza_Procesu', '-')}</div>
+                            </div>
+                        </div>
+                        <hr style="border-color: rgba(255,255,255,0.05); margin: 15px 0;">
+                        <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Notatki</div>
+                        <div style="color: #F8FAFC; font-size: 13px; margin-top: 5px;">{dane_eventu.get('Notatki', 'Brak notatek.')}</div>
                         """, unsafe_allow_html=True)
                         
-                    with det_dok:
-                        # Mini-formularz do szybkiej aktualizacji dokumentów bez zamykania eventu
+                    with det_fin:
                         with st.form(key=f"update_{dane_eventu['ID_Zlecenia']}"):
-                            u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
-                            u_pod = st.selectbox("CMR Podpisane (POD)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
-                            u_nr_fak = st.text_input("Numer Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
+                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji</p>", unsafe_allow_html=True)
+                            col_d1, col_d2, col_d3 = st.columns(3)
+                            with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
+                            with col_d2: u_pod = st.selectbox("CMR POD?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
+                            with col_d3: u_pp = st.selectbox("Przepustki (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
                             
-                            if st.form_submit_button("💾 Zapisz Dokumenty"):
+                            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'>", unsafe_allow_html=True)
+                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Rozliczenia</p>", unsafe_allow_html=True)
+                            
+                            col_f1, col_f2 = st.columns(2)
+                            with col_f1: 
+                                koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
+                                koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
+                                u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
+                                u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
+                            with col_f2:
+                                u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
+                                dp_val = dane_eventu.get("Data_Platnosci", "")
+                                try:
+                                    dp_val_parsed = datetime.datetime.strptime(str(dp_val), "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
+                                except:
+                                    dp_val_parsed = None
+                                u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
+
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.form_submit_button("💾 Zapisz Aktualizacje"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                 df.at[idx, 'CMR_Gotowe'] = u_cmr
                                 df.at[idx, 'CMR_Podpisane_POD'] = u_pod
+                                df.at[idx, 'PP_Otrzymane'] = u_pp
                                 df.at[idx, 'Nr_Faktury'] = u_nr_fak
+                                
+                                # Aktualizujemy finanse tylko jeśli to nie jest flota własna (dla własnej trzymamy N/A)
+                                if dane_eventu['Typ_Transportu'] != "Własny SQM":
+                                    df.at[idx, 'Koszt_Transportu_EUR'] = float(u_koszt)
+                                    df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
+                                    df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
+                                    
                                 save_data(worksheet, df)
-                                st.success("Zaktualizowano dokumenty!")
+                                st.success("Pomyślnie zaktualizowano dokumentację i finanse!")
                                 st.rerun()
 
-                    with det_fin:
-                        st.info("Kliknięcie poniższego przycisku zarchiwizuje transport. System sam uzupełni pola (N/A) dla floty SQM.")
-                        if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ", type="primary", use_container_width=True):
+                    with det_arch:
+                        st.info("Kliknięcie poniższego przycisku zarchiwizuje transport. System automatycznie zabezpieczy i wyczyści pola finansowe dla floty własnej SQM.")
+                        if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ ZLECENIE", type="primary", use_container_width=True):
                             idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                             
                             if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
@@ -164,15 +207,15 @@ def render(sh):
                             df.at[idx, 'Zakonczone_Arch'] = "TAK"
                             
                             save_data(worksheet, df)
-                            st.session_state["wybrany_event_id"] = None # Czyścimy wybór po zamknięciu
-                            st.success(f"Zlecenie {dane_eventu['Nazwa_Targow']} pomyślnie zarchiwizowane!")
+                            st.session_state["wybrany_event_id"] = None
+                            st.success(f"Zlecenie {dane_eventu['Nazwa_Targow']} pomyślnie zamknięte i zarchiwizowane!")
                             st.rerun()
                             
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
                     st.markdown("""
                         <div style="height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(30, 41, 59, 0.2); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1); padding: 40px; text-align: center;">
-                            <span style="color: #64748B;">Wybierz zlecenie z listy po lewej stronie, <br>aby wyświetlić panel szczegółów (Master-Detail View).</span>
+                            <span style="color: #64748B; line-height: 1.6;">Wybierz zlecenie z listy po lewej stronie,<br>aby wyświetlić panel szczegółów oraz opcje edycji finansów i dokumentów.</span>
                         </div>
                     """, unsafe_allow_html=True)
 
