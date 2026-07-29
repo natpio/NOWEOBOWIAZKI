@@ -1,7 +1,5 @@
 import streamlit as st
 import base64
-import pyotp
-import qrcode
 
 # Importowanie funkcji i logiki z naszych modułów
 from db import init_connection
@@ -67,15 +65,16 @@ load_css("style.css")
 set_backgrounds()
 
 # ==========================================
-# 3. WERYFIKACJA STANU LOGOWANIA (GOOGLE AUTH)
+# 3. WERYFIKACJA STANU LOGOWANIA (HASŁO)
 # ==========================================
 if "zalogowany" not in st.session_state:
     st.session_state["zalogowany"] = False
 
 # Jeśli użytkownik NIE JEST zalogowany - POKAŻ EKRAN LOGOWANIA
 if not st.session_state["zalogowany"]:
-    # Pobieramy klucz z ustawień Secrets w Streamlit Cloud
-    TOTP_SECRET = st.secrets.get("totp_secret", "BRAK_KLUCZA_W_SECRETS")
+    # Pobieramy hasło z ustawień Secrets w Streamlit Cloud. 
+    # Jeśli zapomnisz dodać, domyślnie wpuści na hasło 'sqm2026'
+    POPRAWNE_HASLO = st.secrets.get("app_password", "sqm2026")
     
     # Ukrywamy całkowicie boczny panel na ekranie logowania
     st.markdown("""
@@ -100,27 +99,18 @@ if not st.session_state["zalogowany"]:
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         st.markdown('<h2 style="color: #FFFFFF !important;">🔒 Logowanie do systemu</h2>', unsafe_allow_html=True)
-        st.markdown('<p style="color: #94A3B8;">Wprowadź 6-cyfrowy kod z Google Authenticator</p>', unsafe_allow_html=True)
+        st.markdown('<p style="color: #94A3B8;">Wprowadź hasło dostępu</p>', unsafe_allow_html=True)
         
-        kod_wpisany = st.text_input("Kod TOTP", placeholder="Np. 123456", label_visibility="collapsed")
+        haslo_wpisane = st.text_input("Hasło", type="password", placeholder="Wpisz hasło...", label_visibility="collapsed")
         
         if st.button("Zaloguj", type="primary", use_container_width=True):
-            totp = pyotp.TOTP(TOTP_SECRET)
-            if totp.verify(kod_wpisany):
+            if haslo_wpisane == POPRAWNE_HASLO:
                 st.session_state["zalogowany"] = True
                 st.success("Zalogowano pomyślnie!")
                 st.rerun()
             else:
-                st.error("❌ Nieprawidłowy kod. Spróbuj ponownie.")
+                st.error("❌ Nieprawidłowe hasło. Spróbuj ponownie.")
                 
-        with st.expander("Pierwsze uruchomienie? Sparuj z telefonem"):
-            st.info("Zeskanuj poniższy kod w aplikacji Google Authenticator (lub użyj Authy / MS Authenticator).")
-            totp = pyotp.TOTP(TOTP_SECRET)
-            # Personalizacja nazwy wpisu w Twoim telefonie
-            uri = totp.provisioning_uri(name="Piotr Dukiel", issuer_name="SQM Transport Hub")
-            img = qrcode.make(uri)
-            st.image(img.get_image(), width=200)
-            
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
@@ -148,7 +138,7 @@ else:
         
         st.markdown("""
             <div class="sidebar-footer">
-                Wersja systemu: 12.0 (Enterprise Auth)<br><br>
+                Wersja systemu: 12.0 (Password Auth)<br><br>
                 Użytkownik: Piotr Dukiel | Logistics Manager
             </div>
         """, unsafe_allow_html=True)
