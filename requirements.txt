@@ -5,3 +5,4 @@ plotly
 pyotp
 qrcode
 pillow
+streamlit-option-menu
