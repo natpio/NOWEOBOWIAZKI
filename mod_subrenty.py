@@ -41,8 +41,16 @@ def render(sh):
 
     with tab_podglad:
         if not df_aktywne_sub.empty: 
-            widok_kolumn = ["ID_Subrentu", "Dostawca", "Co_Jedzie", "Status_Subrentu", "Deadline_Zwrotu", "Transport_IN_Kto", "Transport_OUT_Kto"]
-            st.dataframe(df_aktywne_sub[[c for c in widok_kolumn if c in df_aktywne_sub.columns]], use_container_width=True, hide_index=True)
+            st.info("💡 Edytuj dane bezpośrednio w tabeli. Kliknij 'Zapisz zmiany', aby wysłać do chmury Google.")
+            
+            # Zostawiamy wszystkie kolumny odblokowane do edycji w locie
+            edited_df_sub = st.data_editor(df_aktywne_sub, use_container_width=True, hide_index=True, key="edit_subrenty")
+            
+            if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
+                df_sub.update(edited_df_sub)
+                save_data(worksheet_sub, df_sub)
+                st.success("Pomyślnie zaktualizowano bazę danych Subrentów!")
+                st.rerun()
         else:
             st.info("Brak aktywnych wypożyczeń sprzętu.")
 
@@ -58,10 +66,12 @@ def render(sh):
                 rodzaj_zlecenia = st.selectbox("Rodzaj", ["Dry Hire", "Cross-rent", "Zastępczy"])
                 status_sub = st.selectbox("Status Początkowy", ["1. Zamówione (Oczekuje na IN)", "2. W drodze do SQM (IN)", "3. Na stanie SQM (Pracuje)"])
 
+            st.markdown("### 📅 Terminarz Wynajmu")
             d_col1, d_col2 = st.columns(2)
             with d_col1: data_odbioru = st.date_input("Data rozpoczęcia wynajmu (Odbiór)")
             with d_col2: deadline_zwrotu = st.date_input("Deadline ZWROTU (do kiedy musi oddać)")
             
+            st.markdown("### 🚚 Logistyka Odbioru (Etap IN)")
             i_col1, i_col2 = st.columns(2)
             with i_col1: transport_in_kto = st.text_input("Kto nam to przywozi? (np. Kurier DPD, Flota SQM)")
             with i_col2: transport_in_dok = st.text_input("Nr listu przewozowego / Dokument IN")
@@ -105,11 +115,13 @@ def render(sh):
                 idx_statusu = opcje_statusu.index(obecny_status) if obecny_status in opcje_statusu else 0
                 nowy_status = st.selectbox("Aktualizuj Status Cyklu", opcje_statusu, index=idx_statusu)
                 
+                st.markdown("### 🚚 Logistyka Zwrotu (Etap OUT)")
                 o_col1, o_col2, o_col3 = st.columns(3)
                 with o_col1: t_out_kto = st.text_input("Kto organizuje zwrot?", value=dane_sub.get("Transport_OUT_Kto", ""))
                 with o_col2: t_out_dok = st.text_input("Nr listu zwrotnego / CMR", value=dane_sub.get("Transport_OUT_Dokumenty", ""))
                 with o_col3: data_zwrotu = st.date_input("Faktyczna Data Zwrotu", value=None)
                 
+                st.markdown("### 💰 Finanse i Zakończenie")
                 f_col1, f_col2, f_col3 = st.columns(3)
                 with f_col1: koszt = st.number_input("Koszt Całkowity Wypożyczenia (€)", min_value=0.0, value=float(dane_sub.get("Koszt_Calkowity_EUR", 0.0)), step=50.0)
                 with f_col2: f_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_sub.get("Faktura_Oplacona", "")) if dane_sub.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
