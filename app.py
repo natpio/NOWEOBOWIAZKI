@@ -4,6 +4,8 @@ import pandas as pd
 import datetime
 import re
 import plotly.graph_objects as go
+import base64
+import os
 
 # ==========================================
 # 1. KONFIGURACJA STRONY
@@ -11,7 +13,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="SQM Transport Hub PRO", page_icon="🌍", layout="wide", initial_sidebar_state="expanded")
 
 # ==========================================
-# 2. ŁADOWANIE PLIKU CSS
+# 2. ŁADOWANIE CSS ORAZ TŁA (BASE64)
 # ==========================================
 def load_css(file_name):
     try:
@@ -20,7 +22,41 @@ def load_css(file_name):
     except FileNotFoundError:
         st.warning("Plik style.css nie został znaleziony. Upewnij się, że jest w tym samym folderze.")
 
+@st.cache_data
+def get_base64_image(file_name):
+    try:
+        with open(file_name, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    except Exception:
+        return None
+
+def set_backgrounds():
+    main_bg_base64 = get_base64_image("tlo obowiazki.png")
+    sidebar_bg_base64 = get_base64_image("tlo pasek.png")
+    
+    css = "<style>\n"
+    if main_bg_base64:
+        css += f"""
+        [data-testid="stAppViewContainer"] {{
+            background-image: url("data:image/png;base64,{main_bg_base64}") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-attachment: fixed !important;
+        }}
+        """
+    if sidebar_bg_base64:
+        css += f"""
+        [data-testid="stSidebar"] {{
+            background-image: url("data:image/png;base64,{sidebar_bg_base64}") !important;
+            background-size: cover !important;
+            background-position: bottom center !important;
+        }}
+        """
+    css += "</style>"
+    st.markdown(css, unsafe_allow_html=True)
+
 load_css("style.css")
+set_backgrounds()
 
 # ==========================================
 # 3. FUNKCJE BAZODANOWE I GENERATORY
@@ -133,7 +169,7 @@ with st.sidebar:
     
     st.markdown("""
         <div class="sidebar-footer">
-            Wersja systemu: 9.1.0 (Bespoke Dashboard)<br><br>
+            Wersja systemu: 9.5.0 (Global Vision UI)<br><br>
             Użytkownik: Piotr Dukiel | Logistics Manager
         </div>
     """, unsafe_allow_html=True)
@@ -148,7 +184,6 @@ if wybrany_modul == "🚚 Eventy / Targi":
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    # NOWE KARTY HTML ZAMIAST ST.METRIC
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card kpi-blue">
@@ -453,7 +488,6 @@ elif wybrany_modul == "📊 Finanse i Raporty":
         </div>
         """, unsafe_allow_html=True)
 
-        # Naprawione kolory Plotly (Dopasowane do jasnego tła)
         st.markdown('<div class="section-title">Monthly Financial Flow</div>', unsafe_allow_html=True)
         miesiace = ['01.2026', '02.2026', '03.2026', '04.2026', '05.2026', '06.2026']
         przychody = [600, 850, 750, 680, 700, 750]
@@ -466,23 +500,25 @@ elif wybrany_modul == "📊 Finanse i Raporty":
         fig.add_trace(go.Scatter(x=miesiace, y=zysk, name='Zysk', mode='lines+markers', line=dict(color='#8B5CF6', width=2)))
 
         fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#334155'),
+            plot_bgcolor='rgba(255,255,255,0.7)',
+            paper_bgcolor='rgba(255,255,255,0.5)',
+            font=dict(color='#0A192F'),
             margin=dict(l=0, r=0, t=10, b=0),
             height=250,
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="center", x=0.5),
-            xaxis=dict(showgrid=False, linecolor='#CBD5E1', tickfont=dict(color='#64748B')),
-            yaxis=dict(showgrid=True, gridcolor='#E2E8F0', zerolinecolor='#CBD5E1', tickfont=dict(color='#64748B')),
+            xaxis=dict(showgrid=False, linecolor='#CBD5E1', tickfont=dict(color='#0A192F')),
+            yaxis=dict(showgrid=True, gridcolor='#E2E8F0', zerolinecolor='#CBD5E1', tickfont=dict(color='#0A192F')),
             barmode='group'
         )
+        st.markdown('<div style="background: rgba(255,255,255,0.85); backdrop-filter: blur(10px); padding: 15px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.5);">', unsafe_allow_html=True)
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.markdown('</div><br>', unsafe_allow_html=True)
 
         st.markdown('<div class="section-title">Ostatnie Płatności i Blokady</div>', unsafe_allow_html=True)
         if spoznione_count == 0 and braki_count == 0:
             st.markdown("""
-            <table style="width:100%; border-collapse: collapse; background: #FFFFFF; border: 1px solid #E2E8F0; border-bottom: none; border-radius: 8px 8px 0 0;">
-                <tr style="color: #64748B; font-size: 12px; border-bottom: 2px solid #E2E8F0; text-align: left;">
+            <table style="width:100%; border-collapse: collapse; background: rgba(255,255,255,0.85); backdrop-filter: blur(5px); border: 1px solid #E2E8F0; border-bottom: none; border-radius: 8px 8px 0 0;">
+                <tr style="color: #0A192F; font-size: 13px; border-bottom: 2px solid rgba(10, 25, 47, 0.2); text-align: left;">
                     <th style="padding: 12px;">ID Płatności</th>
                     <th style="padding: 12px;">Klient</th>
                     <th style="padding: 12px;">Kwota</th>
@@ -531,7 +567,6 @@ elif wybrany_modul == "📊 Finanse i Raporty":
             st.dataframe(rentownosc.style.map(color_bilans, subset=['Bilans (Zysk/Strata) €']), use_container_width=True, hide_index=True)
             suma_zysk = rentownosc['Bilans (Zysk/Strata) €'].sum()
             
-            # Karta podsumowania zysku
             st.markdown(f"""
             <div class="kpi-card kpi-gold" style="width: 50%; margin-top: 20px;">
                 <div class="kpi-header">Łączny bilans na projektach YESTECH</div>
