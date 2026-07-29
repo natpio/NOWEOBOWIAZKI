@@ -134,25 +134,29 @@ h1, h2, h3 { color: #0A192F !important; font-weight: 800 !important; letter-spac
 /* =========================================
    4. FORMULARZE (INPUTY, SELECTY, DATY) - NAPRAWA KOLORU
 ========================================= */
-/* Wymuszenie tła i złotej ramki dla samych pól wprowadzania */
-[data-baseweb="base-input"], 
-[data-baseweb="select"] > div,
-[data-baseweb="textarea"] {
-    background-color: #0A192F !important; /* Ciemny granat */
-    border: 1px solid rgba(212, 175, 55, 0.4) !important; /* Złota, lekko przezroczysta ramka */
-    border-radius: 6px !important;
-}
-
-/* BIAŁY TEKST dla wartości wpisywanych przez użytkownika */
-[data-baseweb="input"] input, 
-[data-baseweb="textarea"] textarea,
-[data-baseweb="select"] span {
+/* Ekstremalnie agresywne wymuszenie białego tekstu w każdym polu */
+.stTextInput input, 
+.stNumberInput input, 
+.stDateInput input, 
+.stTextArea textarea,
+div[data-baseweb="select"] span,
+input[type="text"], 
+input[type="number"] {
     color: #FFFFFF !important;
-    -webkit-text-fill-color: #FFFFFF !important; /* Wymuszenie w silnikach WebKit (Chrome/Safari) */
+    -webkit-text-fill-color: #FFFFFF !important; 
     font-weight: 500 !important;
 }
 
-/* Wymuszenie ciemnego koloru etykiet nad inputami (żeby były widoczne na jasnym tle okna) */
+/* Wymuszenie ciemnego, granatowego tła ze złotą ramką */
+div[data-baseweb="base-input"], 
+div[data-baseweb="select"] > div,
+textarea {
+    background-color: #0A192F !important;
+    border: 1px solid rgba(212, 175, 55, 0.5) !important;
+    border-radius: 6px !important;
+}
+
+/* Etykiety nad polami - ciemne by były czytelne na jasnym tle */
 .stTextInput label p, 
 .stSelectbox label p, 
 .stDateInput label p, 
@@ -163,13 +167,12 @@ h1, h2, h3 { color: #0A192F !important; font-weight: 800 !important; letter-spac
     text-shadow: 0px 1px 2px rgba(255, 255, 255, 0.8) !important;
 }
 
-/* Kolor placeholdera (np. "Wpisz tutaj...") */
+/* Jasnoszary Placeholder ("Wpisz...") */
 ::placeholder {
     color: #94A3B8 !important;
     opacity: 1 !important;
+    -webkit-text-fill-color: #94A3B8 !important;
 }
 
-/* Złota strzałka w menu rozwijanym (Selectbox) */
-[data-baseweb="select"] svg {
-    fill: #D4AF37 !important;
-}
+/* Złota strzałka w menu rozwijanym */
+[data-baseweb="select"] svg { fill: #D4AF37 !important; }
