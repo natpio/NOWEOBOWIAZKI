@@ -56,7 +56,15 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label p { color: #94A3B8 !important; font-weight: 500 !important; font-size: 15px !important; margin: 0 !important; }
 [data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p { color: #D4AF37 !important; font-weight: 700 !important; text-shadow: 0 0 10px rgba(212, 175, 55, 0.4) !important; }
 
-.sidebar-footer { position: absolute; bottom: 20px; font-size: 11px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+/* NAPRAWIONA STOPKA - usunięto position: absolute */
+.sidebar-footer { 
+    margin-top: 60px; 
+    padding-top: 15px;
+    border-top: 1px solid rgba(212,175,55,0.2);
+    font-size: 11px; 
+    color: rgba(255,255,255,0.5); 
+    line-height: 1.6; 
+}
 
 /* =========================================
    2. GŁÓWNA TREŚĆ APLIKACJI
@@ -85,7 +93,6 @@ h1, h2, h3 { color: #0A192F !important; font-weight: 800 !important; letter-spac
     flex: 1;
     padding: 20px 25px;
     border-radius: 12px;
-    /* Szronione szkło */
     background-color: rgba(255, 255, 255, 0.85) !important;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
