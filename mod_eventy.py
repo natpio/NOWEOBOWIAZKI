@@ -10,18 +10,15 @@ def render(sh):
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
     
-    # --- INTELIGENTNA LOGIKA DLA CMR ---
     def wymaga_cmr(row_data):
         if str(row_data.get('CMR_Gotowe', '')) == 'NIE':
             typ_transp = str(row_data.get('Typ_Transportu', ''))
             typ_pojazdu = str(row_data.get('Typ_Pojazdu', '')).lower()
-            # Flota SQM lekkich aut (bus/van) zwolniona z wymogu CMR
             if typ_transp == "Własny SQM" and ("bus" in typ_pojazdu or "van" in typ_pojazdu):
                 return False 
             return True
         return False
 
-    # Zliczanie metryk
     braki_cmr = sum(df_aktywne.apply(wymaga_cmr, axis=1)) if not df_aktywne.empty else 0
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
@@ -114,7 +111,6 @@ def render(sh):
                         
                         tag_style = "padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;"
                         
-                        # Wykorzystanie nowej funkcji do sprawdzania czy tag CMR jest potrzebny
                         if wymaga_cmr(row):
                             braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>🚨 WYSTAW CMR</span>"
                         
@@ -125,6 +121,11 @@ def render(sh):
                                 braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>💰 NIEOPŁACONE</span>"
                             if str(row.get('PP_Otrzymane', '')) == 'NIE':
                                 braki_tagi_html += f"<span style='background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); {tag_style}'>💳 BRAK PP</span>"
+
+                        # Logika wyświetlania pustej daty załadunku na liście
+                        data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
+                        if data_zal_lista in ['', 'None', 'nan', 'NaT']:
+                            data_zal_lista = 'no info'
 
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
@@ -141,7 +142,7 @@ def render(sh):
                                         <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
                                     </div>
                                     <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                        <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #D4AF37;">{row.get('Data_Zlecenia_Tr', '-')}</b></span>
+                                        <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #D4AF37;">{data_zal_lista}</b></span>
                                         <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
                                     </div>
                                 </div>
@@ -189,7 +190,6 @@ def render(sh):
                         """, unsafe_allow_html=True)
 
                     braki_zlecenia = []
-                    # Zastosowanie nowej logiki do tablicy TO-DO
                     if wymaga_cmr(dane_eventu):
                         braki_zlecenia.append("📝 <b>Wystawić dokument CMR</b> dla kierowcy")
                     
@@ -224,6 +224,11 @@ def render(sh):
                     det_info, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
+                        # Logika wyświetlania pustej daty załadunku w detalach
+                        data_zal_det = str(dane_eventu.get('Data_Zlecenia_Tr', '')).strip()
+                        if data_zal_det in ['', 'None', 'nan', 'NaT']:
+                            data_zal_det = 'no info'
+
                         st.markdown(f"""
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
                             <div>
@@ -233,6 +238,10 @@ def render(sh):
                             <div>
                                 <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Typ Transportu</div>
                                 <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Typ_Transportu', '-')}</div>
+                            </div>
+                            <div>
+                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Data Załadunku</div>
+                                <div style="color: #D4AF37; font-weight: 600; font-size: 14px;">{data_zal_det}</div>
                             </div>
                             <div>
                                 <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Nr Zlecenia Zewn.</div>
@@ -260,12 +269,14 @@ def render(sh):
                             with c_stat2:
                                 u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
                             with c_stat3:
-                                dp_trasa = dane_eventu.get("Data_Zlecenia_Tr", "")
+                                # Odczyt daty do modyfikacji
+                                dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
                                 try:
-                                    dp_parsed = datetime.datetime.strptime(str(dp_trasa), "%Y-%m-%d").date() if dp_trasa and dp_trasa != "N/A" else datetime.date.today()
+                                    # Sprawdza czy data jest poprawna, inaczej zostawia pole puste
+                                    dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
                                 except:
-                                    dp_parsed = datetime.date.today()
-                                u_data_tr = st.date_input("Data Logistyczna", value=dp_parsed)
+                                    dp_parsed = None
+                                u_data_tr = st.date_input("Data Logistyczna (Załadunek)", value=dp_parsed)
 
                             u_notatki = st.text_area("Notatki", value=dane_eventu.get('Notatki', ''))
                             
@@ -273,7 +284,8 @@ def render(sh):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                 df.at[idx, 'Faza_Procesu'] = u_faza
                                 df.at[idx, 'Status_Magazyn'] = u_status_mag
-                                df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr)
+                                # Jeśli kalendarz jest pusty (None), zapisz puste pole
+                                df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 df.at[idx, 'Notatki'] = u_notatki
                                 save_data(worksheet, df)
                                 st.success("Status operacyjny został zaktualizowany!")
@@ -372,6 +384,8 @@ def render(sh):
             with f_col1:
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
+                # Dodane pole daty do formularza inicjalizacji (domyślnie puste)
+                data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Kierowca * (Dla SQM wpisz nazwisko)")
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
@@ -410,7 +424,9 @@ def render(sh):
                     nowy_wiersz = {
                         "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
                         "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
-                        "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": status_magazyn,
+                        # Data tylko wtedy, gdy faktycznie została wybrana
+                        "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
+                        "Status_Magazyn": status_magazyn,
                         "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
                         "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zlecenia_zewn, 
                         "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
