@@ -122,7 +122,12 @@ def render(sh):
                             if str(row.get('PP_Otrzymane', '')) == 'NIE':
                                 braki_tagi_html += f"<span style='background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); {tag_style}'>💳 BRAK PP</span>"
 
-                        # Logika wyświetlania pustej daty załadunku na liście
+                        # Zapobieganie błędom parsera Markdown poprzez dodanie bloku tylko wtedy, gdy są jakieś tagi
+                        if braki_tagi_html:
+                            tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
+                        else:
+                            tags_div = ""
+
                         data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
                         if data_zal_lista in ['', 'None', 'nan', 'NaT']:
                             data_zal_lista = 'no info'
@@ -130,27 +135,27 @@ def render(sh):
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
                         with c_karta:
-                            st.markdown(f"""
-                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
-                                <div style="display: flex; width: 100%; justify-content: space-between;">
-                                    <div class="cr-col" style="width: 40%;">
-                                        <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
-                                        <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
-                                    </div>
-                                    <div class="cr-col" style="width: 25%;">
-                                        <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-                                        <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
-                                    </div>
-                                    <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                        <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #D4AF37;">{data_zal_lista}</b></span>
-                                        <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
-                                    </div>
-                                </div>
-                                <div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">
-                                    {braki_tagi_html}
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            # Kod HTML wyczyszczony z wielkich wcięć, aby ominąć formatowanie "Code Block"
+                            html_karta = f"""
+<div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
+    <div style="display: flex; width: 100%; justify-content: space-between;">
+        <div class="cr-col" style="width: 40%;">
+            <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
+            <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+        </div>
+        <div class="cr-col" style="width: 25%;">
+            <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
+            <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
+        </div>
+        <div class="cr-col" style="width: 35%; align-items: flex-end;">
+            <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #D4AF37;">{data_zal_lista}</b></span>
+            <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+        </div>
+    </div>
+    {tags_div}
+</div>
+"""
+                            st.markdown(html_karta, unsafe_allow_html=True)
                             
                         with c_btn:
                             is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
@@ -224,7 +229,6 @@ def render(sh):
                     det_info, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
-                        # Logika wyświetlania pustej daty załadunku w detalach
                         data_zal_det = str(dane_eventu.get('Data_Zlecenia_Tr', '')).strip()
                         if data_zal_det in ['', 'None', 'nan', 'NaT']:
                             data_zal_det = 'no info'
@@ -269,10 +273,8 @@ def render(sh):
                             with c_stat2:
                                 u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
                             with c_stat3:
-                                # Odczyt daty do modyfikacji
                                 dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
                                 try:
-                                    # Sprawdza czy data jest poprawna, inaczej zostawia pole puste
                                     dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
                                 except:
                                     dp_parsed = None
@@ -284,7 +286,6 @@ def render(sh):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                 df.at[idx, 'Faza_Procesu'] = u_faza
                                 df.at[idx, 'Status_Magazyn'] = u_status_mag
-                                # Jeśli kalendarz jest pusty (None), zapisz puste pole
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 df.at[idx, 'Notatki'] = u_notatki
                                 save_data(worksheet, df)
@@ -384,7 +385,6 @@ def render(sh):
             with f_col1:
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
-                # Dodane pole daty do formularza inicjalizacji (domyślnie puste)
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Kierowca * (Dla SQM wpisz nazwisko)")
@@ -424,7 +424,6 @@ def render(sh):
                     nowy_wiersz = {
                         "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
                         "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
-                        # Data tylko wtedy, gdy faktycznie została wybrana
                         "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
                         "Status_Magazyn": status_magazyn,
                         "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
