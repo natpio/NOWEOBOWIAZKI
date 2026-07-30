@@ -176,13 +176,13 @@ def render(sh):
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
                     
-                    # AKTUALIZACJA: Podpięcie nowych nazw grafik z assets
+                    # PRZYWRÓCONE PIERWOTNE NAZWY PLIKÓW GRAFICZNYCH
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
-                    if "ftl" in typ_pojazdu_lower: plik_img = "ftl_2.png"
-                    elif "bus" in typ_pojazdu_lower: plik_img = "bus_2.png"
+                    if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
+                    elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
                     elif "van" in typ_pojazdu_lower: plik_img = "van.png"
-                    elif "sol" in typ_pojazdu_lower: plik_img = "solowka_2.png"
-                    else: plik_img = "default_2.png"
+                    elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
+                    else: plik_img = "default.png"
                     
                     if os.path.exists(plik_img):
                         st.image(plik_img, use_container_width=True)
@@ -225,7 +225,6 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # AKTUALIZACJA: Nowa zakładka HARMONOGRAM
                     det_info, det_har, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "⏱️ HARMONOGRAM", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
@@ -292,7 +291,6 @@ def render(sh):
                                 st.success("Status operacyjny został zaktualizowany!")
                                 st.rerun()
 
-                    # AKTUALIZACJA: Logika wyświetlania i dodawania slotów
                     with det_har:
                         worksheet_sloty, df_sloty = load_data(sh, "DB_Sloty")
                         sloty_eventu = df_sloty[df_sloty['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']] if not df_sloty.empty else pd.DataFrame()
