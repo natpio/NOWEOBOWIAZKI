@@ -122,7 +122,6 @@ def render(sh):
                             if str(row.get('PP_Otrzymane', '')) == 'NIE':
                                 braki_tagi_html += f"<span style='background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); {tag_style}'>💳 BRAK PP</span>"
 
-                        # Zapobieganie błędom parsera Markdown poprzez dodanie bloku tylko wtedy, gdy są jakieś tagi
                         if braki_tagi_html:
                             tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
                         else:
@@ -135,7 +134,6 @@ def render(sh):
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
                         with c_karta:
-                            # Kod HTML wyczyszczony z wielkich wcięć, aby ominąć formatowanie "Code Block"
                             html_karta = f"""
 <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
     <div style="display: flex; width: 100%; justify-content: space-between;">
@@ -178,12 +176,13 @@ def render(sh):
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
                     
+                    # AKTUALIZACJA: Podpięcie nowych nazw grafik z assets
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
-                    if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
-                    elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
+                    if "ftl" in typ_pojazdu_lower: plik_img = "ftl_2.png"
+                    elif "bus" in typ_pojazdu_lower: plik_img = "bus_2.png"
                     elif "van" in typ_pojazdu_lower: plik_img = "van.png"
-                    elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
-                    else: plik_img = "default.png"
+                    elif "sol" in typ_pojazdu_lower: plik_img = "solowka_2.png"
+                    else: plik_img = "default_2.png"
                     
                     if os.path.exists(plik_img):
                         st.image(plik_img, use_container_width=True)
@@ -226,7 +225,8 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
 
-                    det_info, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
+                    # AKTUALIZACJA: Nowa zakładka HARMONOGRAM
+                    det_info, det_har, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "⏱️ HARMONOGRAM", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
                         data_zal_det = str(dane_eventu.get('Data_Zlecenia_Tr', '')).strip()
@@ -290,6 +290,64 @@ def render(sh):
                                 df.at[idx, 'Notatki'] = u_notatki
                                 save_data(worksheet, df)
                                 st.success("Status operacyjny został zaktualizowany!")
+                                st.rerun()
+
+                    # AKTUALIZACJA: Logika wyświetlania i dodawania slotów
+                    with det_har:
+                        worksheet_sloty, df_sloty = load_data(sh, "DB_Sloty")
+                        sloty_eventu = df_sloty[df_sloty['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']] if not df_sloty.empty else pd.DataFrame()
+                        
+                        st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>📍 Zarezerwowane Okna Czasowe</p>", unsafe_allow_html=True)
+                        
+                        if not sloty_eventu.empty:
+                            for idx, slot in sloty_eventu.iterrows():
+                                st.markdown(f"""
+                                <div style="background: rgba(255,255,255,0.05); border-left: 3px solid #D4AF37; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <strong style="color: #F8FAFC; font-size: 14px;">{slot.get('Typ_Operacji', '-')}</strong>
+                                            <span style="color: #94A3B8; font-size: 12px; margin-left: 10px;">📅 {slot.get('Data_Slota', '-')} | ⏰ {slot.get('Godzina_Od', '-')} - {slot.get('Godzina_Do', '-')}</span>
+                                        </div>
+                                        <div style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #D4AF37;">
+                                            Brama: {slot.get('Brama_Rampa', 'Brak') or 'Brak'}
+                                        </div>
+                                    </div>
+                                    <div style="color: #94A3B8; font-size: 12px; margin-top: 5px;">{slot.get('Notatki', '')}</div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                        else:
+                            st.info("Brak przypisanych slotów dla tego transportu.")
+
+                        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
+                        
+                        with st.form(key=f"form_add_slot_{dane_eventu['ID_Zlecenia']}", clear_on_submit=True):
+                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>➕ Dodaj Nowy Slot</p>", unsafe_allow_html=True)
+                            
+                            s_col1, s_col2 = st.columns(2)
+                            with s_col1:
+                                s_typ = st.selectbox("Typ Operacji", ["Montaż", "Odbiór Empties", "Demontaż", "Załadunek (Magazyn)", "Rozładunek (Magazyn)", "Inne"])
+                                s_data = st.date_input("Data", value=None)
+                            with s_col2:
+                                ss_col1, ss_col2 = st.columns(2)
+                                with ss_col1: s_od = st.time_input("Godz. Od", value=None)
+                                with ss_col2: s_do = st.time_input("Godz. Do", value=None)
+                                s_brama = st.text_input("Brama / Rampa (Gate)")
+                                
+                            s_notatki = st.text_input("Dodatkowe Notatki / Numer do kontaktu")
+                            
+                            if st.form_submit_button("💾 Zapisz Slot w Harmonogramie"):
+                                nowy_slot = {
+                                    "ID_Zlecenia": dane_eventu['ID_Zlecenia'],
+                                    "Typ_Operacji": s_typ,
+                                    "Data_Slota": str(s_data) if s_data else "",
+                                    "Godzina_Od": s_od.strftime("%H:%M") if s_od else "",
+                                    "Godzina_Do": s_do.strftime("%H:%M") if s_do else "",
+                                    "Brama_Rampa": s_brama,
+                                    "Notatki": s_notatki
+                                }
+                                df_sloty = pd.concat([df_sloty, pd.DataFrame([nowy_slot])], ignore_index=True)
+                                save_data(worksheet_sloty, df_sloty)
+                                st.success("Dodano nowy slot do harmonogramu!")
                                 st.rerun()
                         
                     with det_fin:
