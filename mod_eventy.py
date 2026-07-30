@@ -10,7 +10,19 @@ def render(sh):
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
     
-    braki_cmr = len(df_aktywne[df_aktywne.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
+    # --- INTELIGENTNA LOGIKA DLA CMR ---
+    def wymaga_cmr(row_data):
+        if str(row_data.get('CMR_Gotowe', '')) == 'NIE':
+            typ_transp = str(row_data.get('Typ_Transportu', ''))
+            typ_pojazdu = str(row_data.get('Typ_Pojazdu', '')).lower()
+            # Flota SQM lekkich aut (bus/van) zwolniona z wymogu CMR
+            if typ_transp == "Własny SQM" and ("bus" in typ_pojazdu or "van" in typ_pojazdu):
+                return False 
+            return True
+        return False
+
+    # Zliczanie metryk
+    braki_cmr = sum(df_aktywne.apply(wymaga_cmr, axis=1)) if not df_aktywne.empty else 0
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
@@ -74,7 +86,7 @@ def render(sh):
             
             df_widok = df_aktywne.copy()
             if st.session_state["filtr_eventow"] == "BrakCMR":
-                df_widok = df_widok[df_widok.get("CMR_Gotowe", pd.Series()) == "NIE"]
+                df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1)]
             elif st.session_state["filtr_eventow"] == "BrakPOD":
                 df_widok = df_widok[df_widok.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
@@ -97,13 +109,15 @@ def render(sh):
                         elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
                         else: badge_class += " domyslny"
                         
-                        # --- GENEROWANIE ALERTÓW (TAGÓW) DLA LISTY ---
                         is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
                         braki_tagi_html = ""
                         
                         tag_style = "padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;"
-                        if str(row.get('CMR_Gotowe', '')) == 'NIE':
+                        
+                        # Wykorzystanie nowej funkcji do sprawdzania czy tag CMR jest potrzebny
+                        if wymaga_cmr(row):
                             braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>🚨 WYSTAW CMR</span>"
+                        
                         if not is_sqm_row:
                             if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
                                 braki_tagi_html += f"<span style='background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); {tag_style}'>📄 BRAK POD</span>"
@@ -127,7 +141,7 @@ def render(sh):
                                         <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
                                     </div>
                                     <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                        <span class="cr-text" style="margin-bottom: 5px;">📅 {row.get('Data_Zlecenia_Tr', '-')}</span>
+                                        <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #D4AF37;">{row.get('Data_Zlecenia_Tr', '-')}</b></span>
                                         <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
                                     </div>
                                 </div>
@@ -174,10 +188,11 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # --- WIZUALNA TABLICA "TO-DO" (ANALIZA BRAKÓW) ---
                     braki_zlecenia = []
-                    if dane_eventu.get("CMR_Gotowe") == "NIE":
+                    # Zastosowanie nowej logiki do tablicy TO-DO
+                    if wymaga_cmr(dane_eventu):
                         braki_zlecenia.append("📝 <b>Wystawić dokument CMR</b> dla kierowcy")
+                    
                     if not is_sqm:
                         if dane_eventu.get("CMR_Podpisane_POD") == "NIE":
                             braki_zlecenia.append("📄 <b>Odzyskać podpisane CMR (POD)</b> po dostawie")
