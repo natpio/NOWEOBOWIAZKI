@@ -66,6 +66,15 @@ def load_data(sh, sheet_name):
 
     elif sheet_name == "DB_Katalog_Firm":
         if "Nazwa_Firmy" not in df.columns: df["Nazwa_Firmy"] = ""
+        
+    elif sheet_name == "DB_Sloty":
+        domyslne_sloty = {
+            "ID_Zlecenia": "", "Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today()),
+            "Godzina_Od": "", "Godzina_Do": "", "Brama_Rampa": "", "Notatki": ""
+        }
+        for kol, val in domyslne_sloty.items():
+            if kol not in df.columns: df[kol] = val
+        df = df[list(domyslne_sloty.keys())]
                 
     return worksheet, df
 
