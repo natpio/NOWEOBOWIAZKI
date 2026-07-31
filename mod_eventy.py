@@ -8,7 +8,14 @@ def render(sh):
     st.markdown("<h2 style='color: #F8FAFC; margin-bottom: 20px;'>🚚 Moduł Operacyjny: Eventy & Flota</h2>", unsafe_allow_html=True)
     worksheet, df = load_data(sh, "DB_Eventy")
     
-    df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df.empty else df
+    # Kopiujemy DataFrame by uniknąć ostrzeżeń przy modyfikacjach
+    df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df.empty else df.copy()
+    
+    # ⚡ DODANO: Automatyczne sortowanie po Dacie Załadunku
+    if not df_aktywne.empty and 'Data_Zlecenia_Tr' in df_aktywne.columns:
+        # Konwersja na typ datetime do prawidłowego sortowania (puste wrzucamy na sam koniec)
+        df_aktywne['_temp_date'] = pd.to_datetime(df_aktywne['Data_Zlecenia_Tr'], errors='coerce')
+        df_aktywne = df_aktywne.sort_values(by='_temp_date', ascending=True, na_position='last').drop(columns=['_temp_date'])
     
     def wymaga_cmr(row_data):
         if str(row_data.get('CMR_Gotowe', '')) == 'NIE':
@@ -176,7 +183,6 @@ def render(sh):
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
                     
-                    # PRZYWRÓCONE PIERWOTNE NAZWY PLIKÓW GRAFICZNYCH
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
                     if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
                     elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
@@ -277,7 +283,8 @@ def render(sh):
                                     dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
                                 except:
                                     dp_parsed = None
-                                u_data_tr = st.date_input("Data Logistyczna (Załadunek)", value=dp_parsed)
+                                # ⚡ ZMIENIONO NAGŁÓWEK NA DATA ZAŁADUNKU ZGODNIE Z PROŚBĄ
+                                u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
 
                             u_notatki = st.text_area("Notatki", value=dane_eventu.get('Notatki', ''))
                             
