@@ -3,6 +3,7 @@ from streamlit_option_menu import option_menu
 
 # Importowanie funkcji i logiki z naszych modułów
 from db import init_connection
+import mod_command_center
 import mod_eventy
 import mod_subrenty
 import mod_yestech
@@ -77,7 +78,7 @@ else:
             menu_title=None,
             options=["Command Center", "Eventy / Targi", "Subrenty", "YESTECH Export", "Finanse i Raporty"],
             icons=["grid-1x2", "truck", "box-seam", "globe-americas", "graph-up"],
-            default_index=1,
+            default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#D4AF37", "font-size": "16px"},
@@ -95,8 +96,8 @@ else:
 
     # Routing do odpowiednich zakładek
     if wybrany_modul == "Command Center":
-        st.markdown("<h2 style='color: #F8FAFC;'>🎛️ Command Center</h2>", unsafe_allow_html=True)
-        st.info("Trwa inicjalizacja głównego kokpitu... Tutaj wylądują najważniejsze alarmy logistyczne ze wszystkich modułów.")
+        st.markdown("<h2 style='color: #F8FAFC; margin-bottom: 25px;'>🎛️ Command Center</h2>", unsafe_allow_html=True)
+        mod_command_center.render(sh)
     elif wybrany_modul == "Eventy / Targi":
         mod_eventy.render(sh)
     elif wybrany_modul == "Subrenty":
