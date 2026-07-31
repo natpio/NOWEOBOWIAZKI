@@ -2,20 +2,14 @@ import streamlit as st
 import pandas as pd
 import datetime
 import os
+import base64
 from db import load_data, save_data, generuj_smart_id
 
 def render(sh):
     st.markdown("<h2 style='color: #F8FAFC; margin-bottom: 20px;'>🚚 Moduł Operacyjny: Eventy & Flota</h2>", unsafe_allow_html=True)
     worksheet, df = load_data(sh, "DB_Eventy")
     
-    # Kopiujemy DataFrame by uniknąć ostrzeżeń przy modyfikacjach
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df.empty else df.copy()
-    
-    # ⚡ DODANO: Automatyczne sortowanie po Dacie Załadunku
-    if not df_aktywne.empty and 'Data_Zlecenia_Tr' in df_aktywne.columns:
-        # Konwersja na typ datetime do prawidłowego sortowania (puste wrzucamy na sam koniec)
-        df_aktywne['_temp_date'] = pd.to_datetime(df_aktywne['Data_Zlecenia_Tr'], errors='coerce')
-        df_aktywne = df_aktywne.sort_values(by='_temp_date', ascending=True, na_position='last').drop(columns=['_temp_date'])
     
     def wymaga_cmr(row_data):
         if str(row_data.get('CMR_Gotowe', '')) == 'NIE':
@@ -96,9 +90,16 @@ def render(sh):
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
+            # ⚡ TWARDE SORTOWANIE PO DACIE ZAŁADUNKU 
+            if not df_widok.empty and 'Data_Zlecenia_Tr' in df_widok.columns:
+                df_widok['_temp_date'] = pd.to_datetime(df_widok['Data_Zlecenia_Tr'], errors='coerce')
+                df_widok = df_widok.sort_values(by='_temp_date', ascending=True, na_position='last')
+                df_widok = df_widok.drop(columns=['_temp_date'])
+
             st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
             
-            col_lista, col_detale = st.columns([55, 45], gap="large")
+            # ⚡ POSZERZAMY LISTĘ ZLECEŃ (Zmiana proporcji kolumn na 65:35)
+            col_lista, col_detale = st.columns([65, 35], gap="large")
             
             with col_lista:
                 if df_widok.empty:
@@ -190,11 +191,18 @@ def render(sh):
                     elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
                     else: plik_img = "default.png"
                     
+                    # ⚡ LIMITOWANIE WYSOKOŚCI ZDJĘCIA (Max 180px height) za pomocą Base64 HTML
                     if os.path.exists(plik_img):
-                        st.image(plik_img, use_container_width=True)
+                        with open(plik_img, "rb") as f:
+                            b64_img = base64.b64encode(f.read()).decode()
+                        st.markdown(f"""
+                        <div style="width: 100%; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 10px; margin: 15px 0;">
+                            <img src="data:image/png;base64,{b64_img}" style="max-width: 100%; max-height: 180px; object-fit: contain;">
+                        </div>
+                        """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
-                        <div style="width: 100%; height: 150px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
+                        <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
                             <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
                         </div>
                         """, unsafe_allow_html=True)
@@ -283,7 +291,6 @@ def render(sh):
                                     dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
                                 except:
                                     dp_parsed = None
-                                # ⚡ ZMIENIONO NAGŁÓWEK NA DATA ZAŁADUNKU ZGODNIE Z PROŚBĄ
                                 u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
 
                             u_notatki = st.text_area("Notatki", value=dane_eventu.get('Notatki', ''))
