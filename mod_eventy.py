@@ -58,8 +58,16 @@ def render(sh):
             if "filtr_eventow" not in st.session_state:
                 st.session_state["filtr_eventow"] = "Wszystkie"
 
-            st.markdown("<p style='color: #94A3B8; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 10px; text-transform: uppercase;'>⚡ Filtruj listę według braków operacyjnych:</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #94A3B8; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;'>⚡ Wyszukaj i filtruj zlecenia:</p>", unsafe_allow_html=True)
             
+            # ⚡ NOWA: GŁÓWNA WYSZUKIWARKA TEKSTOWA
+            wyszukiwarka = st.text_input(
+                "Wyszukiwarka", 
+                placeholder="🔍 Wpisz nazwę targów, przewoźnika, ID zlecenia, fakturę...",
+                label_visibility="collapsed"
+            )
+            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
+
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
             with f_col1:
                 if st.button(f"🌍 Wszystkie", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
@@ -83,6 +91,8 @@ def render(sh):
                     st.rerun()
             
             df_widok = df_aktywne.copy()
+            
+            # 1. Filtrowanie z przycisków (Braki operacyjne)
             if st.session_state["filtr_eventow"] == "BrakCMR":
                 df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1)]
             elif st.session_state["filtr_eventow"] == "BrakPOD":
@@ -90,7 +100,13 @@ def render(sh):
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
-            # TWARDE SORTOWANIE PO DACIE ZAŁADUNKU 
+            # 2. ⚡ Filtrowanie z wyszukiwarki tekstowej (Przeszukuje cały DF)
+            if wyszukiwarka and not df_widok.empty:
+                # Zamieniamy cały wiersz na tekst i szukamy (case=False ignoruje wielkość liter)
+                maska = df_widok.astype(str).apply(lambda row: row.str.contains(wyszukiwarka, case=False, na=False).any(), axis=1)
+                df_widok = df_widok[maska]
+
+            # 3. TWARDE SORTOWANIE PO DACIE ZAŁADUNKU 
             if not df_widok.empty and 'Data_Zlecenia_Tr' in df_widok.columns:
                 df_widok['_temp_date'] = pd.to_datetime(df_widok['Data_Zlecenia_Tr'], errors='coerce')
                 df_widok = df_widok.sort_values(by='_temp_date', ascending=True, na_position='last')
@@ -102,7 +118,10 @@ def render(sh):
             
             with col_lista:
                 if df_widok.empty:
-                    st.info("Brak zleceń spełniających wybrane kryteria filtra.")
+                    if wyszukiwarka:
+                        st.warning(f"Brak zleceń pasujących do frazy: **{wyszukiwarka}** w wybranym filtrze.")
+                    else:
+                        st.info("Brak zleceń spełniających wybrane kryteria filtra.")
                 else:
                     for index, row in df_widok.iterrows():
                         faza = str(row.get('Faza_Procesu', '')).lower()
