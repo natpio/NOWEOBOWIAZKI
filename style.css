@@ -149,23 +149,17 @@ div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-we
 }
 
 /* =========================================
-   6. COMMAND CENTER & DASHBOARD GRIDS
+   6. COMMAND CENTER DASHBOARD
 ========================================= */
-.dashboard-grid.top-kpi {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    margin-bottom: 25px;
-}
-
 .dash-card {
     background: rgba(30, 41, 59, 0.6);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    height: 100%;
 }
 
 .dash-title {
@@ -193,39 +187,22 @@ div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-we
 .kpi-adv-header .icon { font-size: 20px; opacity: 0.8;}
 .kpi-adv-value {
     color: #F8FAFC;
-    font-size: 42px;
+    font-size: 38px;
     font-weight: 800;
     margin: 10px 0;
 }
 .kpi-progress-bar {
     width: 100%;
-    height: 6px;
+    height: 4px;
     background: rgba(255,255,255,0.1);
     border-radius: 10px;
-    margin-bottom: 15px;
+    margin-bottom: 5px;
     overflow: hidden;
 }
 .kpi-progress {
     height: 100%;
     background: #D4AF37;
     border-radius: 10px;
-    transition: width 1s ease-in-out;
-}
-.kpi-btn-action {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: #F8FAFC;
-    padding: 8px 15px;
-    border-radius: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-    width: max-content;
-}
-.kpi-btn-action:hover {
-    background: rgba(212, 175, 55, 0.2);
-    border-color: #D4AF37;
 }
 
 /* Issue Inbox / Alerts */
@@ -233,20 +210,14 @@ div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-we
     display: flex;
     align-items: flex-start;
     gap: 12px;
-    padding: 12px 15px;
+    padding: 10px 15px;
     border-radius: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
     font-size: 13px;
     background: rgba(255,255,255,0.03);
 }
-.alert-warning {
-    border-left: 4px solid #f59e0b;
-    background: rgba(245, 158, 11, 0.1);
-}
-.alert-danger {
-    border-left: 4px solid #ef4444;
-    background: rgba(239, 68, 68, 0.1);
-}
-.alert-icon { font-size: 18px; }
-.alert-content strong { color: #F8FAFC; display: block; margin-bottom: 3px; font-size: 14px;}
-.alert-content { color: #94A3B8; line-height: 1.4; }
+.alert-warning { border-left: 3px solid #f59e0b; }
+.alert-danger { border-left: 3px solid #ef4444; }
+.alert-icon { font-size: 16px; }
+.alert-content strong { color: #F8FAFC; display: block; margin-bottom: 2px;}
+.alert-content { color: #94A3B8; line-height: 1.3; }
