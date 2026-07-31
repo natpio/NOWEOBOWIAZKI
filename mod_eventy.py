@@ -98,7 +98,6 @@ def render(sh):
 
             st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
             
-            # POSZERZAMY LISTĘ ZLECEŃ (Zmiana proporcji kolumn na 65:35)
             col_lista, col_detale = st.columns([65, 35], gap="large")
             
             with col_lista:
@@ -183,7 +182,6 @@ def render(sh):
                     
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     
-                    # ⚡ NOWA SEKCJA Z PRZYCISKIEM DUPLIKACJI
                     c_id, c_dup = st.columns([6, 4])
                     with c_id:
                         st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
@@ -191,7 +189,6 @@ def render(sh):
                         if st.button("📋 Klonuj (Kolejne auto)", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
                             nowy_wiersz = dane_eventu.copy().to_dict()
                             
-                            # Resetujemy kluczowe pola dla nowego auta
                             nowy_wiersz['ID_Zlecenia'] = "" 
                             nowy_wiersz['Faza_Procesu'] = "Inicjacja"
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
@@ -206,12 +203,11 @@ def render(sh):
                             nowy_wiersz['Zakonczone_Arch'] = "NIE"
                             nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
                             
-                            # Dodajemy nowy wiersz do głównego df i zapisujemy
                             df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                             df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                             save_data(worksheet, df)
                             
-                            st.session_state["wybrany_event_id"] = None # Czyścimy widok by odświeżyć listę
+                            st.session_state["wybrany_event_id"] = None 
                             st.success("✅ Skopiowano zlecenie! Dodano nowe auto do bazy.")
                             st.rerun()
 
@@ -222,7 +218,6 @@ def render(sh):
                     elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
                     else: plik_img = "default.png"
                     
-                    # LIMITOWANIE WYSOKOŚCI ZDJĘCIA (Max 180px height) za pomocą Base64 HTML
                     if os.path.exists(plik_img):
                         with open(plik_img, "rb") as f:
                             b64_img = base64.b64encode(f.read()).decode()
@@ -270,70 +265,55 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
 
-                    det_info, det_har, det_fin, det_arch = st.tabs(["📝 INFO & STATUS", "⏱️ HARMONOGRAM", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
+                    det_info, det_har, det_fin, det_arch = st.tabs(["📝 EDYCJA DANYCH", "⏱️ HARMONOGRAM", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ"])
                     
                     with det_info:
-                        data_zal_det = str(dane_eventu.get('Data_Zlecenia_Tr', '')).strip()
-                        if data_zal_det in ['', 'None', 'nan', 'NaT']:
-                            data_zal_det = 'no info'
-
-                        st.markdown(f"""
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
-                            <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Typ Pojazdu</div>
-                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Typ_Pojazdu', '-')}</div>
-                            </div>
-                            <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Typ Transportu</div>
-                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Typ_Transportu', '-')}</div>
-                            </div>
-                            <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Data Załadunku</div>
-                                <div style="color: #D4AF37; font-weight: 600; font-size: 14px;">{data_zal_det}</div>
-                            </div>
-                            <div>
-                                <div style="color: #64748B; font-size: 11px; text-transform: uppercase; font-weight: 700;">Nr Zlecenia Zewn.</div>
-                                <div style="color: #F8FAFC; font-weight: 600; font-size: 14px;">{dane_eventu.get('Nr_Zlecenia_Zewn', '-')}</div>
-                            </div>
-                        </div>
-                        <hr style="border-color: rgba(255,255,255,0.05); margin: 15px 0;">
-                        """, unsafe_allow_html=True)
-                        
-                        with st.form(key=f"edit_status_{dane_eventu['ID_Zlecenia']}"):
-                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🔄 Aktualizacja Statusu Operacyjnego</p>", unsafe_allow_html=True)
+                        with st.form(key=f"edit_all_{dane_eventu['ID_Zlecenia']}"):
+                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🔄 Edycja Danych Podstawowych i Statusu</p>", unsafe_allow_html=True)
                             
-                            c_stat1, c_stat2, c_stat3 = st.columns(3)
-                            
-                            fazy_lista = ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"]
-                            akt_faza = dane_eventu.get("Faza_Procesu", "Inicjacja")
-                            idx_fazy = fazy_lista.index(akt_faza) if akt_faza in fazy_lista else 0
-                            
-                            mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
-                            akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
-                            idx_mag = mag_lista.index(akt_mag) if akt_mag in mag_lista else 0
-
-                            with c_stat1:
+                            c_ed1, c_ed2 = st.columns(2)
+                            with c_ed1:
+                                u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
+                                u_przewoznik = st.text_input("Przewoźnik / Kierowca", value=str(dane_eventu.get('Przewoznik', '')))
+                                u_typ_transp = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"], index=0 if str(dane_eventu.get('Typ_Transportu', '')) == "Zewnętrzny" else 1)
+                                
+                                fazy_lista = ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"]
+                                akt_faza = dane_eventu.get("Faza_Procesu", "Inicjacja")
+                                idx_fazy = fazy_lista.index(akt_faza) if akt_faza in fazy_lista else 0
                                 u_faza = st.selectbox("Faza Procesu", fazy_lista, index=idx_fazy)
-                            with c_stat2:
-                                u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
-                            with c_stat3:
+                                
+                            with c_ed2:
+                                u_typ_pojazd = st.text_input("Typ Pojazdu", value=str(dane_eventu.get('Typ_Pojazdu', '')))
+                                u_nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewn.", value=str(dane_eventu.get('Nr_Zlecenia_Zewn', '')).replace("N/A", "").replace("FLOTA WŁASNA", ""))
+                                
                                 dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
                                 try:
                                     dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
                                 except:
                                     dp_parsed = None
                                 u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
+                                
+                                mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
+                                akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
+                                idx_mag = mag_lista.index(akt_mag) if akt_mag in mag_lista else 0
+                                u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
 
-                            u_notatki = st.text_area("Notatki", value=dane_eventu.get('Notatki', ''))
+                            u_notatki = st.text_area("Notatki", value=str(dane_eventu.get('Notatki', '')))
                             
-                            if st.form_submit_button("💾 Zapisz Zmiany"):
+                            if st.form_submit_button("💾 Zapisz Wszystkie Zmiany"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
+                                df.at[idx, 'Nazwa_Targow'] = u_nazwa
+                                df.at[idx, 'Przewoznik'] = u_przewoznik
+                                df.at[idx, 'Typ_Transportu'] = u_typ_transp
+                                df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
+                                df.at[idx, 'Nr_Zlecenia_Zewn'] = u_nr_zlecenia_zewn if u_typ_transp == "Zewnętrzny" else "FLOTA WŁASNA"
                                 df.at[idx, 'Faza_Procesu'] = u_faza
                                 df.at[idx, 'Status_Magazyn'] = u_status_mag
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 df.at[idx, 'Notatki'] = u_notatki
+                                
                                 save_data(worksheet, df)
-                                st.success("Status operacyjny został zaktualizowany!")
+                                st.success("Pomyślnie zaktualizowano dane operacyjne i logistyczne!")
                                 st.rerun()
 
                     with det_har:
