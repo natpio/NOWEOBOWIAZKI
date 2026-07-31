@@ -90,7 +90,7 @@ def render(sh):
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
-            # ⚡ TWARDE SORTOWANIE PO DACIE ZAŁADUNKU 
+            # TWARDE SORTOWANIE PO DACIE ZAŁADUNKU 
             if not df_widok.empty and 'Data_Zlecenia_Tr' in df_widok.columns:
                 df_widok['_temp_date'] = pd.to_datetime(df_widok['Data_Zlecenia_Tr'], errors='coerce')
                 df_widok = df_widok.sort_values(by='_temp_date', ascending=True, na_position='last')
@@ -98,7 +98,7 @@ def render(sh):
 
             st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
             
-            # ⚡ POSZERZAMY LISTĘ ZLECEŃ (Zmiana proporcji kolumn na 65:35)
+            # POSZERZAMY LISTĘ ZLECEŃ (Zmiana proporcji kolumn na 65:35)
             col_lista, col_detale = st.columns([65, 35], gap="large")
             
             with col_lista:
@@ -182,8 +182,39 @@ def render(sh):
                     """, unsafe_allow_html=True)
                     
                     st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
-                    st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
                     
+                    # ⚡ NOWA SEKCJA Z PRZYCISKIEM DUPLIKACJI
+                    c_id, c_dup = st.columns([6, 4])
+                    with c_id:
+                        st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
+                    with c_dup:
+                        if st.button("📋 Klonuj (Kolejne auto)", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
+                            nowy_wiersz = dane_eventu.copy().to_dict()
+                            
+                            # Resetujemy kluczowe pola dla nowego auta
+                            nowy_wiersz['ID_Zlecenia'] = "" 
+                            nowy_wiersz['Faza_Procesu'] = "Inicjacja"
+                            nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
+                            nowy_wiersz['CMR_Gotowe'] = "NIE"
+                            
+                            is_sqm_clone = (nowy_wiersz['Typ_Transportu'] == "Własny SQM")
+                            nowy_wiersz['CMR_Podpisane_POD'] = "N/A" if is_sqm_clone else "NIE"
+                            nowy_wiersz['Faktura_Oplacona'] = "N/A" if is_sqm_clone else "NIE"
+                            nowy_wiersz['PP_Otrzymane'] = "N/A" if is_sqm_clone else "NIE"
+                            nowy_wiersz['Nr_Faktury'] = "N/A" if is_sqm_clone else ""
+                            nowy_wiersz['Data_Platnosci'] = "N/A" if is_sqm_clone else ""
+                            nowy_wiersz['Zakonczone_Arch'] = "NIE"
+                            nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
+                            
+                            # Dodajemy nowy wiersz do głównego df i zapisujemy
+                            df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
+                            df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
+                            save_data(worksheet, df)
+                            
+                            st.session_state["wybrany_event_id"] = None # Czyścimy widok by odświeżyć listę
+                            st.success("✅ Skopiowano zlecenie! Dodano nowe auto do bazy.")
+                            st.rerun()
+
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
                     if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
                     elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
@@ -191,7 +222,7 @@ def render(sh):
                     elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
                     else: plik_img = "default.png"
                     
-                    # ⚡ LIMITOWANIE WYSOKOŚCI ZDJĘCIA (Max 180px height) za pomocą Base64 HTML
+                    # LIMITOWANIE WYSOKOŚCI ZDJĘCIA (Max 180px height) za pomocą Base64 HTML
                     if os.path.exists(plik_img):
                         with open(plik_img, "rb") as f:
                             b64_img = base64.b64encode(f.read()).decode()
