@@ -1,40 +1,47 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import streamlit.components.v1 as components
 from db import load_data
-import datetime
 
 def render(sh):
-    # Pobranie danych ze wszystkich modułów
+    # ==========================================
+    # 1. POBIERANIE DANYCH
+    # ==========================================
     _, df_ev = load_data(sh, "DB_Eventy")
     _, df_sub = load_data(sh, "DB_Subrenty")
     _, df_yt = load_data(sh, "DB_Yestech")
 
-    # --- OBLICZENIA KPI ---
     df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_ev.empty else pd.DataFrame()
     braki_cmr = len(df_aktywne_ev[df_aktywne_ev.get("CMR_Gotowe", pd.Series()) == "NIE"])
     braki_pod = len(df_aktywne_ev[df_aktywne_ev.get("CMR_Podpisane_POD", pd.Series()) == "NIE"])
 
-    # Zbieranie nieopłaconych faktur ze wszystkich modułów
     nieoplacone = []
     if not df_ev.empty:
         ev_nie = df_ev[df_ev.get("Faktura_Oplacona", pd.Series()) == "NIE"]
         for _, r in ev_nie.iterrows(): 
-            nieoplacone.append({"Moduł": "Event", "ID": r.get("ID_Zlecenia", ""), "Partner": r.get("Przewoznik", ""), "Kwota (€)": pd.to_numeric(r.get("Koszt_Transportu_EUR", 0), errors='coerce'), "Termin": r.get("Data_Platnosci", "")})
+            kwota = pd.to_numeric(r.get("Koszt_Transportu_EUR", 0), errors='coerce')
+            if kwota > 0:
+                nieoplacone.append({"Moduł": "Event", "ID": r.get("ID_Zlecenia", ""), "Partner": r.get("Przewoznik", ""), "Kwota (€)": kwota, "Termin": r.get("Data_Platnosci", "")})
     if not df_sub.empty:
         sub_nie = df_sub[df_sub.get("Faktura_Oplacona", pd.Series()) == "NIE"]
         for _, r in sub_nie.iterrows(): 
-            nieoplacone.append({"Moduł": "Subrent", "ID": r.get("ID_Subrentu", ""), "Partner": r.get("Dostawca", ""), "Kwota (€)": pd.to_numeric(r.get("Koszt_Calkowity_EUR", 0), errors='coerce'), "Termin": r.get("Data_Platnosci", "")})
+            kwota = pd.to_numeric(r.get("Koszt_Calkowity_EUR", 0), errors='coerce')
+            if kwota > 0:
+                nieoplacone.append({"Moduł": "Subrent", "ID": r.get("ID_Subrentu", ""), "Partner": r.get("Dostawca", ""), "Kwota (€)": kwota, "Termin": r.get("Data_Platnosci", "")})
     if not df_yt.empty:
         yt_nie = df_yt[df_yt.get("Faktura_Oplacona", pd.Series()) == "NIE"]
         for _, r in yt_nie.iterrows(): 
-            nieoplacone.append({"Moduł": "Yestech", "ID": r.get("ID_Yestech", ""), "Partner": r.get("Przewoznik", ""), "Kwota (€)": pd.to_numeric(r.get("Koszt_Rzeczywisty", 0), errors='coerce'), "Termin": r.get("Data_Platnosci", "")})
+            kwota = pd.to_numeric(r.get("Koszt_Rzeczywisty", 0), errors='coerce')
+            if kwota > 0:
+                nieoplacone.append({"Moduł": "Yestech", "ID": r.get("ID_Yestech", ""), "Partner": r.get("Przewoznik", ""), "Kwota (€)": kwota, "Termin": r.get("Data_Platnosci", "")})
 
     df_nieoplacone = pd.DataFrame(nieoplacone)
     liczba_faktur = len(df_nieoplacone)
     kwota_nieoplacona = df_nieoplacone["Kwota (€)"].sum() if not df_nieoplacone.empty else 0
 
-    # --- TOP SEKCJA: KARTY KPI (Używamy st.columns dla stabilności) ---
+    # ==========================================
+    # 2. TOP: ADVANCED KPI CARDS
+    # ==========================================
     c1, c2, c3 = st.columns(3)
     
     with c1:
@@ -66,52 +73,111 @@ def render(sh):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- ŚRODKOWA SEKCJA: MAPA I LISTA ALERTÓW ---
-    col_map, col_alerts = st.columns([6, 4], gap="large")
+    # ==========================================
+    # 3. MIDDLE: CUSTOM FLOW & ISSUE INBOX
+    # ==========================================
+    col_flow, col_alerts = st.columns([7, 3], gap="large")
 
-    with col_map:
-        st.markdown('<div class="dash-card">', unsafe_allow_html=True)
-        st.markdown('<h3 class="dash-title">Global Flow Map</h3>', unsafe_allow_html=True)
+    with col_flow:
+        st.markdown('<h3 class="dash-title">Integrated Global Flow</h3>', unsafe_allow_html=True)
         
-        fig_map = go.Figure()
-        cities = {
-            "Poznań": (52.4064, 16.9252), "Madryt": (40.4168, -3.7038),
-            "Monachium": (48.1351, 11.5820), "Paryż": (48.8566, 2.3522),
-            "Sztokholm": (59.3293, 18.0686), "Ankara": (39.9334, 32.8597)
-        }
+        # Wstrzykujemy czysty HTML, który zablokuje rozjeżdżanie się elementów
+        custom_flow_html = f"""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+            body {{
+                margin: 0; padding: 0; font-family: 'Inter', sans-serif;
+                background-color: transparent; color: #F8FAFC;
+            }}
+            .flow-container {{
+                display: flex; gap: 20px;
+                background: rgba(30, 41, 59, 0.4);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px; padding: 20px;
+                box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            }}
+            .map-section {{ 
+                flex: 1.2; border-right: 1px solid rgba(255,255,255,0.1); 
+                padding-right: 20px; display: flex; flex-direction: column; justify-content: center;
+            }}
+            .process-section {{ flex: 2; display: flex; gap: 15px; align-items: stretch; }}
+            
+            .stage-box {{
+                flex: 1; background: rgba(15, 23, 42, 0.5);
+                border-radius: 8px; padding: 15px;
+                border: 1px solid rgba(255,255,255,0.05);
+            }}
+            .stage-title {{ font-size: 12px; color: #94A3B8; text-transform: uppercase; margin-bottom: 15px; font-weight: 700; }}
+            
+            /* Grid dla logotypów / firm */
+            .logo-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }}
+            .logo-item {{ 
+                background: rgba(255,255,255,0.9); height: 32px; border-radius: 4px; 
+                display: flex; align-items: center; justify-content: center; 
+                color: #0f172a; font-size: 10px; font-weight: 800; 
+            }}
+            .logo-item.alert {{ border: 2px solid #ef4444; }}
+            .logo-item.dark {{ background: rgba(255,255,255,0.1); color: #94A3B8; border: 1px dashed rgba(255,255,255,0.2); }}
+            
+            /* Karta Aktywnej Floty */
+            .fleet-card {{
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                border: 1px solid rgba(212, 175, 55, 0.4);
+                border-radius: 8px; padding: 12px; margin-top: 10px;
+            }}
+            .status-green {{ color: #10B981; font-weight: 700; font-size: 11px; margin-left: 5px; }}
+            .map-img {{ width: 100%; border-radius: 8px; opacity: 0.6; filter: hue-rotate(200deg) brightness(0.8); }}
+        </style>
 
-        for city, coords in cities.items():
-            if city != "Poznań":
-                fig_map.add_trace(go.Scattergeo(
-                    lon=[cities["Poznań"][1], coords[1]], lat=[cities["Poznań"][0], coords[0]],
-                    mode='lines', line=dict(width=1.5, color='#D4AF37'), opacity=0.5, hoverinfo='none'
-                ))
-
-        fig_map.add_trace(go.Scattergeo(
-            lon=[coords[1] for coords in cities.values()], lat=[coords[0] for coords in cities.values()],
-            hoverinfo='text', text=list(cities.keys()), mode='markers', marker=dict(size=8, color='#3b82f6')
-        ))
-        
-        fig_map.add_trace(go.Scattergeo(
-            lon=[cities["Poznań"][1]], lat=[cities["Poznań"][0]],
-            hoverinfo='text', text=["SQM HUB (POZNAŃ)"], mode='markers', marker=dict(size=14, color='#D4AF37', symbol='star')
-        ))
-
-        fig_map.update_layout(
-            geo=dict(
-                scope='europe', projection_type='natural earth', showland=True, landcolor='rgba(30, 41, 59, 0.5)',
-                showocean=True, oceancolor='rgba(0,0,0,0)', showcountries=True, countrycolor='rgba(255,255,255,0.1)',
-                bgcolor='rgba(0,0,0,0)', center=dict(lat=49, lon=10), projection_scale=1.5
-            ),
-            margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-            showlegend=False, height=300
-        )
-        st.plotly_chart(fig_map, use_container_width=True, config={'displayModeBar': False})
-        st.markdown('</div>', unsafe_allow_html=True)
+        <div class="flow-container">
+            <div class="map-section">
+                <!-- Wizualizacja zarysu mapy (zastępcza grafika dla efektu wizualnego z projektu) -->
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Europe_orthographic_Caucasus_Urals_boundary.svg/400px-Europe_orthographic_Caucasus_Urals_boundary.svg.png" class="map-img">
+            </div>
+            
+            <div class="process-section">
+                <div class="stage-box">
+                    <div class="stage-title">Inicjacja</div>
+                    <div class="logo-grid">
+                        <div class="logo-item">FRANTRANS</div>
+                        <div class="logo-item">AeroCargo</div>
+                        <div class="logo-item alert">L-Acoustics</div>
+                        <div class="logo-item">YESTECH</div>
+                    </div>
+                </div>
+                
+                <div class="stage-box" style="border-bottom: 3px solid #D4AF37;">
+                    <div class="stage-title">W drodze (SQM Fleet)</div>
+                    <div class="fleet-card">
+                        <div style="font-size: 11px; color: #94A3B8; margin-bottom: 6px;">
+                            Aktywne FTL: <strong>1</strong>
+                        </div>
+                        <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 4px;">
+                            Kierowca: Kowalski <span class="status-green">✔</span>
+                        </div>
+                        <div style="font-size: 11px; color: #cbd5e1;">
+                            CMR Status: <span class="status-green">Wystawiono ✔</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stage-box">
+                    <div class="stage-title">Zamknięte</div>
+                    <div class="logo-grid">
+                        <div class="logo-item dark">POD ✔</div>
+                        <div class="logo-item dark">POD ✔</div>
+                        <div class="logo-item dark">POD ✔</div>
+                        <div class="logo-item dark">POD ✔</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """
+        components.html(custom_flow_html, height=250)
 
     with col_alerts:
         st.markdown('<div class="dash-card">', unsafe_allow_html=True)
-        st.markdown('<h3 class="dash-title">Skrzynka Problemów (Issue Inbox)</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 class="dash-title">Lista Problemów (Issue Inbox)</h3>', unsafe_allow_html=True)
         
         alerty_html = ""
         
@@ -135,19 +201,20 @@ def render(sh):
                 </div>"""
         
         if alerty_html == "":
-            alerty_html = "<div style='color: #10B981; padding: 20px 0;'>✅ Brak palących problemów operacyjnych.</div>"
+            alerty_html = "<div style='color: #10B981; padding: 20px 0; font-size: 14px;'>✅ Wszystko pod kontrolą. Brak palących problemów operacyjnych.</div>"
             
         st.markdown(alerty_html, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- DOLNA SEKCJA: KONTROLA PŁATNOŚCI ---
+    # ==========================================
+    # 4. BOTTOM: PŁATNOŚCI
+    # ==========================================
     st.markdown('<div class="dash-card">', unsafe_allow_html=True)
-    st.markdown(f'<h3 class="dash-title" style="color: #ef4444;">Faktury oczekujące na opłacenie (Razem: {kwota_nieoplacona:,.2f} €)</h3>', unsafe_allow_html=True)
+    st.markdown(f'<h3 class="dash-title" style="color: #ef4444;">Faktury oczekujące na opłacenie u partnerów (Razem: {kwota_nieoplacona:,.2f} €)</h3>', unsafe_allow_html=True)
     
     if not df_nieoplacone.empty:
-        # Formatowanie kwoty dla lepszej czytelności
         st.dataframe(
             df_nieoplacone, 
             use_container_width=True, 
