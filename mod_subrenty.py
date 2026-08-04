@@ -4,37 +4,48 @@ import datetime
 from db import load_data, save_data, generuj_smart_id
 
 def render(sh):
-    st.title("📦 Hub Wypożyczeń (Lifecycle)")
+    # 1. NAGŁÓWEK MODUŁU (STYL ZEN)
+    st.markdown("""
+        <h2 style='color: #E2DCD3; margin-bottom: 0px; font-weight: 400; font-size: 24px;'>Moduł Operacyjny: Subrenty</h2>
+        <div style='color: #8C8477; font-size: 11px; letter-spacing: 2px; margin-bottom: 25px;'>オペレーションモジュール: サブレント</div>
+    """, unsafe_allow_html=True)
     
+    # 2. POBIERANIE DANYCH
     worksheet_sub, df_sub = load_data(sh, "DB_Subrenty")
     worksheet_firmy, df_firmy = load_data(sh, "DB_Katalog_Firm")
     
     katalog_firm = df_firmy["Nazwa_Firmy"].dropna().unique().tolist() if not df_firmy.empty else []
     df_aktywne_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_sub.empty else df_sub
     
+    # 3. OBLICZANIE KPI
     na_stanie = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "3. Na stanie SQM (Pracuje)"]) if not df_aktywne_sub.empty else 0
     gotowe_do_zwrotu = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "4. Gotowe do zwrotu (Alert)"]) if not df_aktywne_sub.empty else 0
     
+    # Renderowanie nowych kart KPI w japońskim stylu
     st.markdown(f"""
         <div class="kpi-container">
-            <div class="kpi-card kpi-blue">
+            <div class="kpi-card">
                 <div class="kpi-header">Łącznie Aktywne</div>
+                <div class="kpi-sub-jp">アクティブな総数</div>
                 <div class="kpi-value">{len(df_aktywne_sub)}</div>
                 <div class="kpi-icon-bg">📦</div>
             </div>
-            <div class="kpi-card kpi-green">
+            <div class="kpi-card">
                 <div class="kpi-header">U nas na magazynie</div>
+                <div class="kpi-sub-jp">倉庫の在庫</div>
                 <div class="kpi-value">{na_stanie}</div>
                 <div class="kpi-icon-bg">✅</div>
             </div>
-            <div class="kpi-card kpi-red">
+            <div class="kpi-card">
                 <div class="kpi-header">Do pilnego zwrotu</div>
+                <div class="kpi-sub-jp">緊急返却</div>
                 <div class="kpi-value">{gotowe_do_zwrotu}</div>
                 <div class="kpi-icon-bg">⚠️</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
+    # 4. ZAKŁADKI MODUŁU
     tab_podglad, tab_nowy, tab_zwrot, tab_archiwum = st.tabs([
         "📊 Podgląd Cyklu", "➕ Dodaj (Inicjuj IN)", "🔄 Zwróć / Aktualizuj (OUT)", "📦 Archiwum"
     ])
@@ -43,7 +54,7 @@ def render(sh):
         if not df_aktywne_sub.empty: 
             st.info("💡 Edytuj dane bezpośrednio w tabeli. Kliknij 'Zapisz zmiany', aby wysłać do chmury Google.")
             
-            # Zostawiamy wszystkie kolumny odblokowane do edycji w locie
+            # Tabela edytowalna
             edited_df_sub = st.data_editor(df_aktywne_sub, use_container_width=True, hide_index=True, key="edit_subrenty")
             
             if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
@@ -55,7 +66,7 @@ def render(sh):
             st.info("Brak aktywnych wypożyczeń sprzętu.")
 
     with tab_nowy:
-        st.subheader("1. Faza: Inicjacja Wypożyczenia i Transport do SQM")
+        st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>1. Faza: Inicjacja Wypożyczenia i Transport do SQM</h4>", unsafe_allow_html=True)
         with st.form("form_subrent_in", clear_on_submit=True):
             s_col1, s_col2 = st.columns(2)
             with s_col1:
@@ -66,21 +77,25 @@ def render(sh):
                 rodzaj_zlecenia = st.selectbox("Rodzaj", ["Dry Hire", "Cross-rent", "Zastępczy"])
                 status_sub = st.selectbox("Status Początkowy", ["1. Zamówione (Oczekuje na IN)", "2. W drodze do SQM (IN)", "3. Na stanie SQM (Pracuje)"])
 
-            st.markdown("### 📅 Terminarz Wynajmu")
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>📅 Terminarz Wynajmu</p>", unsafe_allow_html=True)
             d_col1, d_col2 = st.columns(2)
             with d_col1: data_odbioru = st.date_input("Data rozpoczęcia wynajmu (Odbiór)")
             with d_col2: deadline_zwrotu = st.date_input("Deadline ZWROTU (do kiedy musi oddać)")
             
-            st.markdown("### 🚚 Logistyka Odbioru (Etap IN)")
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>🚚 Logistyka Odbioru (Etap IN)</p>", unsafe_allow_html=True)
             i_col1, i_col2 = st.columns(2)
             with i_col1: transport_in_kto = st.text_input("Kto nam to przywozi? (np. Kurier DPD, Flota SQM)")
             with i_col2: transport_in_dok = st.text_input("Nr listu przewozowego / Dokument IN")
 
+            st.markdown("<br>", unsafe_allow_html=True)
             if st.form_submit_button("🚀 Zainicjuj Subrent"):
                 firma_docelowa = nowa_firma.strip() if wybor_firmy == "-- Dodaj nową firmę --" else wybor_firmy
                 if not co_jedzie or not firma_docelowa:
                     st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać dostawcę!")
                 else:
+                    # Dodanie nowej firmy do bazy, jeśli jej tam nie ma
                     if firma_docelowa not in katalog_firm:
                         df_firmy = pd.concat([df_firmy, pd.DataFrame([{"Nazwa_Firmy": firma_docelowa}])], ignore_index=True)
                         save_data(worksheet_firmy, df_firmy)
@@ -100,7 +115,7 @@ def render(sh):
                     st.rerun()
 
     with tab_zwrot:
-        st.subheader("2. Faza: Aktualizacja statusu i ZWROT sprzętu")
+        st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>2. Faza: Aktualizacja statusu i ZWROT sprzętu</h4>", unsafe_allow_html=True)
         if not df_aktywne_sub.empty:
             wybrany_id = st.selectbox("Wybierz Aktywny Subrent", df_aktywne_sub["ID_Subrentu"].tolist())
             dane_sub = df_aktywne_sub[df_aktywne_sub["ID_Subrentu"] == wybrany_id].iloc[0]
@@ -115,18 +130,21 @@ def render(sh):
                 idx_statusu = opcje_statusu.index(obecny_status) if obecny_status in opcje_statusu else 0
                 nowy_status = st.selectbox("Aktualizuj Status Cyklu", opcje_statusu, index=idx_statusu)
                 
-                st.markdown("### 🚚 Logistyka Zwrotu (Etap OUT)")
+                st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>🚚 Logistyka Zwrotu (Etap OUT)</p>", unsafe_allow_html=True)
                 o_col1, o_col2, o_col3 = st.columns(3)
                 with o_col1: t_out_kto = st.text_input("Kto organizuje zwrot?", value=dane_sub.get("Transport_OUT_Kto", ""))
                 with o_col2: t_out_dok = st.text_input("Nr listu zwrotnego / CMR", value=dane_sub.get("Transport_OUT_Dokumenty", ""))
                 with o_col3: data_zwrotu = st.date_input("Faktyczna Data Zwrotu", value=None)
                 
-                st.markdown("### 💰 Finanse i Zakończenie")
+                st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
+                st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>💰 Finanse i Zakończenie</p>", unsafe_allow_html=True)
                 f_col1, f_col2, f_col3 = st.columns(3)
                 with f_col1: koszt = st.number_input("Koszt Całkowity Wypożyczenia (€)", min_value=0.0, value=float(dane_sub.get("Koszt_Calkowity_EUR", 0.0)), step=50.0)
                 with f_col2: f_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_sub.get("Faktura_Oplacona", "")) if dane_sub.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
                 with f_col3: nr_fak = st.text_input("Nr Faktury od Dostawcy", value=dane_sub.get("Nr_Faktury", ""))
                 
+                st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 Zapisz Zmiany / Zatwierdź Zwrot"):
                     idx = df_sub[df_sub['ID_Subrentu'] == wybrany_id].index[0]
                     df_sub.at[idx, 'Status_Subrentu'] = nowy_status
@@ -136,6 +154,8 @@ def render(sh):
                     df_sub.at[idx, 'Koszt_Calkowity_EUR'] = float(koszt)
                     df_sub.at[idx, 'Faktura_Oplacona'] = f_opl
                     df_sub.at[idx, 'Nr_Faktury'] = nr_fak
+                    
+                    # Automatyczna archiwizacja, jeśli wybrano status końcowy
                     if nowy_status == "6. Zakończone i Rozliczone":
                         df_sub.at[idx, 'Zakonczone_Arch'] = "TAK"
                         
@@ -147,4 +167,7 @@ def render(sh):
 
     with tab_archiwum:
         df_arch_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df_sub.empty else pd.DataFrame()
-        if not df_arch_sub.empty: st.dataframe(df_arch_sub, use_container_width=True, hide_index=True)
+        if not df_arch_sub.empty: 
+            st.dataframe(df_arch_sub, use_container_width=True, hide_index=True)
+        else:
+            st.info("Brak zarchiwizowanych subrentów.")
