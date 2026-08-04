@@ -64,9 +64,6 @@ def load_data(sh, sheet_name):
             if kol not in df.columns: df[kol] = domyslne_yestech[kol]
         df = df[list(domyslne_yestech.keys())]
 
-    elif sheet_name == "DB_Katalog_Firm":
-        if "Nazwa_Firmy" not in df.columns: df["Nazwa_Firmy"] = ""
-        
     elif sheet_name == "DB_Sloty":
         domyslne_sloty = {
             "ID_Zlecenia": "", "Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today()),
@@ -99,3 +96,63 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
         numer = str(licznik_elementow[wartosc1]).zfill(2)
         df.at[idx, nazwa_kolumny_id] = f"{czesc1}-{czesc2}-{numer}"
     return df
+
+# ==========================================
+# NOWE FUNKCJE CRUD (DODANE Z CORE.PY)
+# ==========================================
+
+def fetch_data(sheet_name):
+    """Szybkie pobieranie danych jako DataFrame bez tworzenia brakujących kolumn."""
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        data = ws.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
+        return pd.DataFrame()
+
+def append_data(sheet_name, row_data):
+    """Dodawanie nowego wiersza na sam dół arkusza."""
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        ws.append_row(row_data)
+        return True
+    except Exception as e:
+        st.error(f"Błąd zapisu w {sheet_name}: {e}")
+        return False
+
+def update_row(sheet_name, row_index, row_data):
+    """Nadpisywanie konkretnego wiersza (np. podczas edycji przewoźnika/zlecenia)."""
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        # Obliczamy zakres od kolumny A do litery odpowiadającej długości danych
+        ostatnia_kolumna = chr(65 + len(row_data) - 1) 
+        zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
+        ws.update(values=[row_data], range_name=zakres)
+        return True
+    except Exception as e:
+        st.error(f"Błąd aktualizacji wiersza {row_index} w {sheet_name}: {e}")
+        return False
+
+def delete_row(sheet_name, row_index):
+    """Trwałe usuwanie wiersza z bazy danych."""
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        ws.delete_rows(row_index)
+        return True
+    except Exception as e:
+        st.error(f"Błąd usuwania wiersza {row_index} w {sheet_name}: {e}")
+        return False
+
+def get_next_daily_number(date_str):
+    """Generowanie unikalnego numeru dziennego dla nowych zleceń PRO."""
+    df = fetch_data("Zlecenia")
+    if df.empty or 'Data/Czas Operacji' not in df.columns:
+        return 1
+    # Zliczamy zlecenia, które w kolumnie systemowej daty (np. 2026-08-04) zaczynają się od tej frazy
+    dzisiejsze_zlecenia = sum(df['Data/Czas Operacji'].astype(str).str.startswith(date_str))
+    return dzisiejsze_zlecenia + 1
