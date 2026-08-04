@@ -12,6 +12,7 @@ import mod_zlecenia_poboczne
 import mod_subrenty
 import mod_yestech
 import mod_finanse
+import mod_bazy_danych
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
