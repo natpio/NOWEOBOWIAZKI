@@ -528,7 +528,8 @@ def render(sh):
                     df_przew_ev = df_ev[df_ev["Przewoznik"] == wybrany_przew].copy()
                     
                     st.markdown(f"#### 📦 Historia i Zlecenia: {wybrany_przew}")
-                    df_przew_ev_widok = df_przew_ev[['Nazwa_Targow', 'Data_Zlecenia_Tr', 'Typ_Pojazdu', 'Faza_Procesu', 'ID_Zlecenia']]
+                    # Wizualna zmiana nazwy kolumny Data_Zlecenia_Tr na Data Załadunku
+                    df_przew_ev_widok = df_przew_ev[['Nazwa_Targow', 'Data_Zlecenia_Tr', 'Typ_Pojazdu', 'Faza_Procesu', 'ID_Zlecenia']].rename(columns={'Data_Zlecenia_Tr': 'Data Załadunku'})
                     st.dataframe(df_przew_ev_widok, use_container_width=True, hide_index=True)
 
                     st.markdown("#### ⏱️ Przypisane Sloty Zleceń")
@@ -557,7 +558,9 @@ def render(sh):
                     df_targi = df_ev[df_ev["Nazwa_Targow"] == wybrane_targi].copy()
                     
                     st.markdown(f"#### 🚛 Flota i Przewoźnicy obsługujący: {wybrane_targi}")
-                    st.dataframe(df_targi[['Przewoznik', 'Typ_Pojazdu', 'Data_Zlecenia_Tr', 'Faza_Procesu', 'ID_Zlecenia']], use_container_width=True, hide_index=True)
+                    # Wizualna zmiana nazwy kolumny Data_Zlecenia_Tr na Data Załadunku
+                    df_targi_widok = df_targi[['Przewoznik', 'Typ_Pojazdu', 'Data_Zlecenia_Tr', 'Faza_Procesu', 'ID_Zlecenia']].rename(columns={'Data_Zlecenia_Tr': 'Data Załadunku'})
+                    st.dataframe(df_targi_widok, use_container_width=True, hide_index=True)
 
                     st.markdown("#### ⏱️ Zarezerwowane Sloty dla tego Eventu")
                     id_zlecen_targow = df_targi["ID_Zlecenia"].tolist()
