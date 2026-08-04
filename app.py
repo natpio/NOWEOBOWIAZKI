@@ -3,6 +3,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from streamlit_option_menu import option_menu
 import os
+import base64
 
 # Import modułów aplikacji
 import mod_command_center
@@ -14,11 +15,25 @@ import mod_finanse
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
 
-# 2. ŁADOWANIE LOKALNEGO CSS
+# 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA
 def local_css(file_name):
     if os.path.exists(file_name):
-        with open(file_name) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        with open(file_name, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        
+        # Konwersja tła głównego (fuji_bg.png) na Base64
+        if os.path.exists("fuji_bg.png"):
+            with open("fuji_bg.png", "rb") as img_f:
+                b64_fuji = base64.b64encode(img_f.read()).decode()
+            css_content = css_content.replace("url('fuji_bg.png')", f"url('data:image/png;base64,{b64_fuji}')")
+            
+        # Konwersja tła paska bocznego (lantern_bg.png) na Base64
+        if os.path.exists("lantern_bg.png"):
+            with open("lantern_bg.png", "rb") as img_l:
+                b64_lantern = base64.b64encode(img_l.read()).decode()
+            css_content = css_content.replace("url('lantern_bg.png')", f"url('data:image/png;base64,{b64_lantern}')")
+            
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
 local_css("style.css")
 
