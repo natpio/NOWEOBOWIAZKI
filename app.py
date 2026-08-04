@@ -37,29 +37,27 @@ def local_css(file_name):
 
 local_css("style.css")
 
-# 3. POŁĄCZENIE Z GOOGLE SHEETS (Zabezpieczone przed błędem Response 200)
+# 3. POŁĄCZENIE Z GOOGLE SHEETS
 @st.cache_resource
 def init_connection():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
     
-    # Pobieramy identyfikator lub nazwę z secrets (fallback na domyślną nazwę)
-    spreadsheet_identifier = st.secrets.get("spreadsheet_id", "SQM_Logistyka_DB")
+    # Pobieramy identyfikator lub nazwę z secrets (domyślnie NOWY PODZIAŁ OBOWIĄZKÓW)
+    spreadsheet_identifier = st.secrets.get("spreadsheet_id", "NOWY PODZIAŁ OBOWIĄZKÓW")
     
     try:
-        # Jeśli podano długi klucz (ID arkusza), otwórz po kluczu
         if len(spreadsheet_identifier) > 20 and " " not in spreadsheet_identifier:
             return client.open_by_key(spreadsheet_identifier)
         else:
             return client.open(spreadsheet_identifier)
     except Exception as e:
-        # Fallback próbujący alternatywnych metod w razie niezgodności typu
         try:
             return client.open_by_key(spreadsheet_identifier)
         except:
             try:
-                return client.open("SQM_Logistyka_DB")
+                return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
             except Exception as final_e:
                 raise final_e
 
