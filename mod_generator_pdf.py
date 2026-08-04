@@ -23,16 +23,16 @@ def pdf_sanitize(text):
         text = text.replace(pl, eng)
     return text.encode('latin-1', 'ignore').decode('latin-1')
 
-# --- NOWOCZESNY GENERATOR PDF PRO (STYL JAPANDI/ZEN) ---
+# --- NOWOCZESNY GENERATOR PDF PRO (ORYGINALNE KOLORY SQM) ---
 class PRO_TransportOrder(FPDF):
     def __init__(self, watermark_text="SQM", opiekun="PD"):
         super().__init__()
         self.watermark_text = pdf_sanitize(watermark_text)
         self.opiekun = opiekun
-        # Dopasowanie kolorystyki PDF do stylu aplikacji (Złoto/Czerń)
-        self.primary_color = (197, 168, 128) # Zgaszone złoto
-        self.dark_text = (28, 26, 24)
-        self.light_text = (140, 132, 119)
+        # Klasyczne, oryginalne kolory (Niebieski)
+        self.primary_color = (25, 118, 210) 
+        self.dark_text = (40, 40, 40)
+        self.light_text = (100, 100, 100)
 
     def add_watermark(self):
         self.set_font("Arial", 'B', 45)
@@ -112,15 +112,15 @@ def generate_pro_pdf(dane):
     # BLOKI: REF & DATE
     pdf.set_xy(10, 40)
     pdf.set_font("Arial", 'B', 9)
-    pdf.set_fill_color(40, 40, 40) 
-    pdf.set_text_color(197, 168, 128)
+    pdf.set_fill_color(25, 118, 210) 
+    pdf.set_text_color(255, 255, 255)
     pdf.cell(25, 8, pdf_sanitize(" REF "), border=0, fill=True, align='C')
     pdf.set_fill_color(245, 245, 245)
     pdf.set_text_color(40, 40, 40)
     pdf.cell(60, 8, pdf_sanitize(f" {dane['nr']}"), border=0, fill=True)
     pdf.cell(5, 8, "", border=0) 
-    pdf.set_fill_color(40, 40, 40)
-    pdf.set_text_color(197, 168, 128)
+    pdf.set_fill_color(25, 118, 210)
+    pdf.set_text_color(255, 255, 255)
     pdf.cell(25, 8, pdf_sanitize(" DATE "), border=0, fill=True, align='C')
     pdf.set_fill_color(245, 245, 245)
     pdf.set_text_color(40, 40, 40)
@@ -128,8 +128,8 @@ def generate_pro_pdf(dane):
     pdf.ln(12)
 
     def draw_section_header(num, title):
-        pdf.set_fill_color(40, 40, 40)
-        pdf.set_text_color(197, 168, 128)
+        pdf.set_fill_color(25, 118, 210)
+        pdf.set_text_color(255, 255, 255)
         pdf.set_font("Arial", 'B', 12)
         pdf.cell(10, 10, pdf_sanitize(str(num).zfill(2)), fill=True, align='C')
         pdf.set_text_color(40, 40, 40)
@@ -176,10 +176,10 @@ def generate_pro_pdf(dane):
     # 03 FINANCIALS
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
     sy = pdf.get_y()
-    pdf.set_xy(120, sy); pdf.set_fill_color(40, 40, 40); pdf.rect(120, sy, 80, 25, 'F')
-    pdf.set_xy(125, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(197, 168, 128)
+    pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 80, 25, 'F')
+    pdf.set_xy(125, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
     pdf.cell(70, 5, pdf_sanitize("TOTAL NET RATE / KWOTA NETTO"), ln=True)
-    pdf.set_xy(125, sy + 10); pdf.set_font("Arial", 'B', 20); pdf.set_text_color(255, 255, 255)
+    pdf.set_xy(125, sy + 10); pdf.set_font("Arial", 'B', 20)
     pdf.cell(70, 10, pdf_sanitize(f"{dane['stawka']} {dane['waluta']}"), ln=True)
     
     pdf.set_xy(10, sy)
