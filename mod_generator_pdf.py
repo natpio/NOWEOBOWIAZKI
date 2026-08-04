@@ -29,7 +29,7 @@ class PRO_TransportOrder(FPDF):
         super().__init__()
         self.watermark_text = pdf_sanitize(watermark_text)
         self.opiekun = opiekun
-        # Klasyczne, oryginalne kolory (Niebieski)
+        # Klasyczne, oryginalne kolory (Niebieski SQM)
         self.primary_color = (25, 118, 210) 
         self.dark_text = (40, 40, 40)
         self.light_text = (100, 100, 100)
@@ -46,9 +46,11 @@ class PRO_TransportOrder(FPDF):
     def header(self):
         try:
             if os.path.exists("logosqm.png"):
-                self.image("logosqm.png", 10, 8, 50)
+                # Powiększone logo o 15%
+                self.image("logosqm.png", 10, 8, 57.5)
             elif os.path.exists("logosqm.jpg"):
-                self.image("logosqm.jpg", 10, 8, 50)
+                # Powiększone logo o 15%
+                self.image("logosqm.jpg", 10, 8, 57.5)
         except:
             pass
         
