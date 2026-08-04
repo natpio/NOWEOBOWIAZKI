@@ -29,18 +29,18 @@ def render(sh):
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    # Karty KPI w nowym stylu Zen
+    # Karty KPI w stylu Zen
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card">
                 <div class="kpi-header">Do wystawienia CMR</div>
-                <div class="kpi-sub-jp">CMR発行</div>
+                <div class="kpi-sub-jp">CMRの発行待ち</div>
                 <div class="kpi-value">{braki_cmr}</div>
                 <div class="kpi-icon-bg">📝</div>
             </div>
             <div class="kpi-card">
                 <div class="kpi-header">Brakujące zwroty POD</div>
-                <div class="kpi-sub-jp">POD受領待ち</div>
+                <div class="kpi-sub-jp">POD返却待ち</div>
                 <div class="kpi-value">{braki_pod}</div>
                 <div class="kpi-icon-bg">📄</div>
             </div>
@@ -74,24 +74,61 @@ def render(sh):
             )
             st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
+            # Stylizowane przyciski filtrowania w konwencji kart KPI Zen
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            
+            active_filter = st.session_state["filtr_eventow"]
+            
+            def get_filter_style(is_active):
+                if is_active:
+                    return "background: linear-gradient(135deg, rgba(197, 168, 128, 0.35) 0%, rgba(197, 168, 128, 0.15) 100%); border: 1px solid #C5A880; box-shadow: 0 4px 15px rgba(0,0,0,0.3);"
+                else:
+                    return "background: rgba(28, 26, 24, 0.75); border: 1px solid rgba(197, 168, 128, 0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
+
             with f_col1:
-                if st.button(f"🌍 Wszystkie", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
+                st.markdown(f"""
+                <div style="{get_filter_style(active_filter == 'Wszystkie')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Wszystkie</div>
+                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">すべて</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Filtruj Wszystkie", use_container_width=True, key="btn_f_all"):
                     st.session_state["filtr_eventow"] = "Wszystkie"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
+
             with f_col2:
-                if st.button(f"📝 Brak CMR ({braki_cmr})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakCMR" else "secondary"):
+                st.markdown(f"""
+                <div style="{get_filter_style(active_filter == 'BrakCMR')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak CMR ({braki_cmr})</div>
+                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">CMRなし</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Filtruj Brak CMR", use_container_width=True, key="btn_f_cmr"):
                     st.session_state["filtr_eventow"] = "BrakCMR"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
+
             with f_col3:
-                if st.button(f"📥 Brak POD ({braki_pod})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakPOD" else "secondary"):
+                st.markdown(f"""
+                <div style="{get_filter_style(active_filter == 'BrakPOD')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak POD ({braki_pod})</div>
+                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">POD受領待ち</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Filtruj Brak POD", use_container_width=True, key="btn_f_pod"):
                     st.session_state["filtr_eventow"] = "BrakPOD"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
+
             with f_col4:
-                if st.button(f"💰 Nieopłacone ({braki_faktury})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakFaktury" else "secondary"):
+                st.markdown(f"""
+                <div style="{get_filter_style(active_filter == 'BrakFaktury')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Nieopłacone ({braki_faktury})</div>
+                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">未払い請求書</div>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("Filtruj Nieopłacone", use_container_width=True, key="btn_f_fak"):
                     st.session_state["filtr_eventow"] = "BrakFaktury"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
@@ -114,7 +151,7 @@ def render(sh):
                 df_widok = df_widok.sort_values(by='_temp_date', ascending=True, na_position='last')
                 df_widok = df_widok.drop(columns=['_temp_date'])
 
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 20px 0 25px 0;'>", unsafe_allow_html=True)
             
             col_lista, col_detale = st.columns([65, 35], gap="large")
             
