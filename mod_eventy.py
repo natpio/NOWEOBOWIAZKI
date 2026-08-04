@@ -29,7 +29,7 @@ def render(sh):
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    # K karty KPI w nowym stylu Zen
+    # Karty KPI w nowym stylu Zen
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card">
@@ -137,8 +137,6 @@ def render(sh):
                         is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
                         braki_tagi_html = ""
                         
-                        tag_style = "padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;"
-                        
                         if wymaga_cmr(row):
                             braki_tagi_html += f"<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
                         
@@ -239,18 +237,12 @@ def render(sh):
                     elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
                     else: plik_img = "default.png"
                     
-                   if os.path.exists(plik_img):
+                    if os.path.exists(plik_img):
                         with open(plik_img, "rb") as f:
                             b64_img = base64.b64encode(f.read()).decode()
                         st.markdown(f"""
                         <div style="width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin: 15px 0; border: 1px solid rgba(197, 168, 128, 0.2);">
                             <img src="data:image/png;base64,{b64_img}" style="width: 100%; height: auto; display: block; object-fit: cover;">
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
-                            <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
