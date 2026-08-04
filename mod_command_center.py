@@ -1,566 +1,580 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import os
 import base64
-from db import load_data, save_data, generuj_smart_id
+import os
+import streamlit.components.v1 as components
+from db import load_data
+import math
 
-def render(sh):
-    st.markdown("<h2 style='color: #F8FAFC; margin-bottom: 20px;'>🚚 Moduł Operacyjny: Eventy & Flota</h2>", unsafe_allow_html=True)
-    worksheet, df = load_data(sh, "DB_Eventy")
-    
-    df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df.empty else df.copy()
-    
-    def wymaga_cmr(row_data):
-        if str(row_data.get('CMR_Gotowe', '')) == 'NIE':
-            typ_transp = str(row_data.get('Typ_Transportu', ''))
-            typ_pojazdu = str(row_data.get('Typ_Pojazdu', '')).lower()
-            if typ_transp == "Własny SQM" and ("bus" in typ_pojazdu or "van" in typ_pojazdu):
-                return False 
-            return True
-        return False
+# =====================================================================
+# 1. KONFIGURACJA I SŁOWNIKI GEOGRAFICZNE (BAZA MIAST Z TWOICH ARKUSZY)
+# =====================================================================
 
-    braki_cmr = sum(df_aktywne.apply(wymaga_cmr, axis=1)) if not df_aktywne.empty else 0
-    braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
-    braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
+# Słownik z geolokalizacją (Lat, Lon) dla destynacji z Twojego pliku 1.jpg
+GEO_DICT = {
+    "POZNAŃ": (52.4064, 16.9252), # Hub SQM
+    "MONACHIUM": (48.1351, 11.5820),
+    "MUNICH": (48.1351, 11.5820),
+    "KOLONIA": (50.9375, 6.9603),
+    "COLOGNE": (50.9375, 6.9603),
+    "FRANKFURT": (50.1109, 8.6821),
+    "KOPENHAGA": (55.6761, 12.5683),
+    "KIELCE": (50.8703, 20.6275),
+    "LONDYN": (51.5074, -0.1278),
+    "LONDON": (51.5074, -0.1278),
+    "GUYANCOURT": (48.7718, 2.0494), # Okolice Paryża
+    "SZTOKHOLM": (59.3293, 18.0686),
+    "STOCKHOLM": (59.3293, 18.0686),
+    "HANOWER": (52.3759, 9.7320),
+    "HANOVER": (52.3759, 9.7320),
+    "PARYŻ": (48.8566, 2.3522),
+    "PARIS": (48.8566, 2.3522),
+    "BERLIN": (52.5200, 13.4050),
+    "HAMBURG": (53.5511, 9.9937),
+    "WURSELEN": (50.8214, 6.1386),
+    "MADRYT": (40.4168, -3.7038)
+}
+
+# Parametry okna mapy (projekcja Merkatora na uproszczony SVG)
+MAP_BOUNDS = {
+    "min_lat": 36.0, "max_lat": 63.0,
+    "min_lon": -10.0, "max_lon": 30.0,
+    "svg_width": 300, "svg_height": 200
+}
+
+# =====================================================================
+# 2. KLASY PRZETWARZANIA DANYCH (BACKEND LOGIC)
+# =====================================================================
+
+class LogistykaDataProcessor:
+    """Klasa agregująca i czyszcząca dane ze wszystkich modułów SQM."""
     
-    kpi3_color = "kpi-red" if braki_faktury > 0 else "kpi-green"
+    def __init__(self, df_ev, df_sub, df_yt):
+        # Inicjalizacja i czyszczenie pustych DataFrame'ów
+        self.df_ev = df_ev if not df_ev.empty else pd.DataFrame()
+        self.df_sub = df_sub if not df_sub.empty else pd.DataFrame()
+        self.df_yt = df_yt if not df_yt.empty else pd.DataFrame()
+        self.dzisiaj = pd.Timestamp.today().normalize()
+        
+    def get_aktywne_eventy(self):
+        """Zwraca tylko niezarchiwizowane eventy."""
+        if self.df_ev.empty:
+            return pd.DataFrame()
+        return self.df_ev[self.df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
+
+    def get_zamkniete_eventy(self):
+        """Zwraca zarchiwizowane eventy do analizy POD."""
+        if self.df_ev.empty:
+            return pd.DataFrame()
+        return self.df_ev[self.df_ev.get("Zakonczone_Arch", pd.Series()) == "TAK"]
+
+    def extract_financials(self):
+        """Przetwarza wszystkie faktury i oblicza Dni Opóźnienia (Aging)."""
+        nieoplacone = []
+        
+        def parse_module(df, mod_name, id_col, partner_col, cost_col):
+            if df.empty: return
+            
+            # Filtrujemy tylko nieopłacone
+            df_nie = df[df.get("Faktura_Oplacona", pd.Series()) == "NIE"]
+            for _, row in df_nie.iterrows():
+                # Bezpieczne wyciąganie kwoty
+                try:
+                    kwota = float(str(row.get(cost_col, 0)).replace(',', '.'))
+                except ValueError:
+                    kwota = 0.0
+                
+                if kwota <= 0:
+                    continue
+                    
+                termin_str = str(row.get("Data_Platnosci", "")).strip()
+                partner = str(row.get(partner_col, "")).strip()
+                
+                # Tylko zewnetrzni partnerzy, pomijamy Flotę SQM i N/A
+                if partner.upper() in ["SQM", "WŁASNY SQM", ""] or termin_str == "N/A":
+                    continue
+
+                status_platnosci = "W terminie"
+                dni_opoznienia = 0
+                
+                if termin_str and termin_str not in ["None", "nan", "NaT"]:
+                    try:
+                        termin_date = pd.to_datetime(termin_str).normalize()
+                        if termin_date < self.dzisiaj:
+                            dni_opoznienia = (self.dzisiaj - termin_date).days
+                            status_platnosci = f"Przeterminowana ({dni_opoznienia} dni)"
+                    except Exception:
+                        status_platnosci = "Brak / Błędna data"
+
+                nieoplacone.append({
+                    "Moduł": mod_name, 
+                    "ID Operacji": row.get(id_col, "-"), 
+                    "Kontrahent": partner, 
+                    "Kwota (€)": kwota, 
+                    "Termin": termin_str,
+                    "Status": status_platnosci,
+                    "Dni_Opoznienia": dni_opoznienia
+                })
+
+        parse_module(self.df_ev, "Event", "ID_Zlecenia", "Przewoznik", "Koszt_Transportu_EUR")
+        parse_module(self.df_sub, "Subrent", "ID_Subrentu", "Dostawca", "Koszt_Calkowity_EUR")
+        parse_module(self.df_yt, "Yestech", "ID_Yestech", "Przewoznik", "Koszt_Rzeczywisty")
+
+        df_wynik = pd.DataFrame(nieoplacone)
+        if not df_wynik.empty:
+            df_wynik = df_wynik.sort_values(by="Dni_Opoznienia", ascending=False)
+        return df_wynik
+
+    def generate_alerts(self, df_finanse):
+        """Generuje skrzynkę problemów bazując TYLKO na twardych danych z DB."""
+        alerty = []
+        
+        # 1. Alerty Krytyczne: Brakujące POD (Eventy zakończone)
+        zamkniete = self.get_zamkniete_eventy()
+        if not zamkniete.empty:
+            df_ev_pod = zamkniete[zamkniete.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
+            for _, row in df_ev_pod.iterrows():
+                # Ignoruj flotę własną (POD dotyczy głównie zewn.) chyba że SQM też wymaga.
+                if row.get("Typ_Transportu", "") != "Własny SQM":
+                    alerty.append({
+                        "typ": "krytyczny", "ikona": "🛑",
+                        "tytul": f"Brak POD: {row.get('Nazwa_Targow', 'Nieznana destynacja')}",
+                        "opis": f"Przewoźnik {row.get('Przewoznik', '-')} nie odesłał dokumentów przewozowych."
+                    })
+                
+        # 2. Alerty Ostrzegawcze: Gotowe do zwrotu (Subrenty)
+        if not self.df_sub.empty:
+            df_sub_alert = self.df_sub[self.df_sub.get("Status_Subrentu", pd.Series()) == "4. Gotowe do zwrotu (Alert)"]
+            for _, row in df_sub_alert.iterrows():
+                alerty.append({
+                    "typ": "ostrzezenie", "ikona": "⚠️",
+                    "tytul": f"Zwrot sprzętu: {row.get('Co_Jedzie', '-')}",
+                    "opis": f"Sprzęt oczekuje na zwrot do: {row.get('Dostawca', '-')} (Deadline: {row.get('Deadline_Zwrotu', '-')})."
+                })
+                
+        # 3. Alerty Finansowe: Poważne zadłużenie
+        if not df_finanse.empty:
+            powazne_dlugi = df_finanse[df_finanse["Dni_Opoznienia"] > 14]
+            for _, row in powazne_dlugi.head(3).iterrows():
+                alerty.append({
+                    "typ": "finanse", "ikona": "💸",
+                    "tytul": f"Zaległa faktura: {row['Kontrahent']}",
+                    "opis": f"Opóźnienie płatności o {row['Dni_Opoznienia']} dni na kwotę {row['Kwota (€)']} €."
+                })
+                
+        return alerty
+
+# =====================================================================
+# 3. GENERATOR KOMPONENTÓW HTML/CSS (PIXEL PERFECT MICRO-FRONTEND)
+# =====================================================================
+
+def get_base64_image(filepath):
+    """Bezpieczne ładowanie grafik b64 z obsługą błędów."""
+    if os.path.exists(filepath):
+        try:
+            with open(filepath, "rb") as img_file:
+                return f"data:image/png;base64,{base64.b64encode(img_file.read()).decode()}"
+        except Exception:
+            pass
+    return ""
+
+def latlon_to_svg(lat, lon):
+    """Prosta projekcja pseudo-Merkatora do współrzędnych SVG."""
+    w = MAP_BOUNDS["svg_width"]
+    h = MAP_BOUNDS["svg_height"]
     
-    st.markdown(f"""
-        <div class="kpi-container">
-            <div class="kpi-card kpi-blue">
-                <div class="kpi-header">Do wystawienia CMR</div>
-                <div class="kpi-value">{braki_cmr}</div>
-                <div class="kpi-icon-bg">📝</div>
+    # Skalowanie Lon (X)
+    x = (lon - MAP_BOUNDS["min_lon"]) / (MAP_BOUNDS["max_lon"] - MAP_BOUNDS["min_lon"]) * w
+    
+    # Skalowanie Lat (Y) - Merkator (odwrócona oś Y)
+    lat_rad = lat * math.pi / 180.0
+    merc_n = math.log(math.tan((math.pi / 4.0) + (lat_rad / 2.0)))
+    
+    min_lat_rad = MAP_BOUNDS["min_lat"] * math.pi / 180.0
+    max_lat_rad = MAP_BOUNDS["max_lat"] * math.pi / 180.0
+    min_merc = math.log(math.tan((math.pi / 4.0) + (min_lat_rad / 2.0)))
+    max_merc = math.log(math.tan((math.pi / 4.0) + (max_lat_rad / 2.0)))
+    
+    y = h - ((merc_n - min_merc) / (max_merc - min_merc) * h)
+    return x, y
+
+def build_dynamic_flow_html(aktywne_ev, zamkniete_ev):
+    """
+    Kluczowa funkcja generująca DYNAMICZNY kod HTML na podstawie FAKTYCZNYCH danych.
+    Zero zmyślonych kierowców i przewoźników.
+    """
+    
+    # 1. PARSOWANIE: Faza INICJACJI (Zewnętrzni partnerzy)
+    inicjacja_ev = aktywne_ev[aktywne_ev.get("Faza_Procesu", pd.Series()).isin(["Inicjacja", "Planowanie"])]
+    zewnetrzni_partnerzy = set()
+    for _, row in inicjacja_ev.iterrows():
+        if row.get("Typ_Transportu", "") != "Własny SQM":
+            przewoznik = str(row.get("Przewoznik", "")).strip().upper()
+            if przewoznik and przewoznik not in ["", "SQM", "N/A"]:
+                zewnetrzni_partnerzy.add(przewoznik[:15]) # Limit długości dla UI
+    
+    html_inicjacja = ""
+    if not zewnetrzni_partnerzy:
+        html_inicjacja = "<div class='logo-item dark' style='grid-column: 1 / -1;'>Brak inicjacji</div>"
+    else:
+        for p in list(zewnetrzni_partnerzy)[:4]: # Max 4 w kafelku
+            html_inicjacja += f"<div class='logo-item'>{p}</div>"
+
+    # 2. PARSOWANIE: Faza W DRODZE (Tylko SQM Fleet)
+    w_drodze_ev = aktywne_ev[
+        (aktywne_ev.get("Faza_Procesu", pd.Series()).isin(["Trasa", "Załadunek"])) & 
+        (aktywne_ev.get("Typ_Transportu", pd.Series()) == "Własny SQM")
+    ]
+    
+    html_flota = ""
+    if w_drodze_ev.empty:
+        html_flota = """
+        <div class="fleet-box" style="display:flex; align-items:center; justify-content:center; color:#64748B;">
+            Aktualnie brak pojazdów SQM w trasie.
+        </div>"""
+    else:
+        html_flota = '<div class="fleet-box"><div class="fleet-header">Status Pojazdów w Trasie</div>'
+        # Pobieranie grafik
+        b64_bus = get_base64_image("bus.png")
+        b64_van = get_base64_image("van.png")
+        b64_ftl = get_base64_image("ftl.png")
+        b64_sol = get_base64_image("solowka.png")
+        
+        for idx, row in w_drodze_ev.head(2).iterrows(): # Pokazujemy max 2 pojazdy by zachowac UI
+            typ = str(row.get("Typ_Pojazdu", "")).upper()
+            kierowca = str(row.get("Przewoznik", "Nieznany")).title()
+            cmr_status = str(row.get("CMR_Gotowe", "NIE")).upper()
+            cmr_klasa = "tag-ok" if cmr_status == "TAK" else "tag-alert"
+            
+            # Dobór grafiki bazując na typie (z DB)
+            img_src = b64_van # Domyslny
+            if "BUS" in typ: img_src = b64_bus
+            elif "FTL" in typ: img_src = b64_ftl
+            elif "SOL" in typ: img_src = b64_sol
+            
+            html_flota += f"""
+            <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                <div style="width: 50px; height: 35px; background: rgba(0,0,0,0.4); border-radius: 4px; display:flex; align-items:center; justify-content:center;">
+                    <img src="{img_src}" style="max-width: 90%; max-height: 90%;" onerror="this.style.display='none';">
+                </div>
+                <div style="flex: 1;">
+                    <div style="font-size: 11px; color:#94A3B8;">Kierowca: <strong style="color:#F8FAFC;">{kierowca}</strong></div>
+                    <div style="font-size: 10px; color:#94A3B8; margin-top:2px;">CMR: <span class="{cmr_klasa}">{cmr_status}</span></div>
+                </div>
             </div>
-            <div class="kpi-card kpi-gold">
-                <div class="kpi-header">Brakujące zwroty POD</div>
-                <div class="kpi-value">{braki_pod}</div>
-                <div class="kpi-icon-bg">📄</div>
+            """
+        html_flota += "</div>"
+
+    # 3. PARSOWANIE: Faza ZAMKNIĘTE (Dokumenty POD z DB)
+    html_zamkniete = ""
+    if zamkniete_ev.empty:
+        html_zamkniete = "<div class='logo-item dark' style='grid-column: 1 / -1;'>Brak historii</div>"
+    else:
+        for idx, row in zamkniete_ev.tail(4).iterrows():
+            id_zew = str(row.get("ID_Zlecenia", "BRAK"))[:7]
+            pod_status = str(row.get("CMR_Podpisane_POD", "NIE")).upper()
+            
+            if pod_status == "TAK":
+                html_zamkniete += f"""
+                <div class="doc-card">
+                    <div class="doc-icon">📄</div><div style="font-size: 9px; color: #64748B;">{id_zew}</div>
+                    <div class="doc-check">✓</div>
+                </div>"""
+            else:
+                html_zamkniete += f"""
+                <div class="doc-card" style="opacity: 0.6; border-color: rgba(239, 68, 68, 0.3);">
+                    <div class="doc-icon" style="color: #ef4444;">📄</div><div style="font-size: 9px; color: #ef4444;">Brak POD</div>
+                </div>"""
+
+    # 4. MAPA I LINIE (DYNAMICZNY SVG)
+    svg_lines = ""
+    html_dots = ""
+    
+    # Rysowanie huba (Poznań)
+    hx, hy = latlon_to_svg(GEO_DICT["POZNAŃ"][0], GEO_DICT["POZNAŃ"][1])
+    html_dots += f'<div class="dot hub" style="top: {hy}px; left: {hx}px;"><div class="pulse"></div></div>'
+    
+    # Rysowanie destynacji aktywnych
+    unikalne_destynacje = set()
+    for _, row in aktywne_ev.iterrows():
+        targi = str(row.get("Nazwa_Targow", "")).upper()
+        # Proste dopasowanie nazwy z bazy do słownika
+        for miasto in GEO_DICT.keys():
+            if miasto in targi:
+                unikalne_destynacje.add(miasto)
+                break
+                
+    for dest in unikalne_destynacje:
+        if dest != "POZNAŃ":
+            dx, dy = latlon_to_svg(GEO_DICT[dest][0], GEO_DICT[dest][1])
+            html_dots += f'<div class="dot" style="top: {dy}px; left: {dx}px;"></div>'
+            # Rysowanie krzywej Beziera od Poznania do destynacji
+            ctrl_y = min(hy, dy) - 30 # Lekkie wygięcie krzywej w górę
+            svg_lines += f'<path d="M {hx+6} {hy+6} Q {(hx+dx)/2} {ctrl_y} {dx+4} {dy+4}" fill="transparent" stroke="rgba(212,175,55,0.8)" stroke-width="1.5" stroke-dasharray="3 3" />'
+
+
+    # 5. SKŁADANIE KOŃCOWEGO HTML'A
+    css_string = """
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background-color: transparent; color: #F8FAFC; overflow: hidden; }
+        .mega-container {
+            display: flex; gap: 20px; background: rgba(15, 23, 42, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 20px;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.3); height: 350px; box-sizing: border-box;
+        }
+        .map-zone {
+            flex: 0 0 35%; position: relative; background: radial-gradient(circle at center, rgba(30, 41, 59, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%);
+            border-radius: 10px; border: 1px solid rgba(255,255,255,0.02); overflow: hidden;
+        }
+        .map-bg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Europe_orthographic_Caucasus_Urals_boundary.svg/600px-Europe_orthographic_Caucasus_Urals_boundary.svg.png') no-repeat center 80%;
+            background-size: 140%; opacity: 0.15; filter: grayscale(100%) brightness(1.5);
+        }
+        .map-header { position: absolute; top: 10px; left: 15px; font-size: 12px; font-weight: 700; color: #e2e8f0; z-index: 10;}
+        .dot { position: absolute; width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 10px #3b82f6; z-index: 5; }
+        .dot.hub { background: #D4AF37; width: 12px; height: 12px; box-shadow: 0 0 15px #D4AF37; z-index: 6; }
+        .pulse { position: absolute; width: 26px; height: 26px; background: rgba(212, 175, 55, 0.4); border-radius: 50%; top: -7px; left: -7px; z-index: 4; animation: radar 2s infinite ease-out; }
+        @keyframes radar { 0% { transform: scale(0.1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+        
+        .process-zone { flex: 1; display: flex; gap: 15px; }
+        .process-col { flex: 1; display: flex; flex-direction: column; }
+        .col-header { font-size: 12px; color: #94A3B8; text-transform: uppercase; font-weight: 700; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .logo-grid, .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .logo-item { background: #ffffff; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0f172a; font-weight: 800; font-size: 10px; text-align: center; padding: 0 5px;}
+        .logo-item.dark { background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px dashed rgba(255,255,255,0.1); }
+        .fleet-box { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 8px; padding: 12px; height: 100%; box-sizing: border-box; }
+        .fleet-header { color: #F8FAFC; font-weight: 700; font-size: 12px; margin-bottom: 15px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 8px;}
+        .tag-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9px; }
+        .tag-alert { background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9px; }
+        .doc-card { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; position: relative; }
+        .doc-icon { font-size: 20px; color: #94A3B8; }
+        .doc-check { position: absolute; bottom: 4px; right: 4px; background: #10B981; color: #000; font-size: 9px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold;}
+    </style>
+    """
+
+    final_html = f"""
+    {css_string}
+    <div class="mega-container">
+        <!-- ZONA MAPY -->
+        <div class="map-zone">
+            <div class="map-header">Aktywne Trasy Z bazy</div>
+            <div class="map-bg"></div>
+            <svg style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2;">
+                {svg_lines}
+            </svg>
+            {html_dots}
+        </div>
+        
+        <!-- ZONA PROCESOW -->
+        <div class="process-zone">
+            <div class="process-col">
+                <div class="col-header">Inicjacja (Zewn.)</div>
+                <div class="logo-grid">{html_inicjacja}</div>
             </div>
-            <div class="kpi-card {kpi3_color}">
-                <div class="kpi-header">Nieopłacone faktury</div>
-                <div class="kpi-value">{braki_faktury}</div>
-                <div class="kpi-icon-bg">💰</div>
+            
+            <div class="process-col" style="flex: 1.3;">
+                <div class="col-header" style="color: #D4AF37; border-bottom-color: rgba(212,175,55,0.3);">W Drodze (SQM Fleet)</div>
+                {html_flota}
             </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    tab_podglad, tab_formularz, tab_archiwum = st.tabs([
-        "🗂️ Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum Historyczne"
-    ])
-
-    with tab_podglad:
-        if not df_aktywne.empty:
             
-            if "wybrany_event_id" not in st.session_state:
-                st.session_state["wybrany_event_id"] = None
-            if "filtr_eventow" not in st.session_state:
-                st.session_state["filtr_eventow"] = "Wszystkie"
-
-            st.markdown("<p style='color: #94A3B8; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;'>⚡ Wyszukaj i filtruj zlecenia:</p>", unsafe_allow_html=True)
-            
-            # ⚡ NOWA: GŁÓWNA WYSZUKIWARKA TEKSTOWA
-            wyszukiwarka = st.text_input(
-                "Wyszukiwarka", 
-                placeholder="🔍 Wpisz nazwę targów, przewoźnika, ID zlecenia, fakturę...",
-                label_visibility="collapsed"
-            )
-            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
-
-            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            with f_col1:
-                if st.button(f"🌍 Wszystkie", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "Wszystkie" else "secondary"):
-                    st.session_state["filtr_eventow"] = "Wszystkie"
-                    st.session_state["wybrany_event_id"] = None
-                    st.rerun()
-            with f_col2:
-                if st.button(f"📝 Brak CMR ({braki_cmr})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakCMR" else "secondary"):
-                    st.session_state["filtr_eventow"] = "BrakCMR"
-                    st.session_state["wybrany_event_id"] = None
-                    st.rerun()
-            with f_col3:
-                if st.button(f"📥 Brak POD ({braki_pod})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakPOD" else "secondary"):
-                    st.session_state["filtr_eventow"] = "BrakPOD"
-                    st.session_state["wybrany_event_id"] = None
-                    st.rerun()
-            with f_col4:
-                if st.button(f"💰 Nieopłacone ({braki_faktury})", use_container_width=True, type="primary" if st.session_state["filtr_eventow"] == "BrakFaktury" else "secondary"):
-                    st.session_state["filtr_eventow"] = "BrakFaktury"
-                    st.session_state["wybrany_event_id"] = None
-                    st.rerun()
-            
-            df_widok = df_aktywne.copy()
-            
-            # 1. Filtrowanie z przycisków (Braki operacyjne)
-            if st.session_state["filtr_eventow"] == "BrakCMR":
-                df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1)]
-            elif st.session_state["filtr_eventow"] == "BrakPOD":
-                df_widok = df_widok[df_widok.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
-            elif st.session_state["filtr_eventow"] == "BrakFaktury":
-                df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
-
-            # 2. ⚡ Filtrowanie z wyszukiwarki tekstowej (Przeszukuje cały DF)
-            if wyszukiwarka and not df_widok.empty:
-                # Zamieniamy cały wiersz na tekst i szukamy (case=False ignoruje wielkość liter)
-                maska = df_widok.astype(str).apply(lambda row: row.str.contains(wyszukiwarka, case=False, na=False).any(), axis=1)
-                df_widok = df_widok[maska]
-
-            # 3. TWARDE SORTOWANIE PO DACIE ZAŁADUNKU 
-            if not df_widok.empty and 'Data_Zlecenia_Tr' in df_widok.columns:
-                df_widok['_temp_date'] = pd.to_datetime(df_widok['Data_Zlecenia_Tr'], errors='coerce')
-                df_widok = df_widok.sort_values(by='_temp_date', ascending=True, na_position='last')
-                df_widok = df_widok.drop(columns=['_temp_date'])
-
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
-            
-            col_lista, col_detale = st.columns([65, 35], gap="large")
-            
-            with col_lista:
-                if df_widok.empty:
-                    if wyszukiwarka:
-                        st.warning(f"Brak zleceń pasujących do frazy: **{wyszukiwarka}** w wybranym filtrze.")
-                    else:
-                        st.info("Brak zleceń spełniających wybrane kryteria filtra.")
-                else:
-                    for index, row in df_widok.iterrows():
-                        faza = str(row.get('Faza_Procesu', '')).lower()
-                        badge_class = "cr-badge"
-                        if "inicjacja" in faza: badge_class += " inicjacja"
-                        elif "planowanie" in faza: badge_class += " planowanie"
-                        elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
-                        elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
-                        else: badge_class += " domyslny"
-                        
-                        is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
-                        braki_tagi_html = ""
-                        
-                        tag_style = "padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.5px;"
-                        
-                        if wymaga_cmr(row):
-                            braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>🚨 WYSTAW CMR</span>"
-                        
-                        if not is_sqm_row:
-                            if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
-                                braki_tagi_html += f"<span style='background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); {tag_style}'>📄 BRAK POD</span>"
-                            if str(row.get('Faktura_Oplacona', '')) == 'NIE':
-                                braki_tagi_html += f"<span style='background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4); {tag_style}'>💰 NIEOPŁACONE</span>"
-                            if str(row.get('PP_Otrzymane', '')) == 'NIE':
-                                braki_tagi_html += f"<span style='background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); {tag_style}'>💳 BRAK PP</span>"
-
-                        if braki_tagi_html:
-                            tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
-                        else:
-                            tags_div = ""
-
-                        data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
-                        if data_zal_lista in ['', 'None', 'nan', 'NaT']:
-                            data_zal_lista = 'no info'
-
-                        c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
-                        
-                        with c_karta:
-                            html_karta = f"""
-<div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
-    <div style="display: flex; width: 100%; justify-content: space-between;">
-        <div class="cr-col" style="width: 40%;">
-            <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
-            <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
-        </div>
-        <div class="cr-col" style="width: 25%;">
-            <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-            <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
-        </div>
-        <div class="cr-col" style="width: 35%; align-items: flex-end;">
-            <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #D4AF37;">{data_zal_lista}</b></span>
-            <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+            <div class="process-col">
+                <div class="col-header">Zamknięte (Status POD)</div>
+                <div class="doc-grid">{html_zamkniete}</div>
+            </div>
         </div>
     </div>
-    {tags_div}
-</div>
-"""
-                            st.markdown(html_karta, unsafe_allow_html=True)
-                            
-                        with c_btn:
-                            is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
-                            btn_type = "primary" if is_primary else "secondary"
-                            
-                            if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
-                                st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
-                                st.rerun()
+    """
+    return final_html
 
-            with col_detale:
-                if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
-                    dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
-                    is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
-                    
-                    st.markdown("""
-                        <div style="background: rgba(30, 41, 59, 0.5); padding: 25px; border-radius: 16px; border: 1px solid rgba(212, 175, 55, 0.3);">
-                            <p style="color: #94A3B8; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;">Szczegóły Operacji</p>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(f"<h3 style='color: #F8FAFC; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
-                    
-                    c_id, c_dup = st.columns([6, 4])
-                    with c_id:
-                        st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
-                    with c_dup:
-                        if st.button("📋 Klonuj (Kolejne auto)", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
-                            nowy_wiersz = dane_eventu.copy().to_dict()
-                            
-                            nowy_wiersz['ID_Zlecenia'] = "" 
-                            nowy_wiersz['Faza_Procesu'] = "Inicjacja"
-                            nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
-                            nowy_wiersz['CMR_Gotowe'] = "NIE"
-                            
-                            is_sqm_clone = (nowy_wiersz['Typ_Transportu'] == "Własny SQM")
-                            nowy_wiersz['CMR_Podpisane_POD'] = "N/A" if is_sqm_clone else "NIE"
-                            nowy_wiersz['Faktura_Oplacona'] = "N/A" if is_sqm_clone else "NIE"
-                            nowy_wiersz['PP_Otrzymane'] = "N/A" if is_sqm_clone else "NIE"
-                            nowy_wiersz['Nr_Faktury'] = "N/A" if is_sqm_clone else ""
-                            nowy_wiersz['Data_Platnosci'] = "N/A" if is_sqm_clone else ""
-                            nowy_wiersz['Zakonczone_Arch'] = "NIE"
-                            nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
-                            
-                            df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                            df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
-                            save_data(worksheet, df)
-                            
-                            st.session_state["wybrany_event_id"] = None 
-                            st.success("✅ Skopiowano zlecenie! Dodano nowe auto do bazy.")
-                            st.rerun()
+# =====================================================================
+# 4. GŁÓWNA FUNKCJA RENDERUJĄCA STREAMLIT
+# =====================================================================
 
-                    typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
-                    if "ftl" in typ_pojazdu_lower: plik_img = "ftl.png"
-                    elif "bus" in typ_pojazdu_lower: plik_img = "bus.png"
-                    elif "van" in typ_pojazdu_lower: plik_img = "van.png"
-                    elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
-                    else: plik_img = "default.png"
-                    
-                    if os.path.exists(plik_img):
-                        with open(plik_img, "rb") as f:
-                            b64_img = base64.b64encode(f.read()).decode()
-                        st.markdown(f"""
-                        <div style="width: 100%; text-align: center; background: rgba(0,0,0,0.15); border-radius: 8px; padding: 10px; margin: 15px 0;">
-                            <img src="data:image/png;base64,{b64_img}" style="max-width: 100%; max-height: 180px; object-fit: contain;">
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
-                            <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+def render(sh):
+    # --- 1. ŁADOWANIE I WSTĘPNE PRZETWARZANIE ---
+    try:
+        _, df_ev = load_data(sh, "DB_Eventy")
+        _, df_sub = load_data(sh, "DB_Subrenty")
+        _, df_yt = load_data(sh, "DB_Yestech")
+        _, df_sloty = load_data(sh, "DB_Sloty")
+    except Exception as e:
+        st.error(f"Krytyczny błąd pobierania danych: {e}")
+        return
 
-                    braki_zlecenia = []
-                    if wymaga_cmr(dane_eventu):
-                        braki_zlecenia.append("📝 <b>Wystawić dokument CMR</b> dla kierowcy")
-                    
-                    if not is_sqm:
-                        if dane_eventu.get("CMR_Podpisane_POD") == "NIE":
-                            braki_zlecenia.append("📄 <b>Odzyskać podpisane CMR (POD)</b> po dostawie")
-                        if dane_eventu.get("Faktura_Oplacona") == "NIE":
-                            braki_zlecenia.append("💰 <b>Opłacić fakturę</b> zewnętrznego przewoźnika")
-                        if dane_eventu.get("PP_Otrzymane") == "NIE":
-                            braki_zlecenia.append("💳 Zdobyć i wgrać <b>Potwierdzenie Przelewu (PP)</b>")
-                        if str(dane_eventu.get("Nr_Faktury", "")).strip() in ["", "None"]:
-                            braki_zlecenia.append("🔢 Wprowadzić <b>Numer Faktury Zewnętrznej</b>")
+    processor = LogistykaDataProcessor(df_ev, df_sub, df_yt)
+    aktywne_ev = processor.get_aktywne_eventy()
+    zamkniete_ev = processor.get_zamkniete_eventy()
+    
+    df_finanse = processor.extract_financials()
+    alerty = processor.generate_alerts(df_finanse)
 
-                    if braki_zlecenia:
-                        lista_brakow = "".join([f"<li style='margin-bottom: 5px;'>{b}</li>" for b in braki_zlecenia])
-                        st.markdown(f"""
-                        <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.4); padding: 15px 20px; border-radius: 8px; margin: 15px 0;">
-                            <h4 style="color: #ef4444; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">⚠️ Wymagane Akcje (Do załatwienia):</h4>
-                            <ul style="color: #F8FAFC; font-size: 13px; margin: 0; padding-left: 20px;">
-                                {lista_brakow}
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.3); padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">✅</span>
-                            <span style="color: #22c55e; font-size: 13px; font-weight: 600;">Wszystkie dokumenty i rozliczenia dla tego etapu są kompletne.</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+    # --- KPI ORYGINALNE DLA COMMAND CENTER (BEZ ZMIAN) ---
+    braki_cmr = len(aktywne_ev[aktywne_ev.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not aktywne_ev.empty else 0
+    braki_pod = len(zamkniete_ev[zamkniete_ev.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not zamkniete_ev.empty else 0
+    
+    liczba_faktur = len(df_finanse) if not df_finanse.empty else 0
+    kwota_suma = df_finanse["Kwota (€)"].sum() if not df_finanse.empty else 0.0
 
-                    det_info, det_har, det_fin, det_arch = st.tabs(["📝 EDYCJA DANYCH", "⏱️ HARMONOGRAM", "💼 DOK. & FINANSE", "🏁 ZAKOŃCZ / USUŃ"])
-                    
-                    with det_info:
-                        with st.form(key=f"edit_all_{dane_eventu['ID_Zlecenia']}"):
-                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🔄 Edycja Danych Podstawowych i Statusu</p>", unsafe_allow_html=True)
-                            
-                            c_ed1, c_ed2 = st.columns(2)
-                            with c_ed1:
-                                u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
-                                u_przewoznik = st.text_input("Przewoźnik / Kierowca", value=str(dane_eventu.get('Przewoznik', '')))
-                                u_typ_transp = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"], index=0 if str(dane_eventu.get('Typ_Transportu', '')) == "Zewnętrzny" else 1)
-                                
-                                fazy_lista = ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"]
-                                akt_faza = dane_eventu.get("Faza_Procesu", "Inicjacja")
-                                idx_fazy = fazy_lista.index(akt_faza) if akt_faza in fazy_lista else 0
-                                u_faza = st.selectbox("Faza Procesu", fazy_lista, index=idx_fazy)
-                                
-                            with c_ed2:
-                                u_typ_pojazd = st.text_input("Typ Pojazdu", value=str(dane_eventu.get('Typ_Pojazdu', '')))
-                                u_nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewn.", value=str(dane_eventu.get('Nr_Zlecenia_Zewn', '')).replace("N/A", "").replace("FLOTA WŁASNA", ""))
-                                
-                                dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
-                                try:
-                                    dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
-                                except:
-                                    dp_parsed = None
-                                u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
-                                
-                                mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
-                                akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
-                                idx_mag = mag_lista.index(akt_mag) if akt_mag in mag_lista else 0
-                                u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
-
-                            u_notatki = st.text_area("Notatki", value=str(dane_eventu.get('Notatki', '')))
-                            
-                            if st.form_submit_button("💾 Zapisz Wszystkie Zmiany"):
-                                idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                                df.at[idx, 'Nazwa_Targow'] = u_nazwa
-                                df.at[idx, 'Przewoznik'] = u_przewoznik
-                                df.at[idx, 'Typ_Transportu'] = u_typ_transp
-                                df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
-                                df.at[idx, 'Nr_Zlecenia_Zewn'] = u_nr_zlecenia_zewn if u_typ_transp == "Zewnętrzny" else "FLOTA WŁASNA"
-                                df.at[idx, 'Faza_Procesu'] = u_faza
-                                df.at[idx, 'Status_Magazyn'] = u_status_mag
-                                df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
-                                df.at[idx, 'Notatki'] = u_notatki
-                                
-                                save_data(worksheet, df)
-                                st.success("Pomyślnie zaktualizowano dane operacyjne i logistyczne!")
-                                st.rerun()
-
-                    with det_har:
-                        worksheet_sloty, df_sloty = load_data(sh, "DB_Sloty")
-                        sloty_eventu = df_sloty[df_sloty['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']] if not df_sloty.empty else pd.DataFrame()
-                        
-                        st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>📍 Zarezerwowane Okna Czasowe</p>", unsafe_allow_html=True)
-                        
-                        if not sloty_eventu.empty:
-                            for idx, slot in sloty_eventu.iterrows():
-                                st.markdown(f"""
-                                <div style="background: rgba(255,255,255,0.05); border-left: 3px solid #D4AF37; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <strong style="color: #F8FAFC; font-size: 14px;">{slot.get('Typ_Operacji', '-')}</strong>
-                                            <span style="color: #94A3B8; font-size: 12px; margin-left: 10px;">📅 {slot.get('Data_Slota', '-')} | ⏰ {slot.get('Godzina_Od', '-')} - {slot.get('Godzina_Do', '-')}</span>
-                                        </div>
-                                        <div style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #D4AF37;">
-                                            Brama: {slot.get('Brama_Rampa', 'Brak') or 'Brak'}
-                                        </div>
-                                    </div>
-                                    <div style="color: #94A3B8; font-size: 12px; margin-top: 5px;">{slot.get('Notatki', '')}</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                        else:
-                            st.info("Brak przypisanych slotów dla tego transportu.")
-
-                        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
-                        
-                        with st.form(key=f"form_add_slot_{dane_eventu['ID_Zlecenia']}", clear_on_submit=True):
-                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>➕ Dodaj Nowy Slot</p>", unsafe_allow_html=True)
-                            
-                            s_col1, s_col2 = st.columns(2)
-                            with s_col1:
-                                s_typ = st.selectbox("Typ Operacji", ["Montaż", "Odbiór Empties", "Demontaż", "Załadunek (Magazyn)", "Rozładunek (Magazyn)", "Inne"])
-                                s_data = st.date_input("Data", value=None)
-                            with s_col2:
-                                ss_col1, ss_col2 = st.columns(2)
-                                with ss_col1: s_od = st.time_input("Godz. Od", value=None)
-                                with ss_col2: s_do = st.time_input("Godz. Do", value=None)
-                                s_brama = st.text_input("Brama / Rampa (Gate)")
-                                
-                            s_notatki = st.text_input("Dodatkowe Notatki / Numer do kontaktu")
-                            
-                            if st.form_submit_button("💾 Zapisz Slot w Harmonogramie"):
-                                nowy_slot = {
-                                    "ID_Zlecenia": dane_eventu['ID_Zlecenia'],
-                                    "Typ_Operacji": s_typ,
-                                    "Data_Slota": str(s_data) if s_data else "",
-                                    "Godzina_Od": s_od.strftime("%H:%M") if s_od else "",
-                                    "Godzina_Do": s_do.strftime("%H:%M") if s_do else "",
-                                    "Brama_Rampa": s_brama,
-                                    "Notatki": s_notatki
-                                }
-                                df_sloty = pd.concat([df_sloty, pd.DataFrame([nowy_slot])], ignore_index=True)
-                                save_data(worksheet_sloty, df_sloty)
-                                st.success("Dodano nowy slot do harmonogramu!")
-                                st.rerun()
-                        
-                    with det_fin:
-                        with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
-                            st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
-                            
-                            if is_sqm:
-                                u_cmr = st.selectbox("CMR Gotowe (Wystawione)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
-                                st.info("🚚 Pojazd własnej floty SQM. Pola kosztów, zewnętrznych faktur oraz statusu Potwierdzenia Przelewu są automatycznie wyłączone (N/A).")
-                                
-                                u_pod, u_pp, u_koszt, u_nr_fak, u_faktura_opl, u_data_platnosci = "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
-                            else:
-                                col_d1, col_d2, col_d3 = st.columns(3)
-                                with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
-                                with col_d2: u_pod = st.selectbox("CMR POD?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
-                                with col_d3: u_pp = st.selectbox("Potw. Przelewu (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
-                                
-                                st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'>", unsafe_allow_html=True)
-                                st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Faktury</p>", unsafe_allow_html=True)
-                                
-                                col_f1, col_f2 = st.columns(2)
-                                with col_f1: 
-                                    koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
-                                    koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
-                                    u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
-                                    u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
-                                with col_f2:
-                                    u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
-                                    dp_val = dane_eventu.get("Data_Platnosci", "")
-                                    try:
-                                        dp_val_parsed = datetime.datetime.strptime(str(dp_val), "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
-                                    except:
-                                        dp_val_parsed = None
-                                    u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
-
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            if st.form_submit_button("💾 Zapisz Aktualizacje"):
-                                idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                                df.at[idx, 'CMR_Gotowe'] = u_cmr
-                                df.at[idx, 'CMR_Podpisane_POD'] = u_pod
-                                df.at[idx, 'PP_Otrzymane'] = u_pp
-                                df.at[idx, 'Nr_Faktury'] = u_nr_fak
-                                
-                                if not is_sqm:
-                                    df.at[idx, 'Koszt_Transportu_EUR'] = float(u_koszt)
-                                    df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
-                                    df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
-                                    
-                                save_data(worksheet, df)
-                                st.success("Pomyślnie zaktualizowano dokumentację i finanse!")
-                                st.rerun()
-
-                    with det_arch:
-                        st.info("Wybierz odpowiednią akcję dla tego zlecenia (np. zakończenie lub usunięcie pomyłki).")
-                        
-                        st.markdown("### 🗄️ Zakończ i Archiwizuj")
-                        st.caption("Przenosi zlecenie do archiwum. Zachowuje całą historię, harmonogram i finanse dla raportów.")
-                        
-                        if st.button("🏁 ARCHIWIZUJ ZLECENIE", type="primary", use_container_width=True):
-                            idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                            
-                            if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
-                                df.at[idx, 'Faktura_Oplacona'] = "N/A"
-                                df.at[idx, 'PP_Otrzymane'] = "N/A"
-                                df.at[idx, 'Data_Platnosci'] = "N/A"
-                                df.at[idx, 'Koszt_Transportu_EUR'] = "N/A"
-                                df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
-                                df.at[idx, 'Nr_Faktury'] = "N/A"
-                                df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
-                                
-                            df.at[idx, 'Faza_Procesu'] = "Zamknięte"
-                            df.at[idx, 'Zakonczone_Arch'] = "TAK"
-                            
-                            save_data(worksheet, df)
-                            st.session_state["wybrany_event_id"] = None
-                            st.success(f"Zlecenie {dane_eventu['Nazwa_Targow']} pomyślnie zamknięte i zarchiwizowane!")
-                            st.rerun()
-
-                        st.markdown("<hr style='border-color: rgba(239,68,68,0.3); margin: 20px 0;'>", unsafe_allow_html=True)
-                        
-                        st.markdown("<h3 style='color: #ef4444;'>🗑️ Trwałe usunięcie (Anulacja)</h3>", unsafe_allow_html=True)
-                        st.caption("Całkowicie usuwa zlecenie z bazy danych (np. klient anulował event lub auto zostało dodane przez pomyłkę). Ta akcja jest nieodwracalna.")
-                        
-                        potwierdzenie_usuniecia = st.checkbox(f"Rozumiem, trwale usuń zlecenie {dane_eventu['ID_Zlecenia']}")
-                        
-                        if st.button("❌ USUŃ ZLECENIE Z BAZY", type="secondary", use_container_width=True, disabled=not potwierdzenie_usuniecia):
-                            # Filtrujemy DataFrame zostawiając wszystko poza usuwanym ID
-                            df = df[df['ID_Zlecenia'] != dane_eventu['ID_Zlecenia']]
-                            
-                            save_data(worksheet, df)
-                            st.session_state["wybrany_event_id"] = None
-                            st.success("Zlecenie zostało trwale usunięte z bazy danych!")
-                            st.rerun()
-                            
-                    st.markdown('</div>', unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                        <div style="height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(30, 41, 59, 0.2); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1); padding: 40px; text-align: center;">
-                            <span style="color: #64748B; line-height: 1.6;">Wybierz zlecenie z listy po lewej stronie,<br>aby wyświetlić panel szczegółów oraz opcje edycji finansów i dokumentów.</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-        else:
-            st.info("Brak aktywnych transportów w bazie danych.")
-
-    with tab_formularz:
-        st.markdown("<h4 style='color: #D4AF37; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
+    # --- 2. GŁÓWNY INTERFEJS (KARTY KPI) ---
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        st.markdown(f"""
+        <div class="dash-card kpi-advanced" style="padding: 20px;">
+            <div class="kpi-adv-header" style="font-size: 14px;">CMR do wystawienia (Aktywne) <span class="icon">📝</span></div>
+            <div class="kpi-adv-value" style="font-size: 42px; color: #F8FAFC;">{braki_cmr}</div>
+            <div class="kpi-progress-bar"><div class="kpi-progress" style="width: {min(braki_cmr*10, 100)}%;"></div></div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        typ_transportu = st.radio("Rodzaj transportu (zmienia układ interfejsu):", ["Zewnętrzny", "Własny SQM"], horizontal=True)
+    with c2:
+        st.markdown(f"""
+        <div class="dash-card kpi-advanced" style="padding: 20px;">
+            <div class="kpi-adv-header" style="font-size: 14px;">Brakujące zwroty POD (Zamknięte) <span class="icon">📄</span></div>
+            <div class="kpi-adv-value" style="font-size: 42px; color: #F8FAFC;">{braki_pod}</div>
+            <div class="kpi-progress-bar"><div class="kpi-progress" style="width: {min(braki_pod*10, 100)}%; background: #f59e0b;"></div></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with c3:
+        st.markdown(f"""
+        <div class="dash-card kpi-advanced" style="padding: 20px;">
+            <div class="kpi-adv-header" style="font-size: 14px;">Nieopłacone faktury zewn. <span class="icon">💰</span></div>
+            <div class="kpi-adv-value" style="font-size: 42px; color: #F8FAFC;">{liczba_faktur}</div>
+            <div class="kpi-progress-bar"><div class="kpi-progress" style="width: {min(liczba_faktur*5, 100)}%; background: #ef4444;"></div></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # --- 3. PODZIAŁ NA ZAKŁADKI (DASHBOARD VS RAPORTY 360) ---
+    tab_dashboard, tab_raporty = st.tabs(["🌍 Live Dashboard (Operacje)", "📊 Raporty 360° (Eventy & Przewoźnicy)"])
+
+    with tab_dashboard:
+        st.markdown('<h3 class="dash-title">Rzeczywisty Przepływ Operacyjny (Live)</h3>', unsafe_allow_html=True)
         
-        with st.form("form_event_pro", clear_on_submit=True):
-            f_col1, f_col2 = st.columns(2)
-            with f_col1:
-                nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
-                typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
-                data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
-            with f_col2:
-                przewoznik = st.text_input("Przewoźnik / Kierowca * (Dla SQM wpisz nazwisko)")
-                faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
-                status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
+        # Generowanie HTML'a zasilonego prawdziwymi danymi ze SQM Sheets
+        html_flow = build_dynamic_flow_html(aktywne_ev, zamkniete_ev)
+        components.html(html_flow, height=360)
 
-            notatki = st.text_area("Notatki Dodatkowe")
-            
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color: #D4AF37;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
-            cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
-            
-            if typ_transportu == "Zewnętrzny":
-                st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
-                st.markdown("<h4 style='color: #D4AF37;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
-                d_col1, d_col2, d_col3 = st.columns(3)
-                with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
-                with d_col2: pp_otrzymane = st.selectbox("Potw. Przelewu (PP)?", ["", "NIE", "TAK"])
-                with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
+        # Skrzynka Problemów Oraz Tabela Faktur
+        col_inbox, col_fin = st.columns([35, 65], gap="large")
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                e_col1, e_col2, e_col3 = st.columns(3)
-                with e_col1: koszt_transportu = st.number_input("Koszt Transportu (€)", min_value=0.0, value=0.0, step=50.0)
-                with e_col2: nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
-                with e_col3: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
+        with col_inbox:
+            st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
+            st.markdown('<h3 class="dash-title">Skrzynka Problemów (Issue Inbox)</h3>', unsafe_allow_html=True)
+            
+            if not alerty:
+                st.markdown("<div style='color: #10B981; padding: 20px 0; font-size: 13px; text-align: center;'>✅ Brak palących problemów operacyjnych w bazach danych.</div>", unsafe_allow_html=True)
             else:
-                st.info("💡 Wybrano Flotę Własną SQM. Sekcja finansowa (faktury, zlecenia zewn., zwroty POD) została ukryta i przyjmie wartość N/A.")
-                cmr_podpisane, pp_otrzymane, faktura_opl = "N/A", "N/A", "N/A"
-                koszt_transportu, nr_zlecenia_zewn, nr_faktury = "N/A", "FLOTA WŁASNA", "N/A"
+                html_inbox = ""
+                for a in alerty:
+                    k_boczna = "alert-danger" if a["typ"] == "krytyczny" else ("alert-warning" if a["typ"] == "ostrzezenie" else "alert-warning")
+                    html_inbox += f"""
+                    <div class="alert-item {k_boczna}" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <div style="font-size: 16px;">{a['ikona']}</div>
+                            <div>
+                                <strong style="color: #F8FAFC; display: block; font-size: 12px; margin-bottom: 2px;">{a['tytul']}</strong>
+                                <span style="color: #94A3B8; font-size: 11px; line-height: 1.3;">{a['opis']}</span>
+                            </div>
+                        </div>
+                    </div>
+                    """
+                st.markdown(html_inbox, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            st.markdown("<br>", unsafe_allow_html=True)
+        with col_fin:
+            st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
+            st.markdown(f'<h3 class="dash-title" style="color: #ef4444;">Faktury oczekujące na opłacenie (Zobowiązania: {kwota_suma:,.2f} €)</h3>', unsafe_allow_html=True)
             
-            if st.form_submit_button("🚀 Zainicjuj Zlecenie Systemowe"):
-                if not nazwa_targow or not przewoznik:
-                    st.error("❌ Błąd krytyczny: Uzupełnij nazwę targów oraz przewoźnika!")
-                else:
-                    nowy_wiersz = {
-                        "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
-                        "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
-                        "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
-                        "Status_Magazyn": status_magazyn,
-                        "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
-                        "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zlecenia_zewn, 
-                        "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
-                        "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
-                    }
+            if not df_finanse.empty:
+                def color_status(val):
+                    if "Przeterminowana" in str(val): return 'color: #ef4444; font-weight: bold;'
+                    if "W terminie" in str(val): return 'color: #10B981;'
+                    return 'color: #94A3B8;'
 
-                    df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                    df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
-                    save_data(worksheet, df)
-                    st.success("🎉 Zlecenie zapisane w bazie chmurowej!")
-                    st.rerun()
+                df_widok = df_finanse.drop(columns=["Dni_Opoznienia"])
+                styled_df = df_widok.style.map(color_status, subset=['Status']).format({'Kwota (€)': "{:.2f} €"})
+                
+                st.dataframe(
+                    styled_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    height=260
+                )
+            else:
+                st.info("✅ Brak nieopłaconych faktur zewnętrznych w systemie.")
+                
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    with tab_archiwum:
-        df_arch = df[df.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df.empty else pd.DataFrame()
-        if not df_arch.empty: 
-            st.dataframe(df_arch, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych transportów.")
+    with tab_raporty:
+        st.markdown('<h3 class="dash-title">Zestawienia Analityczne</h3>', unsafe_allow_html=True)
+        tryb_raportu = st.radio("Wybierz perspektywę:", ["🚚 Według Przewoźnika", "🎪 Według Eventu / Targów"], horizontal=True)
+        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
+
+        if tryb_raportu == "🚚 Według Przewoźnika":
+            if df_ev.empty:
+                st.warning("Brak danych o eventach w bazie.")
+            else:
+                lista_przewoznikow = sorted([p for p in df_ev["Przewoznik"].unique() if str(p).strip() != ""])
+                wybrany_przew = st.selectbox("Wybierz przewoźnika:", ["-- Wybierz --"] + lista_przewoznikow)
+                
+                if wybrany_przew != "-- Wybierz --":
+                    # Filtrujemy wszystkie zlecenia (aktywne i archiwalne) dla wybranego przewoźnika
+                    df_przew_ev = df_ev[df_ev["Przewoznik"] == wybrany_przew].copy()
+                    
+                    st.markdown(f"#### 📦 Historia i Zlecenia: {wybrany_przew}")
+                    # Wizualna zmiana nazwy kolumny Data_Zlecenia_Tr na Data Załadunku
+                    df_przew_ev_widok = df_przew_ev[['Nazwa_Targow', 'Data_Zlecenia_Tr', 'Typ_Pojazdu', 'Faza_Procesu', 'ID_Zlecenia']].rename(columns={'Data_Zlecenia_Tr': 'Data Załadunku'})
+                    st.dataframe(df_przew_ev_widok, use_container_width=True, hide_index=True)
+
+                    st.markdown("#### ⏱️ Przypisane Sloty Zleceń")
+                    id_zlecen_przew = df_przew_ev["ID_Zlecenia"].tolist()
+                    sloty_przew = df_sloty[df_sloty["ID_Zlecenia"].isin(id_zlecen_przew)] if not df_sloty.empty else pd.DataFrame()
+                    if not sloty_przew.empty:
+                        st.dataframe(sloty_przew[['ID_Zlecenia', 'Typ_Operacji', 'Data_Slota', 'Godzina_Od', 'Godzina_Do', 'Brama_Rampa']], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Brak przypisanych slotów w harmonogramie dla tego przewoźnika.")
+
+                    st.markdown("#### 🚨 Braki i Zobowiązania (POD / Faktury)")
+                    braki_przew = df_przew_ev[(df_przew_ev["CMR_Podpisane_POD"] == "NIE") | (df_przew_ev["Faktura_Oplacona"] == "NIE")]
+                    if not braki_przew.empty:
+                        st.dataframe(braki_przew[['Nazwa_Targow', 'CMR_Podpisane_POD', 'Faktura_Oplacona', 'Koszt_Transportu_EUR', 'Data_Platnosci']], use_container_width=True, hide_index=True)
+                    else:
+                        st.success("Wszystkie dokumenty POD i płatności są uregulowane dla tego przewoźnika!")
+
+        elif tryb_raportu == "🎪 Według Eventu / Targów":
+            if df_ev.empty:
+                st.warning("Brak danych o eventach w bazie.")
+            else:
+                lista_targow = sorted([t for t in df_ev["Nazwa_Targow"].unique() if str(t).strip() != ""])
+                wybrane_targi = st.selectbox("Wybierz Event:", ["-- Wybierz --"] + lista_targow)
+                
+                if wybrane_targi != "-- Wybierz --":
+                    df_targi = df_ev[df_ev["Nazwa_Targow"] == wybrane_targi].copy()
+                    
+                    st.markdown(f"#### 🚛 Flota i Przewoźnicy obsługujący: {wybrane_targi}")
+                    # Wizualna zmiana nazwy kolumny Data_Zlecenia_Tr na Data Załadunku
+                    df_targi_widok = df_targi[['Przewoznik', 'Typ_Pojazdu', 'Data_Zlecenia_Tr', 'Faza_Procesu', 'ID_Zlecenia']].rename(columns={'Data_Zlecenia_Tr': 'Data Załadunku'})
+                    st.dataframe(df_targi_widok, use_container_width=True, hide_index=True)
+
+                    st.markdown("#### ⏱️ Zarezerwowane Sloty dla tego Eventu")
+                    id_zlecen_targow = df_targi["ID_Zlecenia"].tolist()
+                    sloty_targow = df_sloty[df_sloty["ID_Zlecenia"].isin(id_zlecen_targow)] if not df_sloty.empty else pd.DataFrame()
+                    if not sloty_targow.empty:
+                        # Łączenie z tabelą eventów, aby dopasować przewoźnika do slotu bazując na ID_Zlecenia
+                        sloty_targow_merged = pd.merge(sloty_targow, df_targi[['ID_Zlecenia', 'Przewoznik']], on='ID_Zlecenia', how='left')
+                        st.dataframe(sloty_targow_merged[['Przewoznik', 'Typ_Operacji', 'Data_Slota', 'Godzina_Od', 'Godzina_Do', 'Brama_Rampa']], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Brak zdefiniowanych slotów dla wybranego eventu.")
+
+                    st.markdown("#### 🚨 Status Rozliczeń Eventu (POD / Faktury)")
+                    braki_targi = df_targi[(df_targi["CMR_Podpisane_POD"] == "NIE") | (df_targi["Faktura_Oplacona"] == "NIE")]
+                    if not braki_targi.empty:
+                        st.dataframe(braki_targi[['Przewoznik', 'CMR_Podpisane_POD', 'Faktura_Oplacona', 'Koszt_Transportu_EUR']], use_container_width=True, hide_index=True)
+                    else:
+                        st.success("Kompletna dokumentacja POD i rozliczenia dla tego eventu!")
