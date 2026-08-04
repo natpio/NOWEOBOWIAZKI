@@ -6,3 +6,4 @@ pyotp
 qrcode
 pillow
 streamlit-option-menu
+oauth2client
