@@ -86,68 +86,61 @@ def render(sh):
             nr = row.get("Nr Zlecenia", "Nieznany")
             przew = row.get("Przewoźnik", "Nieznany przewoźnik")
             
+            # UWAGA: Usunięto wcięcia w HTML, aby uniknąć renderowania jako blok kodu Markdown
             if row.get("CMR") == "NIE":
-                alerts_html += f"""
-                <div class="alert-item alert-danger">
-                    <div class="alert-icon">📄</div>
-                    <div class="alert-content">
-                        <strong>Krytyczny brak dokumentu CMR!</strong>
-                        Zlecenie poboczne <b>{nr}</b> ({przew}) nie posiada przypisanego listu przewozowego.
-                    </div>
-                </div>"""
+                alerts_html += f"""<div class="alert-item alert-danger">
+<div class="alert-icon">📄</div>
+<div class="alert-content">
+<strong>Krytyczny brak dokumentu CMR!</strong>
+Zlecenie poboczne <b>{nr}</b> ({przew}) nie posiada przypisanego listu przewozowego.
+</div>
+</div>"""
                 
             if row.get("POD") == "NIE":
-                alerts_html += f"""
-                <div class="alert-item alert-warning">
-                    <div class="alert-icon">📋</div>
-                    <div class="alert-content">
-                        <strong>Brak zwrotu dokumentów dostawy (POD)</strong>
-                        Przewoźnik <b>{przew}</b> nie dostarczył potwierdzenia rozładunku dla zlecenia <b>{nr}</b>.
-                    </div>
-                </div>"""
+                alerts_html += f"""<div class="alert-item alert-warning">
+<div class="alert-icon">📋</div>
+<div class="alert-content">
+<strong>Brak zwrotu dokumentów dostawy (POD)</strong>
+Przewoźnik <b>{przew}</b> nie dostarczył potwierdzenia rozładunku dla zlecenia <b>{nr}</b>.
+</div>
+</div>"""
                 
             if row.get("Faktura") == "NIE":
-                alerts_html += f"""
-                <div class="alert-item" style="border-left: 3px solid #C5A880; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-                    <div class="alert-icon" style="opacity: 0.8;">💳</div>
-                    <div class="alert-content">
-                        <strong style="color: #E2DCD3;">Nieopłacona Faktura Transportowa</strong>
-                        Zlecenie <b>{nr}</b> oczekuje na spływ lub zaksięgowanie faktury.
-                    </div>
-                </div>"""
+                alerts_html += f"""<div class="alert-item" style="border-left: 3px solid #C5A880; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+<div class="alert-icon" style="opacity: 0.8;">💳</div>
+<div class="alert-content">
+<strong style="color: #E2DCD3;">Nieopłacona Faktura Transportowa</strong>
+Zlecenie <b>{nr}</b> oczekuje na spływ lub zaksięgowanie faktury.
+</div>
+</div>"""
 
     if not alerts_html:
-        alerts_html = """
-        <div class="alert-item" style="border-left: 3px solid #77A385; background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.1);">
-            <div class="alert-icon" style="opacity: 1;">🍵</div>
-            <div class="alert-content">
-                <strong style="color: #77A385;">Wszystko w porządku (Czysta karta)</strong>
-                Brak aktywnych problemów dokumentacyjnych i finansowych. Pełen spokój.
-            </div>
-        </div>
-        """
+        alerts_html = """<div class="alert-item" style="border-left: 3px solid #77A385; background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.1);">
+<div class="alert-icon" style="opacity: 1;">🍵</div>
+<div class="alert-content">
+<strong style="color: #77A385;">Wszystko w porządku (Czysta karta)</strong>
+Brak aktywnych problemów dokumentacyjnych i finansowych. Pełen spokój.
+</div>
+</div>"""
     
     col_alerts, col_info = st.columns([2, 1])
     
     with col_alerts:
-        st.markdown(f'''
-            <div class="dash-card" style="max-height: 450px; overflow-y: auto; padding-right: 15px;">
-                {alerts_html}
-            </div>
-        ''', unsafe_allow_html=True)
+        # Usunięto wcięcia przed {alerts_html}
+        st.markdown(f'''<div class="dash-card" style="max-height: 450px; overflow-y: auto; padding-right: 15px;">
+{alerts_html}
+</div>''', unsafe_allow_html=True)
         
     with col_info:
-        st.markdown(f'''
-            <div class="dash-card">
-                <div class="dash-title">Status Operacyjny</div>
-                <div style="color: #8C8477; font-size: 12px; line-height: 1.6;">
-                    System stale analizuje statusy zleceń wprowadzonych w zakładce <b>Zlecenia Poboczne</b>. 
-                    <br><br>
-                    Alerty klasyfikowane są na podstawie ważności:<br>
-                    <span style="color: #BA4949;">■ Krytyczne</span> (Brak CMR)<br>
-                    <span style="color: #C77F4A;">■ Ostrzeżenia</span> (Brak POD)<br>
-                    <span style="color: #C5A880;">■ Administracyjne</span> (Faktury)<br><br>
-                    Łączna liczba wymaganych akcji: <b>{suma_problemow}</b>
-                </div>
-            </div>
-        ''', unsafe_allow_html=True)
+        st.markdown(f'''<div class="dash-card">
+<div class="dash-title">Status Operacyjny</div>
+<div style="color: #8C8477; font-size: 12px; line-height: 1.6;">
+System stale analizuje statusy zleceń wprowadzonych w zakładce <b>Zlecenia Poboczne</b>. 
+<br><br>
+Alerty klasyfikowane są na podstawie ważności:<br>
+<span style="color: #BA4949;">■ Krytyczne</span> (Brak CMR)<br>
+<span style="color: #C77F4A;">■ Ostrzeżenia</span> (Brak POD)<br>
+<span style="color: #C5A880;">■ Administracyjne</span> (Faktury)<br><br>
+Łączna liczba wymaganych akcji: <b>{suma_problemow}</b>
+</div>
+</div>''', unsafe_allow_html=True)
