@@ -19,18 +19,24 @@
    2. PASEK BOCZNY (SIDEBAR) I LOGO
 ========================================= */
 [data-testid="stSidebar"] {
-    background-color: rgba(18, 16, 14, 0.85) !important;
-    border-right: 1px solid rgba(197, 168, 128, 0.1);
+    background-color: rgba(18, 16, 14, 0.92) !important;
+    border-right: 1px solid rgba(197, 168, 128, 0.12);
     background-image: url('lantern_bg.png'); 
-    background-size: 100% auto;
+    background-size: 85% auto;
     background-position: bottom center;
     background-repeat: no-repeat;
+    padding-top: 1rem;
 }
 
+.sidebar-logo-container {
+    border-bottom: 1px solid rgba(197, 168, 128, 0.15);
+    padding-bottom: 18px;
+    margin-bottom: 25px;
+}
 .sidebar-logo-text {
     font-size: 20px;
     font-weight: 800;
-    margin-bottom: 5px;
+    margin-bottom: 4px;
     color: #E2DCD3;
     letter-spacing: 2px;
     text-transform: uppercase;
@@ -41,8 +47,8 @@
 .sidebar-logo-sub {
     font-size: 9px;
     color: #8C8477;
-    margin-bottom: 30px;
     letter-spacing: 3px;
+    text-transform: uppercase;
 }
 .sidebar-logo-text span {
     color: #C5A880; 
@@ -52,8 +58,25 @@
 .nav-link { 
     font-weight: 600 !important; 
     font-size: 11px !important; 
-    border-radius: 4px !important; 
+    border-radius: 6px !important; 
     letter-spacing: 1px;
+    transition: all 0.2s ease !important;
+}
+.nav-link:hover {
+    background-color: rgba(197, 168, 128, 0.08) !important;
+    color: #C5A880 !important;
+}
+
+/* Karta profilu w sidebarze */
+.sidebar-profile-card {
+    background: rgba(28, 26, 24, 0.8);
+    border: 1px solid rgba(197, 168, 128, 0.2);
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-top: 35px;
+    margin-bottom: 15px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 
 /* =========================================
