@@ -80,8 +80,10 @@
 }
 
 /* =========================================
-   3. KARTY KPI (WASHI PARCHMENT & JAPANESE LETTER STYLE)
+   3. KARTY KPI (WASHI PARCHMENT & YUJI BOKU / ZEN OLD MINCHO)
 ========================================= */
+@import url('https://fonts.googleapis.com/css2?family=Yuji+Boku&family=Zen+Old+Mincho:wght@700&display=swap');
+
 .kpi-container {
     display: flex;
     gap: 18px;
@@ -94,8 +96,8 @@
     background-image: url('washi_bg.jpg');
     background-size: cover;
     background-position: center;
-    border: 1px solid rgba(197, 168, 128, 0.4);
-    box-shadow: 6px 6px 20px rgba(0,0,0,0.6), inset 0 0 15px rgba(0,0,0,0.3);
+    border: 1px solid rgba(197, 168, 128, 0.45);
+    box-shadow: 6px 6px 20px rgba(0,0,0,0.5), inset 0 0 20px rgba(212, 180, 137, 0.15);
     position: relative;
     overflow: hidden;
 }
@@ -103,17 +105,15 @@
     content: "";
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(25, 22, 18, 0.65);
-    backdrop-filter: blur(1px);
+    background: rgba(30, 26, 21, 0.35);
+    backdrop-filter: blur(0.5px);
     pointer-events: none;
     z-index: 1;
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@600;700&family=Noto+Serif+JP:wght@600;700&display=swap');
-
-.kpi-header { color: #2A2118; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; font-family: 'Shippori Mincho', 'Noto Serif JP', serif; z-index: 2; position: relative; text-shadow: none; }
-.kpi-sub-jp { color: #594838; font-size: 10px; margin-bottom: 12px; letter-spacing: 1.5px; font-family: 'Noto Serif JP', serif; z-index: 2; position: relative; font-weight: 600; text-shadow: none; }
-.kpi-value { color: #14100C; font-size: 52px; font-weight: 700; z-index: 2; position: relative; font-family: 'Shippori Mincho', 'Noto Serif JP', serif; letter-spacing: 2px; text-shadow: none; }
+.kpi-header { color: #2E2319; font-size: 16px; font-weight: 400; font-family: 'Yuji Boku', serif; z-index: 2; position: relative; text-shadow: 0 1px 2px rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1.5px; }
+.kpi-sub-jp { color: #4A3A2C; font-size: 11px; margin-bottom: 12px; letter-spacing: 1.5px; font-family: 'Zen Old Mincho', serif; z-index: 2; position: relative; font-weight: 700; text-shadow: 0 1px 1px rgba(255,255,255,0.2); }
+.kpi-value { color: #17110C; font-size: 60px; font-weight: 400; z-index: 2; position: relative; font-family: 'Yuji Boku', serif; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(255,255,255,0.3); }
 .kpi-icon-bg { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 48px; opacity: 0.18; filter: grayscale(100%); z-index: 1; }
 
 /* =========================================
