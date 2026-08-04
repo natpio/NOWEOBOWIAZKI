@@ -2,8 +2,14 @@
    1. GLOBALNE TŁO I UKRYWANIE ELEMENTÓW
 ========================================= */
 .stApp {
-    background: linear-gradient(135deg, #0f172a 0%, #020617 100%);
-    color: #F8FAFC;
+    background-color: #12100E;
+    background-image: url('fuji_bg.png'); 
+    background-size: cover;
+    background-position: center right;
+    background-attachment: fixed;
+    background-blend-mode: overlay;
+    color: #E2DCD3;
+    font-family: 'Inter', sans-serif;
 }
 
 #MainMenu, footer { visibility: hidden; }
@@ -13,162 +19,175 @@
    2. PASEK BOCZNY (SIDEBAR) I LOGO
 ========================================= */
 [data-testid="stSidebar"] {
-    background-color: rgba(15, 23, 42, 0.4) !important;
-    backdrop-filter: blur(15px) !important;
-    -webkit-backdrop-filter: blur(15px) !important;
-    border-right: 1px solid rgba(212, 175, 55, 0.15);
+    background-color: rgba(18, 16, 14, 0.85) !important;
+    border-right: 1px solid rgba(197, 168, 128, 0.1);
+    background-image: url('lantern_bg.png'); 
+    background-size: 100% auto;
+    background-position: bottom center;
+    background-repeat: no-repeat;
 }
 
 .sidebar-logo-text {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 800;
+    margin-bottom: 5px;
+    color: #E2DCD3;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.sidebar-logo-sub {
+    font-size: 9px;
+    color: #8C8477;
     margin-bottom: 30px;
-    color: #F8FAFC;
-    letter-spacing: 1px;
+    letter-spacing: 3px;
 }
 .sidebar-logo-text span {
-    color: #D4AF37;
+    color: #C5A880; 
 }
 
-/* Nowoczesne Menu Boczne (Option Menu) */
+/* Menu Boczne (Option Menu) */
 .nav-link { 
     font-weight: 600 !important; 
-    font-size: 14px !important; 
-    border-radius: 8px !important; 
+    font-size: 11px !important; 
+    border-radius: 4px !important; 
+    letter-spacing: 1px;
 }
 
 /* =========================================
-   3. KARTY KPI (GLASSMORPHISM)
+   3. KARTY KPI (ZEN MATTE STYLE)
 ========================================= */
 .kpi-container {
     display: flex;
-    gap: 20px;
-    margin-bottom: 30px;
+    gap: 15px;
+    margin-bottom: 25px;
 }
 .kpi-card {
     flex: 1;
-    padding: 20px;
-    border-radius: 16px;
-    background: rgba(30, 41, 59, 0.4);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 15px 20px;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #1f1c1a, #161412);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.4), inset 1px 1px 2px rgba(255,255,255,0.05);
     position: relative;
     overflow: hidden;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-    transition: transform 0.3s ease, border-color 0.3s ease;
 }
-.kpi-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(212, 175, 55, 0.4);
-}
-.kpi-header { color: #94a3b8; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; z-index: 2; position: relative;}
-.kpi-value { color: #f8fafc; font-size: 34px; font-weight: 800; z-index: 2; position: relative;}
-.kpi-icon-bg { position: absolute; right: -5px; bottom: -15px; font-size: 70px; opacity: 0.05; transform: rotate(-15deg); z-index: 1; }
-
-.kpi-blue { border-left: 3px solid #3b82f6; }
-.kpi-gold { border-left: 3px solid #d4af37; }
-.kpi-green { border-left: 3px solid #10b981; }
-.kpi-red { border-left: 3px solid #ef4444; }
+.kpi-header { color: #8C8477; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; z-index: 2; position: relative;}
+.kpi-sub-jp { color: #5C554D; font-size: 9px; margin-bottom: 12px; letter-spacing: 1px; }
+.kpi-value { color: #E2DCD3; font-size: 32px; font-weight: 600; z-index: 2; position: relative; font-family: 'Courier New', monospace;}
+.kpi-icon-bg { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); font-size: 35px; opacity: 0.15; filter: grayscale(100%); z-index: 1; }
 
 /* =========================================
-   4. KAFELKI ZLECEŃ (ZAMIAST TABELI)
+   4. KAFELKI ZLECEŃ (CUSTOM ROW)
 ========================================= */
 .custom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(30, 41, 59, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 18px 25px;
-    border-radius: 12px;
+    background: rgba(28, 26, 24, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 12px 20px;
+    border-radius: 6px;
     margin-bottom: -15px;
-    color: #94a3b8;
-    font-size: 13px;
+    color: #A39B8F;
+    font-size: 12px;
     transition: all 0.2s ease;
 }
 .custom-row:hover {
-    border: 1px solid rgba(212, 175, 55, 0.4);
-    background: rgba(30, 41, 59, 0.7);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    background: rgba(35, 32, 28, 0.9);
+    border-left: 3px solid #C5A880;
 }
 .cr-col {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
 }
-.cr-title { color: #f8fafc; font-weight: 700; font-size: 16px; letter-spacing: 0.5px; }
-.cr-text { color: #f8fafc; font-weight: 500; font-size: 13px; }
+.cr-title { color: #E2DCD3; font-weight: 600; font-size: 14px; letter-spacing: 0.5px; }
+.cr-text { color: #8C8477; font-weight: 400; font-size: 11px; }
 
-/* Pigułki Statusów (Badges) */
+/* Pigułki Statusów (Badges) - Zgaszone kolory */
 .cr-badge {
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 9px;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 1px;
     text-align: center;
 }
-.cr-badge.inicjacja { border: 1px solid rgba(59, 130, 246, 0.5); color: #60a5fa; background: rgba(59, 130, 246, 0.1); }
-.cr-badge.planowanie { border: 1px solid rgba(139, 92, 246, 0.5); color: #a78bfa; background: rgba(139, 92, 246, 0.1); }
-.cr-badge.zaladunek { border: 1px solid rgba(245, 158, 11, 0.5); color: #fbbf24; background: rgba(245, 158, 11, 0.1); }
-.cr-badge.trasa { border: 1px solid rgba(212, 175, 55, 0.5); color: #d4af37; background: rgba(212, 175, 55, 0.1); }
-.cr-badge.zamkniete { border: 1px solid rgba(16, 185, 129, 0.5); color: #34d399; background: rgba(16, 185, 129, 0.1); }
-.cr-badge.domyslny { border: 1px solid rgba(255, 255, 255, 0.2); color: #f8fafc; background: rgba(255, 255, 255, 0.05); }
+.cr-badge.inicjacja { border: 1px solid rgba(131, 165, 219, 0.3); color: #83A5DB; background: rgba(131, 165, 219, 0.05); }
+.cr-badge.planowanie { border: 1px solid rgba(175, 143, 201, 0.3); color: #AF8FC9; background: rgba(175, 143, 201, 0.05); }
+.cr-badge.zaladunek { border: 1px solid rgba(201, 164, 113, 0.3); color: #C9A471; background: rgba(201, 164, 113, 0.05); }
+.cr-badge.trasa { border: 1px solid rgba(197, 168, 128, 0.5); color: #C5A880; background: rgba(197, 168, 128, 0.1); }
+.cr-badge.zamkniete { border: 1px solid rgba(119, 163, 133, 0.3); color: #77A385; background: rgba(119, 163, 133, 0.05); }
+.cr-badge.domyslny { border: 1px solid rgba(255, 255, 255, 0.1); color: #8C8477; background: rgba(255, 255, 255, 0.02); }
 
-/* Wyrównanie przycisków akcji obok kart */
-div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-weight: 600; }
+/* Tagi braków (Czerwone/Pomarańczowe zen) */
+.tag-zen-red { background: rgba(186, 73, 73, 0.1); color: #BA4949; border: 1px solid rgba(186, 73, 73, 0.3); padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+.tag-zen-orange { background: rgba(199, 127, 74, 0.1); color: #C77F4A; border: 1px solid rgba(199, 127, 74, 0.3); padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+.tag-zen-blue { background: rgba(85, 122, 166, 0.1); color: #557AA6; border: 1px solid rgba(85, 122, 166, 0.3); padding: 3px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+
+div[data-testid="column"] button { margin-top: 15px; border-radius: 4px; font-weight: 600; }
 
 /* =========================================
    5. ELEMENTY FORMULARZY I PRZYCISKI GŁÓWNE
 ========================================= */
 /* Ekran Logowania */
 .login-box {
-    background-color: rgba(30, 41, 59, 0.5);
-    backdrop-filter: blur(15px);
+    background-color: rgba(28, 26, 24, 0.8);
+    backdrop-filter: blur(10px);
     padding: 40px;
-    border-radius: 16px;
-    border: 1px solid rgba(212, 175, 55, 0.3);
+    border-radius: 8px;
+    border: 1px solid rgba(197, 168, 128, 0.2);
     text-align: center;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
 }
 
-/* Przyciski typu Primary (Złote) */
+/* Przyciski typu Primary (Złote zgaszone) */
 .stButton>button[kind="primary"] {
-    background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
-    color: #000;
-    border: none;
-    font-weight: 700;
-    border-radius: 8px;
+    background: transparent;
+    color: #C5A880;
+    border: 1px solid #C5A880;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 1px;
+    border-radius: 4px;
     transition: all 0.3s ease;
 }
 .stButton>button[kind="primary"]:hover {
-    box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
-    transform: scale(1.02);
+    background: rgba(197, 168, 128, 0.1);
+    box-shadow: none;
+}
+.stButton>button[kind="secondary"] {
+    background: transparent;
+    color: #8C8477;
+    border: 1px solid rgba(140, 132, 119, 0.3);
+    font-weight: 600;
+    font-size: 11px;
+    border-radius: 4px;
 }
 
 /* =========================================
    6. COMMAND CENTER DASHBOARD
 ========================================= */
 .dash-card {
-    background: rgba(30, 41, 59, 0.6);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
+    background: rgba(28, 26, 24, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
     padding: 20px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
     height: 100%;
 }
 
 .dash-title {
-    color: #F8FAFC;
-    font-size: 16px;
-    font-weight: 700;
+    color: #E2DCD3;
+    font-size: 14px;
+    font-weight: 600;
     margin-top: 0;
     margin-bottom: 15px;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
 }
 
 /* Advanced KPI Cards */
@@ -178,31 +197,35 @@ div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-we
     justify-content: space-between;
 }
 .kpi-adv-header {
-    color: #94A3B8;
-    font-size: 14px;
+    color: #8C8477;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    letter-spacing: 1px;
 }
-.kpi-adv-header .icon { font-size: 20px; opacity: 0.8;}
+.kpi-adv-header .icon { font-size: 20px; opacity: 0.5;}
 .kpi-adv-value {
-    color: #F8FAFC;
-    font-size: 38px;
-    font-weight: 800;
+    color: #E2DCD3;
+    font-size: 34px;
+    font-weight: 600;
     margin: 10px 0;
+    font-family: 'Courier New', monospace;
 }
 .kpi-progress-bar {
     width: 100%;
-    height: 4px;
-    background: rgba(255,255,255,0.1);
-    border-radius: 10px;
+    height: 2px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 2px;
     margin-bottom: 5px;
     overflow: hidden;
 }
 .kpi-progress {
     height: 100%;
-    background: #D4AF37;
-    border-radius: 10px;
+    background: #C5A880;
+    border-radius: 2px;
 }
 
 /* Issue Inbox / Alerts */
@@ -211,13 +234,14 @@ div[data-testid="column"] button { margin-top: 15px; border-radius: 8px; font-we
     align-items: flex-start;
     gap: 12px;
     padding: 10px 15px;
-    border-radius: 8px;
+    border-radius: 6px;
     margin-bottom: 10px;
-    font-size: 13px;
-    background: rgba(255,255,255,0.03);
+    font-size: 12px;
+    background: rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(255,255,255,0.05);
 }
-.alert-warning { border-left: 3px solid #f59e0b; }
-.alert-danger { border-left: 3px solid #ef4444; }
+.alert-warning { border-left: 3px solid #C77F4A !important; }
+.alert-danger { border-left: 3px solid #BA4949 !important; }
 .alert-icon { font-size: 16px; }
-.alert-content strong { color: #F8FAFC; display: block; margin-bottom: 2px;}
-.alert-content { color: #94A3B8; line-height: 1.3; }
+.alert-content strong { color: #E2DCD3; display: block; margin-bottom: 2px;}
+.alert-content { color: #8C8477; line-height: 1.3; }
