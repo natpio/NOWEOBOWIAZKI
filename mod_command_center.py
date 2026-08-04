@@ -1,580 +1,166 @@
 import streamlit as st
 import pandas as pd
-import datetime
-import base64
-import os
-import streamlit.components.v1 as components
-from db import load_data
-import math
-
-# =====================================================================
-# 1. KONFIGURACJA I SŁOWNIKI GEOGRAFICZNE (BAZA MIAST Z TWOICH ARKUSZY)
-# =====================================================================
-
-# Słownik z geolokalizacją (Lat, Lon) dla destynacji z Twojego pliku 1.jpg
-GEO_DICT = {
-    "POZNAŃ": (52.4064, 16.9252), # Hub SQM
-    "MONACHIUM": (48.1351, 11.5820),
-    "MUNICH": (48.1351, 11.5820),
-    "KOLONIA": (50.9375, 6.9603),
-    "COLOGNE": (50.9375, 6.9603),
-    "FRANKFURT": (50.1109, 8.6821),
-    "KOPENHAGA": (55.6761, 12.5683),
-    "KIELCE": (50.8703, 20.6275),
-    "LONDYN": (51.5074, -0.1278),
-    "LONDON": (51.5074, -0.1278),
-    "GUYANCOURT": (48.7718, 2.0494), # Okolice Paryża
-    "SZTOKHOLM": (59.3293, 18.0686),
-    "STOCKHOLM": (59.3293, 18.0686),
-    "HANOWER": (52.3759, 9.7320),
-    "HANOVER": (52.3759, 9.7320),
-    "PARYŻ": (48.8566, 2.3522),
-    "PARIS": (48.8566, 2.3522),
-    "BERLIN": (52.5200, 13.4050),
-    "HAMBURG": (53.5511, 9.9937),
-    "WURSELEN": (50.8214, 6.1386),
-    "MADRYT": (40.4168, -3.7038)
-}
-
-# Parametry okna mapy (projekcja Merkatora na uproszczony SVG)
-MAP_BOUNDS = {
-    "min_lat": 36.0, "max_lat": 63.0,
-    "min_lon": -10.0, "max_lon": 30.0,
-    "svg_width": 300, "svg_height": 200
-}
-
-# =====================================================================
-# 2. KLASY PRZETWARZANIA DANYCH (BACKEND LOGIC)
-# =====================================================================
-
-class LogistykaDataProcessor:
-    """Klasa agregująca i czyszcząca dane ze wszystkich modułów SQM."""
-    
-    def __init__(self, df_ev, df_sub, df_yt):
-        # Inicjalizacja i czyszczenie pustych DataFrame'ów
-        self.df_ev = df_ev if not df_ev.empty else pd.DataFrame()
-        self.df_sub = df_sub if not df_sub.empty else pd.DataFrame()
-        self.df_yt = df_yt if not df_yt.empty else pd.DataFrame()
-        self.dzisiaj = pd.Timestamp.today().normalize()
-        
-    def get_aktywne_eventy(self):
-        """Zwraca tylko niezarchiwizowane eventy."""
-        if self.df_ev.empty:
-            return pd.DataFrame()
-        return self.df_ev[self.df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
-
-    def get_zamkniete_eventy(self):
-        """Zwraca zarchiwizowane eventy do analizy POD."""
-        if self.df_ev.empty:
-            return pd.DataFrame()
-        return self.df_ev[self.df_ev.get("Zakonczone_Arch", pd.Series()) == "TAK"]
-
-    def extract_financials(self):
-        """Przetwarza wszystkie faktury i oblicza Dni Opóźnienia (Aging)."""
-        nieoplacone = []
-        
-        def parse_module(df, mod_name, id_col, partner_col, cost_col):
-            if df.empty: return
-            
-            # Filtrujemy tylko nieopłacone
-            df_nie = df[df.get("Faktura_Oplacona", pd.Series()) == "NIE"]
-            for _, row in df_nie.iterrows():
-                # Bezpieczne wyciąganie kwoty
-                try:
-                    kwota = float(str(row.get(cost_col, 0)).replace(',', '.'))
-                except ValueError:
-                    kwota = 0.0
-                
-                if kwota <= 0:
-                    continue
-                    
-                termin_str = str(row.get("Data_Platnosci", "")).strip()
-                partner = str(row.get(partner_col, "")).strip()
-                
-                # Tylko zewnetrzni partnerzy, pomijamy Flotę SQM i N/A
-                if partner.upper() in ["SQM", "WŁASNY SQM", ""] or termin_str == "N/A":
-                    continue
-
-                status_platnosci = "W terminie"
-                dni_opoznienia = 0
-                
-                if termin_str and termin_str not in ["None", "nan", "NaT"]:
-                    try:
-                        termin_date = pd.to_datetime(termin_str).normalize()
-                        if termin_date < self.dzisiaj:
-                            dni_opoznienia = (self.dzisiaj - termin_date).days
-                            status_platnosci = f"Przeterminowana ({dni_opoznienia} dni)"
-                    except Exception:
-                        status_platnosci = "Brak / Błędna data"
-
-                nieoplacone.append({
-                    "Moduł": mod_name, 
-                    "ID Operacji": row.get(id_col, "-"), 
-                    "Kontrahent": partner, 
-                    "Kwota (€)": kwota, 
-                    "Termin": termin_str,
-                    "Status": status_platnosci,
-                    "Dni_Opoznienia": dni_opoznienia
-                })
-
-        parse_module(self.df_ev, "Event", "ID_Zlecenia", "Przewoznik", "Koszt_Transportu_EUR")
-        parse_module(self.df_sub, "Subrent", "ID_Subrentu", "Dostawca", "Koszt_Calkowity_EUR")
-        parse_module(self.df_yt, "Yestech", "ID_Yestech", "Przewoznik", "Koszt_Rzeczywisty")
-
-        df_wynik = pd.DataFrame(nieoplacone)
-        if not df_wynik.empty:
-            df_wynik = df_wynik.sort_values(by="Dni_Opoznienia", ascending=False)
-        return df_wynik
-
-    def generate_alerts(self, df_finanse):
-        """Generuje skrzynkę problemów bazując TYLKO na twardych danych z DB."""
-        alerty = []
-        
-        # 1. Alerty Krytyczne: Brakujące POD (Eventy zakończone)
-        zamkniete = self.get_zamkniete_eventy()
-        if not zamkniete.empty:
-            df_ev_pod = zamkniete[zamkniete.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
-            for _, row in df_ev_pod.iterrows():
-                # Ignoruj flotę własną (POD dotyczy głównie zewn.) chyba że SQM też wymaga.
-                if row.get("Typ_Transportu", "") != "Własny SQM":
-                    alerty.append({
-                        "typ": "krytyczny", "ikona": "🛑",
-                        "tytul": f"Brak POD: {row.get('Nazwa_Targow', 'Nieznana destynacja')}",
-                        "opis": f"Przewoźnik {row.get('Przewoznik', '-')} nie odesłał dokumentów przewozowych."
-                    })
-                
-        # 2. Alerty Ostrzegawcze: Gotowe do zwrotu (Subrenty)
-        if not self.df_sub.empty:
-            df_sub_alert = self.df_sub[self.df_sub.get("Status_Subrentu", pd.Series()) == "4. Gotowe do zwrotu (Alert)"]
-            for _, row in df_sub_alert.iterrows():
-                alerty.append({
-                    "typ": "ostrzezenie", "ikona": "⚠️",
-                    "tytul": f"Zwrot sprzętu: {row.get('Co_Jedzie', '-')}",
-                    "opis": f"Sprzęt oczekuje na zwrot do: {row.get('Dostawca', '-')} (Deadline: {row.get('Deadline_Zwrotu', '-')})."
-                })
-                
-        # 3. Alerty Finansowe: Poważne zadłużenie
-        if not df_finanse.empty:
-            powazne_dlugi = df_finanse[df_finanse["Dni_Opoznienia"] > 14]
-            for _, row in powazne_dlugi.head(3).iterrows():
-                alerty.append({
-                    "typ": "finanse", "ikona": "💸",
-                    "tytul": f"Zaległa faktura: {row['Kontrahent']}",
-                    "opis": f"Opóźnienie płatności o {row['Dni_Opoznienia']} dni na kwotę {row['Kwota (€)']} €."
-                })
-                
-        return alerty
-
-# =====================================================================
-# 3. GENERATOR KOMPONENTÓW HTML/CSS (PIXEL PERFECT MICRO-FRONTEND)
-# =====================================================================
-
-def get_base64_image(filepath):
-    """Bezpieczne ładowanie grafik b64 z obsługą błędów."""
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, "rb") as img_file:
-                return f"data:image/png;base64,{base64.b64encode(img_file.read()).decode()}"
-        except Exception:
-            pass
-    return ""
-
-def latlon_to_svg(lat, lon):
-    """Prosta projekcja pseudo-Merkatora do współrzędnych SVG."""
-    w = MAP_BOUNDS["svg_width"]
-    h = MAP_BOUNDS["svg_height"]
-    
-    # Skalowanie Lon (X)
-    x = (lon - MAP_BOUNDS["min_lon"]) / (MAP_BOUNDS["max_lon"] - MAP_BOUNDS["min_lon"]) * w
-    
-    # Skalowanie Lat (Y) - Merkator (odwrócona oś Y)
-    lat_rad = lat * math.pi / 180.0
-    merc_n = math.log(math.tan((math.pi / 4.0) + (lat_rad / 2.0)))
-    
-    min_lat_rad = MAP_BOUNDS["min_lat"] * math.pi / 180.0
-    max_lat_rad = MAP_BOUNDS["max_lat"] * math.pi / 180.0
-    min_merc = math.log(math.tan((math.pi / 4.0) + (min_lat_rad / 2.0)))
-    max_merc = math.log(math.tan((math.pi / 4.0) + (max_lat_rad / 2.0)))
-    
-    y = h - ((merc_n - min_merc) / (max_merc - min_merc) * h)
-    return x, y
-
-def build_dynamic_flow_html(aktywne_ev, zamkniete_ev):
-    """
-    Kluczowa funkcja generująca DYNAMICZNY kod HTML na podstawie FAKTYCZNYCH danych.
-    Zero zmyślonych kierowców i przewoźników.
-    """
-    
-    # 1. PARSOWANIE: Faza INICJACJI (Zewnętrzni partnerzy)
-    inicjacja_ev = aktywne_ev[aktywne_ev.get("Faza_Procesu", pd.Series()).isin(["Inicjacja", "Planowanie"])]
-    zewnetrzni_partnerzy = set()
-    for _, row in inicjacja_ev.iterrows():
-        if row.get("Typ_Transportu", "") != "Własny SQM":
-            przewoznik = str(row.get("Przewoznik", "")).strip().upper()
-            if przewoznik and przewoznik not in ["", "SQM", "N/A"]:
-                zewnetrzni_partnerzy.add(przewoznik[:15]) # Limit długości dla UI
-    
-    html_inicjacja = ""
-    if not zewnetrzni_partnerzy:
-        html_inicjacja = "<div class='logo-item dark' style='grid-column: 1 / -1;'>Brak inicjacji</div>"
-    else:
-        for p in list(zewnetrzni_partnerzy)[:4]: # Max 4 w kafelku
-            html_inicjacja += f"<div class='logo-item'>{p}</div>"
-
-    # 2. PARSOWANIE: Faza W DRODZE (Tylko SQM Fleet)
-    w_drodze_ev = aktywne_ev[
-        (aktywne_ev.get("Faza_Procesu", pd.Series()).isin(["Trasa", "Załadunek"])) & 
-        (aktywne_ev.get("Typ_Transportu", pd.Series()) == "Własny SQM")
-    ]
-    
-    html_flota = ""
-    if w_drodze_ev.empty:
-        html_flota = """
-        <div class="fleet-box" style="display:flex; align-items:center; justify-content:center; color:#64748B;">
-            Aktualnie brak pojazdów SQM w trasie.
-        </div>"""
-    else:
-        html_flota = '<div class="fleet-box"><div class="fleet-header">Status Pojazdów w Trasie</div>'
-        # Pobieranie grafik
-        b64_bus = get_base64_image("bus.png")
-        b64_van = get_base64_image("van.png")
-        b64_ftl = get_base64_image("ftl.png")
-        b64_sol = get_base64_image("solowka.png")
-        
-        for idx, row in w_drodze_ev.head(2).iterrows(): # Pokazujemy max 2 pojazdy by zachowac UI
-            typ = str(row.get("Typ_Pojazdu", "")).upper()
-            kierowca = str(row.get("Przewoznik", "Nieznany")).title()
-            cmr_status = str(row.get("CMR_Gotowe", "NIE")).upper()
-            cmr_klasa = "tag-ok" if cmr_status == "TAK" else "tag-alert"
-            
-            # Dobór grafiki bazując na typie (z DB)
-            img_src = b64_van # Domyslny
-            if "BUS" in typ: img_src = b64_bus
-            elif "FTL" in typ: img_src = b64_ftl
-            elif "SOL" in typ: img_src = b64_sol
-            
-            html_flota += f"""
-            <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
-                <div style="width: 50px; height: 35px; background: rgba(0,0,0,0.4); border-radius: 4px; display:flex; align-items:center; justify-content:center;">
-                    <img src="{img_src}" style="max-width: 90%; max-height: 90%;" onerror="this.style.display='none';">
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-size: 11px; color:#94A3B8;">Kierowca: <strong style="color:#F8FAFC;">{kierowca}</strong></div>
-                    <div style="font-size: 10px; color:#94A3B8; margin-top:2px;">CMR: <span class="{cmr_klasa}">{cmr_status}</span></div>
-                </div>
-            </div>
-            """
-        html_flota += "</div>"
-
-    # 3. PARSOWANIE: Faza ZAMKNIĘTE (Dokumenty POD z DB)
-    html_zamkniete = ""
-    if zamkniete_ev.empty:
-        html_zamkniete = "<div class='logo-item dark' style='grid-column: 1 / -1;'>Brak historii</div>"
-    else:
-        for idx, row in zamkniete_ev.tail(4).iterrows():
-            id_zew = str(row.get("ID_Zlecenia", "BRAK"))[:7]
-            pod_status = str(row.get("CMR_Podpisane_POD", "NIE")).upper()
-            
-            if pod_status == "TAK":
-                html_zamkniete += f"""
-                <div class="doc-card">
-                    <div class="doc-icon">📄</div><div style="font-size: 9px; color: #64748B;">{id_zew}</div>
-                    <div class="doc-check">✓</div>
-                </div>"""
-            else:
-                html_zamkniete += f"""
-                <div class="doc-card" style="opacity: 0.6; border-color: rgba(239, 68, 68, 0.3);">
-                    <div class="doc-icon" style="color: #ef4444;">📄</div><div style="font-size: 9px; color: #ef4444;">Brak POD</div>
-                </div>"""
-
-    # 4. MAPA I LINIE (DYNAMICZNY SVG)
-    svg_lines = ""
-    html_dots = ""
-    
-    # Rysowanie huba (Poznań)
-    hx, hy = latlon_to_svg(GEO_DICT["POZNAŃ"][0], GEO_DICT["POZNAŃ"][1])
-    html_dots += f'<div class="dot hub" style="top: {hy}px; left: {hx}px;"><div class="pulse"></div></div>'
-    
-    # Rysowanie destynacji aktywnych
-    unikalne_destynacje = set()
-    for _, row in aktywne_ev.iterrows():
-        targi = str(row.get("Nazwa_Targow", "")).upper()
-        # Proste dopasowanie nazwy z bazy do słownika
-        for miasto in GEO_DICT.keys():
-            if miasto in targi:
-                unikalne_destynacje.add(miasto)
-                break
-                
-    for dest in unikalne_destynacje:
-        if dest != "POZNAŃ":
-            dx, dy = latlon_to_svg(GEO_DICT[dest][0], GEO_DICT[dest][1])
-            html_dots += f'<div class="dot" style="top: {dy}px; left: {dx}px;"></div>'
-            # Rysowanie krzywej Beziera od Poznania do destynacji
-            ctrl_y = min(hy, dy) - 30 # Lekkie wygięcie krzywej w górę
-            svg_lines += f'<path d="M {hx+6} {hy+6} Q {(hx+dx)/2} {ctrl_y} {dx+4} {dy+4}" fill="transparent" stroke="rgba(212,175,55,0.8)" stroke-width="1.5" stroke-dasharray="3 3" />'
-
-
-    # 5. SKŁADANIE KOŃCOWEGO HTML'A
-    css_string = """
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background-color: transparent; color: #F8FAFC; overflow: hidden; }
-        .mega-container {
-            display: flex; gap: 20px; background: rgba(15, 23, 42, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 20px;
-            box-shadow: inset 0 0 40px rgba(0,0,0,0.5), 0 10px 30px rgba(0,0,0,0.3); height: 350px; box-sizing: border-box;
-        }
-        .map-zone {
-            flex: 0 0 35%; position: relative; background: radial-gradient(circle at center, rgba(30, 41, 59, 0.8) 0%, rgba(2, 6, 23, 0.9) 100%);
-            border-radius: 10px; border: 1px solid rgba(255,255,255,0.02); overflow: hidden;
-        }
-        .map-bg {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/e4/Europe_orthographic_Caucasus_Urals_boundary.svg/600px-Europe_orthographic_Caucasus_Urals_boundary.svg.png') no-repeat center 80%;
-            background-size: 140%; opacity: 0.15; filter: grayscale(100%) brightness(1.5);
-        }
-        .map-header { position: absolute; top: 10px; left: 15px; font-size: 12px; font-weight: 700; color: #e2e8f0; z-index: 10;}
-        .dot { position: absolute; width: 8px; height: 8px; background: #3b82f6; border-radius: 50%; box-shadow: 0 0 10px #3b82f6; z-index: 5; }
-        .dot.hub { background: #D4AF37; width: 12px; height: 12px; box-shadow: 0 0 15px #D4AF37; z-index: 6; }
-        .pulse { position: absolute; width: 26px; height: 26px; background: rgba(212, 175, 55, 0.4); border-radius: 50%; top: -7px; left: -7px; z-index: 4; animation: radar 2s infinite ease-out; }
-        @keyframes radar { 0% { transform: scale(0.1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
-        
-        .process-zone { flex: 1; display: flex; gap: 15px; }
-        .process-col { flex: 1; display: flex; flex-direction: column; }
-        .col-header { font-size: 12px; color: #94A3B8; text-transform: uppercase; font-weight: 700; margin-bottom: 15px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .logo-grid, .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .logo-item { background: #ffffff; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #0f172a; font-weight: 800; font-size: 10px; text-align: center; padding: 0 5px;}
-        .logo-item.dark { background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px dashed rgba(255,255,255,0.1); }
-        .fleet-box { background: linear-gradient(145deg, #1e293b, #0f172a); border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 8px; padding: 12px; height: 100%; box-sizing: border-box; }
-        .fleet-header { color: #F8FAFC; font-weight: 700; font-size: 12px; margin-bottom: 15px; border-bottom: 1px dashed rgba(255,255,255,0.1); padding-bottom: 8px;}
-        .tag-ok { background: rgba(16, 185, 129, 0.2); color: #34d399; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9px; }
-        .tag-alert { background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 9px; }
-        .doc-card { background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; height: 60px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; position: relative; }
-        .doc-icon { font-size: 20px; color: #94A3B8; }
-        .doc-check { position: absolute; bottom: 4px; right: 4px; background: #10B981; color: #000; font-size: 9px; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-weight: bold;}
-    </style>
-    """
-
-    final_html = f"""
-    {css_string}
-    <div class="mega-container">
-        <!-- ZONA MAPY -->
-        <div class="map-zone">
-            <div class="map-header">Aktywne Trasy Z bazy</div>
-            <div class="map-bg"></div>
-            <svg style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2;">
-                {svg_lines}
-            </svg>
-            {html_dots}
-        </div>
-        
-        <!-- ZONA PROCESOW -->
-        <div class="process-zone">
-            <div class="process-col">
-                <div class="col-header">Inicjacja (Zewn.)</div>
-                <div class="logo-grid">{html_inicjacja}</div>
-            </div>
-            
-            <div class="process-col" style="flex: 1.3;">
-                <div class="col-header" style="color: #D4AF37; border-bottom-color: rgba(212,175,55,0.3);">W Drodze (SQM Fleet)</div>
-                {html_flota}
-            </div>
-            
-            <div class="process-col">
-                <div class="col-header">Zamknięte (Status POD)</div>
-                <div class="doc-grid">{html_zamkniete}</div>
-            </div>
-        </div>
-    </div>
-    """
-    return final_html
-
-# =====================================================================
-# 4. GŁÓWNA FUNKCJA RENDERUJĄCA STREAMLIT
-# =====================================================================
 
 def render(sh):
-    # --- 1. ŁADOWANIE I WSTĘPNE PRZETWARZANIE ---
+    # Nagłówek modułu Command Center
+    st.markdown('''
+        <div class="module-header-container">
+            <h1 class="module-title">Command Center</h1>
+            <div class="module-subtitle">コマンドセンター ✦ GŁÓWNY PANEL STEROWANIA</div>
+        </div>
+    ''', unsafe_allow_html=True)
+
+    # 1. POBIERANIE I AGREGACJA DANYCH
+    # Pobieramy Zlecenia Poboczne (jeśli są inne moduły np. Eventy, tu można je łatwo dorzucić)
     try:
-        _, df_ev = load_data(sh, "DB_Eventy")
-        _, df_sub = load_data(sh, "DB_Subrenty")
-        _, df_yt = load_data(sh, "DB_Yestech")
-        _, df_sloty = load_data(sh, "DB_Sloty")
+        ws_zlecenia = sh.worksheet("Zlecenia Poboczne")
+        # Pobieramy wszystko pomijając pierwszy wiersz jeśli jest pusty (pandas sobie z tym poradzi)
+        df_zlecenia = pd.DataFrame(ws_zlecenia.get_all_records())
     except Exception as e:
-        st.error(f"Krytyczny błąd pobierania danych: {e}")
-        return
+        st.warning(f"Brak danych lub arkusza 'Zlecenia Poboczne'. ({e})")
+        df_zlecenia = pd.DataFrame()
 
-    processor = LogistykaDataProcessor(df_ev, df_sub, df_yt)
-    aktywne_ev = processor.get_aktywne_eventy()
-    zamkniete_ev = processor.get_zamkniete_eventy()
-    
-    df_finanse = processor.extract_financials()
-    alerty = processor.generate_alerts(df_finanse)
+    # Filtrujemy tylko aktywne zlecenia do metryk i problemów
+    aktywne_zlecenia = pd.DataFrame()
+    if not df_zlecenia.empty and 'Status' in df_zlecenia.columns:
+        aktywne_zlecenia = df_zlecenia[df_zlecenia['Status'] != 'ARCHIWUM']
 
-    # --- KPI ORYGINALNE DLA COMMAND CENTER (BEZ ZMIAN) ---
-    braki_cmr = len(aktywne_ev[aktywne_ev.get("CMR_Gotowe", pd.Series()) == "NIE"]) if not aktywne_ev.empty else 0
-    braki_pod = len(zamkniete_ev[zamkniete_ev.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not zamkniete_ev.empty else 0
+    # Obliczenia globalne
+    total_active = len(aktywne_zlecenia)
     
-    liczba_faktur = len(df_finanse) if not df_finanse.empty else 0
-    kwota_suma = df_finanse["Kwota (€)"].sum() if not df_finanse.empty else 0.0
+    brak_cmr = len(aktywne_zlecenia[aktywne_zlecenia.get("CMR") == "NIE"]) if not aktywne_zlecenia.empty else 0
+    brak_pod = len(aktywne_zlecenia[aktywne_zlecenia.get("POD") == "NIE"]) if not aktywne_zlecenia.empty else 0
+    brak_fv = len(aktywne_zlecenia[aktywne_zlecenia.get("Faktura") == "NIE"]) if not aktywne_zlecenia.empty else 0
+    
+    suma_problemow = brak_cmr + brak_pod + brak_fv
 
-    # --- 2. GŁÓWNY INTERFEJS (KARTY KPI) ---
-    c1, c2, c3 = st.columns(3)
+    # 2. SEKCJA METRYK ZAAWANSOWANYCH (Top Dashboard)
+    col1, col2, col3 = st.columns(3)
     
-    with c1:
+    with col1:
         st.markdown(f"""
-        <div class="dash-card kpi-advanced" style="padding: 20px;">
-            <div class="kpi-adv-header" style="font-size: 14px;">CMR do wystawienia (Aktywne) <span class="icon">📝</span></div>
-            <div class="kpi-adv-value" style="font-size: 42px; color: #F8FAFC;">{braki_cmr}</div>
-            <div class="kpi-progress-bar"><div class="kpi-progress" style="width: {min(braki_cmr*10, 100)}%;"></div></div>
+        <div class="dash-card">
+            <div class="kpi-advanced">
+                <div class="kpi-adv-header">
+                    <span>Aktywne Operacje (Poboczne)</span>
+                    <span class="icon">🚛</span>
+                </div>
+                <div class="kpi-adv-value">{total_active}</div>
+                <div class="kpi-progress-bar"><div class="kpi-progress" style="width: 100%;"></div></div>
+                <div style="font-size: 10px; color: #8C8477;">Bieżące zlecenia w realizacji</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-    with c2:
+    with col2:
         st.markdown(f"""
-        <div class="dash-card kpi-advanced" style="padding: 20px;">
-            <div class="kpi-adv-header" style="font-size: 14px;">Brakujące zwroty POD (Zamknięte) <span class="icon">📄</span></div>
-            <div class="kpi-adv-value" style="font-size: 42px; color: #F8FAFC;">{braki_pod}</div>
-            <div class="kpi-progress-bar"><div class="kpi-progress" style="width: {min(braki_pod*10, 100)}%; background: #f59e0b;"></div></div>
+        <div class="dash-card">
+            <div class="kpi-advanced">
+                <div class="kpi-adv-header">
+                    <span>Otwarte Kwestie Dokumentacyjne</span>
+                    <span class="icon">📑</span>
+                </div>
+                <div class="kpi-adv-value">{brak_cmr + brak_pod}</div>
+                <div class="kpi-progress-bar"><div class="kpi-progress" style="width: 75%; background: #C77F4A;"></div></div>
+                <div style="font-size: 10px; color: #8C8477;">Braki CMR oraz POD z tras</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-
-    with c3:
+        
+    with col3:
         st.markdown(f"""
-        <div class="dash-card kpi-advanced" style="padding: 20px;">
-            <div class="kpi-adv-header" style="font-size: 14px;">Nieopłacone faktury zewn. <span class="icon">💰</span></div>
-            <div class="kpi-adv-value" style="font-size: 42px; color: #F8FAFC;">{liczba_faktur}</div>
-            <div class="kpi-progress-bar"><div class="kpi-progress" style="width: {min(liczba_faktur*5, 100)}%; background: #ef4444;"></div></div>
+        <div class="dash-card">
+            <div class="kpi-advanced">
+                <div class="kpi-adv-header">
+                    <span>Zadłużenie / Brak Płatności</span>
+                    <span class="icon">💰</span>
+                </div>
+                <div class="kpi-adv-value">{brak_fv}</div>
+                <div class="kpi-progress-bar"><div class="kpi-progress" style="width: 40%; background: #BA4949;"></div></div>
+                <div style="font-size: 10px; color: #8C8477;">Wymagają domknięcia księgowego</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- 3. PODZIAŁ NA ZAKŁADKI (DASHBOARD VS RAPORTY 360) ---
-    tab_dashboard, tab_raporty = st.tabs(["🌍 Live Dashboard (Operacje)", "📊 Raporty 360° (Eventy & Przewoźnicy)"])
-
-    with tab_dashboard:
-        st.markdown('<h3 class="dash-title">Rzeczywisty Przepływ Operacyjny (Live)</h3>', unsafe_allow_html=True)
-        
-        # Generowanie HTML'a zasilonego prawdziwymi danymi ze SQM Sheets
-        html_flow = build_dynamic_flow_html(aktywne_ev, zamkniete_ev)
-        components.html(html_flow, height=360)
-
-        # Skrzynka Problemów Oraz Tabela Faktur
-        col_inbox, col_fin = st.columns([35, 65], gap="large")
-
-        with col_inbox:
-            st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
-            st.markdown('<h3 class="dash-title">Skrzynka Problemów (Issue Inbox)</h3>', unsafe_allow_html=True)
+    # 3. SKRZYNKA PROBLEMÓW (ISSUE INBOX) & NOTYFIKACJE
+    st.markdown("<h3 class='dash-title'>🚨 Skrzynka Problemów (Issue Inbox)</h3>", unsafe_allow_html=True)
+    
+    alerts_html = ""
+    
+    if not aktywne_zlecenia.empty:
+        for index, row in aktywne_zlecenia.iterrows():
+            nr = row.get("Nr Zlecenia", "Nieznany")
+            przew = row.get("Przewoźnik", "Nieznany przewoźnik")
             
-            if not alerty:
-                st.markdown("<div style='color: #10B981; padding: 20px 0; font-size: 13px; text-align: center;'>✅ Brak palących problemów operacyjnych w bazach danych.</div>", unsafe_allow_html=True)
-            else:
-                html_inbox = ""
-                for a in alerty:
-                    k_boczna = "alert-danger" if a["typ"] == "krytyczny" else ("alert-warning" if a["typ"] == "ostrzezenie" else "alert-warning")
-                    html_inbox += f"""
-                    <div class="alert-item {k_boczna}" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                        <div style="display: flex; gap: 10px; align-items: flex-start;">
-                            <div style="font-size: 16px;">{a['ikona']}</div>
-                            <div>
-                                <strong style="color: #F8FAFC; display: block; font-size: 12px; margin-bottom: 2px;">{a['tytul']}</strong>
-                                <span style="color: #94A3B8; font-size: 11px; line-height: 1.3;">{a['opis']}</span>
-                            </div>
-                        </div>
+            # Alert: Brak CMR (Krytyczny)
+            if row.get("CMR") == "NIE":
+                alerts_html += f"""
+                <div class="alert-item alert-danger">
+                    <div class="alert-icon">📄</div>
+                    <div class="alert-content">
+                        <strong>Krytyczny brak dokumentu CMR!</strong>
+                        Zlecenie poboczne <b>{nr}</b> ({przew}) nie posiada przypisanego listu przewozowego.
                     </div>
-                    """
-                st.markdown(html_inbox, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col_fin:
-            st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
-            st.markdown(f'<h3 class="dash-title" style="color: #ef4444;">Faktury oczekujące na opłacenie (Zobowiązania: {kwota_suma:,.2f} €)</h3>', unsafe_allow_html=True)
-            
-            if not df_finanse.empty:
-                def color_status(val):
-                    if "Przeterminowana" in str(val): return 'color: #ef4444; font-weight: bold;'
-                    if "W terminie" in str(val): return 'color: #10B981;'
-                    return 'color: #94A3B8;'
-
-                df_widok = df_finanse.drop(columns=["Dni_Opoznienia"])
-                styled_df = df_widok.style.map(color_status, subset=['Status']).format({'Kwota (€)': "{:.2f} €"})
+                </div>"""
                 
-                st.dataframe(
-                    styled_df, 
-                    use_container_width=True, 
-                    hide_index=True,
-                    height=260
-                )
-            else:
-                st.info("✅ Brak nieopłaconych faktur zewnętrznych w systemie.")
+            # Alert: Brak POD (Ostrzeżenie)
+            if row.get("POD") == "NIE":
+                alerts_html += f"""
+                <div class="alert-item alert-warning">
+                    <div class="alert-icon">📋</div>
+                    <div class="alert-content">
+                        <strong>Brak zwrotu dokumentów dostawy (POD)</strong>
+                        Przewoźnik <b>{przew}</b> nie dostarczył potwierdzenia rozładunku dla zlecenia <b>{nr}</b>.
+                    </div>
+                </div>"""
                 
-            st.markdown('</div>', unsafe_allow_html=True)
+            # Alert: Brak Faktury (Neutralny/Złoty)
+            if row.get("Faktura") == "NIE":
+                alerts_html += f"""
+                <div class="alert-item" style="border-left: 3px solid #C5A880; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+                    <div class="alert-icon" style="opacity: 0.8;">💳</div>
+                    <div class="alert-content">
+                        <strong style="color: #E2DCD3;">Nieopłacona Faktura Transportowa</strong>
+                        Zlecenie <b>{nr}</b> oczekuje na spływ lub zaksięgowanie faktury.
+                    </div>
+                </div>"""
 
-    with tab_raporty:
-        st.markdown('<h3 class="dash-title">Zestawienia Analityczne</h3>', unsafe_allow_html=True)
-        tryb_raportu = st.radio("Wybierz perspektywę:", ["🚚 Według Przewoźnika", "🎪 Według Eventu / Targów"], horizontal=True)
-        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
-
-        if tryb_raportu == "🚚 Według Przewoźnika":
-            if df_ev.empty:
-                st.warning("Brak danych o eventach w bazie.")
-            else:
-                lista_przewoznikow = sorted([p for p in df_ev["Przewoznik"].unique() if str(p).strip() != ""])
-                wybrany_przew = st.selectbox("Wybierz przewoźnika:", ["-- Wybierz --"] + lista_przewoznikow)
-                
-                if wybrany_przew != "-- Wybierz --":
-                    # Filtrujemy wszystkie zlecenia (aktywne i archiwalne) dla wybranego przewoźnika
-                    df_przew_ev = df_ev[df_ev["Przewoznik"] == wybrany_przew].copy()
-                    
-                    st.markdown(f"#### 📦 Historia i Zlecenia: {wybrany_przew}")
-                    # Wizualna zmiana nazwy kolumny Data_Zlecenia_Tr na Data Załadunku
-                    df_przew_ev_widok = df_przew_ev[['Nazwa_Targow', 'Data_Zlecenia_Tr', 'Typ_Pojazdu', 'Faza_Procesu', 'ID_Zlecenia']].rename(columns={'Data_Zlecenia_Tr': 'Data Załadunku'})
-                    st.dataframe(df_przew_ev_widok, use_container_width=True, hide_index=True)
-
-                    st.markdown("#### ⏱️ Przypisane Sloty Zleceń")
-                    id_zlecen_przew = df_przew_ev["ID_Zlecenia"].tolist()
-                    sloty_przew = df_sloty[df_sloty["ID_Zlecenia"].isin(id_zlecen_przew)] if not df_sloty.empty else pd.DataFrame()
-                    if not sloty_przew.empty:
-                        st.dataframe(sloty_przew[['ID_Zlecenia', 'Typ_Operacji', 'Data_Slota', 'Godzina_Od', 'Godzina_Do', 'Brama_Rampa']], use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Brak przypisanych slotów w harmonogramie dla tego przewoźnika.")
-
-                    st.markdown("#### 🚨 Braki i Zobowiązania (POD / Faktury)")
-                    braki_przew = df_przew_ev[(df_przew_ev["CMR_Podpisane_POD"] == "NIE") | (df_przew_ev["Faktura_Oplacona"] == "NIE")]
-                    if not braki_przew.empty:
-                        st.dataframe(braki_przew[['Nazwa_Targow', 'CMR_Podpisane_POD', 'Faktura_Oplacona', 'Koszt_Transportu_EUR', 'Data_Platnosci']], use_container_width=True, hide_index=True)
-                    else:
-                        st.success("Wszystkie dokumenty POD i płatności są uregulowane dla tego przewoźnika!")
-
-        elif tryb_raportu == "🎪 Według Eventu / Targów":
-            if df_ev.empty:
-                st.warning("Brak danych o eventach w bazie.")
-            else:
-                lista_targow = sorted([t for t in df_ev["Nazwa_Targow"].unique() if str(t).strip() != ""])
-                wybrane_targi = st.selectbox("Wybierz Event:", ["-- Wybierz --"] + lista_targow)
-                
-                if wybrane_targi != "-- Wybierz --":
-                    df_targi = df_ev[df_ev["Nazwa_Targow"] == wybrane_targi].copy()
-                    
-                    st.markdown(f"#### 🚛 Flota i Przewoźnicy obsługujący: {wybrane_targi}")
-                    # Wizualna zmiana nazwy kolumny Data_Zlecenia_Tr na Data Załadunku
-                    df_targi_widok = df_targi[['Przewoznik', 'Typ_Pojazdu', 'Data_Zlecenia_Tr', 'Faza_Procesu', 'ID_Zlecenia']].rename(columns={'Data_Zlecenia_Tr': 'Data Załadunku'})
-                    st.dataframe(df_targi_widok, use_container_width=True, hide_index=True)
-
-                    st.markdown("#### ⏱️ Zarezerwowane Sloty dla tego Eventu")
-                    id_zlecen_targow = df_targi["ID_Zlecenia"].tolist()
-                    sloty_targow = df_sloty[df_sloty["ID_Zlecenia"].isin(id_zlecen_targow)] if not df_sloty.empty else pd.DataFrame()
-                    if not sloty_targow.empty:
-                        # Łączenie z tabelą eventów, aby dopasować przewoźnika do slotu bazując na ID_Zlecenia
-                        sloty_targow_merged = pd.merge(sloty_targow, df_targi[['ID_Zlecenia', 'Przewoznik']], on='ID_Zlecenia', how='left')
-                        st.dataframe(sloty_targow_merged[['Przewoznik', 'Typ_Operacji', 'Data_Slota', 'Godzina_Od', 'Godzina_Do', 'Brama_Rampa']], use_container_width=True, hide_index=True)
-                    else:
-                        st.info("Brak zdefiniowanych slotów dla wybranego eventu.")
-
-                    st.markdown("#### 🚨 Status Rozliczeń Eventu (POD / Faktury)")
-                    braki_targi = df_targi[(df_targi["CMR_Podpisane_POD"] == "NIE") | (df_targi["Faktura_Oplacona"] == "NIE")]
-                    if not braki_targi.empty:
-                        st.dataframe(braki_targi[['Przewoznik', 'CMR_Podpisane_POD', 'Faktura_Oplacona', 'Koszt_Transportu_EUR']], use_container_width=True, hide_index=True)
-                    else:
-                        st.success("Kompletna dokumentacja POD i rozliczenia dla tego eventu!")
+    # Jeśli nie ma żadnych alertów – wyświetlamy komunikat "Zen"
+    if not alerts_html:
+        alerts_html = """
+        <div class="alert-item" style="border-left: 3px solid #77A385; background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.1);">
+            <div class="alert-icon" style="opacity: 1;">🍵</div>
+            <div class="alert-content">
+                <strong style="color: #77A385;">Wszystko w porządku (Czysta karta)</strong>
+                Brak aktywnych problemów dokumentacyjnych i finansowych. Pełen spokój.
+            </div>
+        </div>
+        """
+    
+    # Zamknięcie alertów w przewijanym, designerskim kontenerze
+    col_alerts, col_info = st.columns([2, 1])
+    
+    with col_alerts:
+        st.markdown(f'''
+            <div class="dash-card" style="max-height: 450px; overflow-y: auto; padding-right: 15px;">
+                {alerts_html}
+            </div>
+        ''', unsafe_allow_html=True)
+        
+    with col_info:
+        st.markdown(f'''
+            <div class="dash-card">
+                <div class="dash-title">Status Operacyjny</div>
+                <div style="color: #8C8477; font-size: 12px; line-height: 1.6;">
+                    System stale analizuje statusy zleceń wprowadzonych w zakładce <b>Zlecenia Poboczne</b>. 
+                    <br><br>
+                    Alerty klasyfikowane są na podstawie ważności:<br>
+                    <span style="color: #BA4949;">■ Krytyczne</span> (Brak CMR)<br>
+                    <span style="color: #C77F4A;">■ Ostrzeżenia</span> (Brak POD)<br>
+                    <span style="color: #C5A880;">■ Administracyjne</span> (Faktury)<br><br>
+                    Łączna liczba wymaganych akcji: <b>{suma_problemow}</b>
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
