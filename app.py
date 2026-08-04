@@ -3,6 +3,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from streamlit_option_menu import option_menu
 import os
+import base64
 
 # Import modułów aplikacji
 import mod_command_center
@@ -14,21 +15,53 @@ import mod_finanse
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
 
-# 2. ŁADOWANIE LOKALNEGO CSS
+# 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA
 def local_css(file_name):
     if os.path.exists(file_name):
-        with open(file_name) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        with open(file_name, "r", encoding="utf-8") as f:
+            css_content = f.read()
+        
+        # Konwersja tła głównego (fuji_bg.png) na Base64
+        if os.path.exists("fuji_bg.png"):
+            with open("fuji_bg.png", "rb") as img_f:
+                b64_fuji = base64.b64encode(img_f.read()).decode()
+            css_content = css_content.replace("url('fuji_bg.png')", f"url('data:image/png;base64,{b64_fuji}')")
+            
+        # Konwersja tła paska bocznego (lantern_bg.png) na Base64
+        if os.path.exists("lantern_bg.png"):
+            with open("lantern_bg.png", "rb") as img_l:
+                b64_lantern = base64.b64encode(img_l.read()).decode()
+            css_content = css_content.replace("url('lantern_bg.png')", f"url('data:image/png;base64,{b64_lantern}')")
+            
+        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
 local_css("style.css")
 
-# 3. POŁĄCZENIE Z GOOGLE SHEETS
+# 3. POŁĄCZENIE Z GOOGLE SHEETS (Zabezpieczone przed błędem Response 200)
 @st.cache_resource
 def init_connection():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
-    return client.open("SQM_Logistyka_DB")
+    
+    # Pobieramy identyfikator lub nazwę z secrets (fallback na domyślną nazwę)
+    spreadsheet_identifier = st.secrets.get("spreadsheet_id", "SQM_Logistyka_DB")
+    
+    try:
+        # Jeśli podano długi klucz (ID arkusza), otwórz po kluczu
+        if len(spreadsheet_identifier) > 20 and " " not in spreadsheet_identifier:
+            return client.open_by_key(spreadsheet_identifier)
+        else:
+            return client.open(spreadsheet_identifier)
+    except Exception as e:
+        # Fallback próbujący alternatywnych metod w razie niezgodności typu
+        try:
+            return client.open_by_key(spreadsheet_identifier)
+        except:
+            try:
+                return client.open("SQM_Logistyka_DB")
+            except Exception as final_e:
+                raise final_e
 
 # 4. EKRAN LOGOWANIA (Styl Zen/Japandi)
 def login_screen():
@@ -44,7 +77,6 @@ def login_screen():
         
         pwd = st.text_input("Hasło dostępu / パスワード", type="password")
         
-        # Oczekiwane hasło ze st.secrets (fallback na sqm2026)
         if st.button("WEJDŹ / 入る", use_container_width=True, type="primary"):
             if pwd == st.secrets.get("app_password", "sqm2026"):
                 st.session_state["zalogowany"] = True
@@ -125,7 +157,6 @@ def main():
         if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True, type="secondary"):
             st.session_state["zalogowany"] = False
             st.rerun()
-
 
     # --- ROUTING MODUŁÓW ---
     if wybrany_modul == "COMMAND CENTER":
