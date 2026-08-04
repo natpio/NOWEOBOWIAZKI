@@ -8,7 +8,7 @@ import base64
 # Import modułów aplikacji
 import mod_command_center
 import mod_eventy
-import mod_zlecenia_poboczne  # NOWY MODUŁ
+import mod_zlecenia_poboczne
 import mod_subrenty
 import mod_yestech
 import mod_finanse
