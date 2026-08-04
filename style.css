@@ -282,3 +282,76 @@ div[data-testid="column"] button { margin-top: 15px; border-radius: 4px; font-we
 .alert-icon { font-size: 16px; }
 .alert-content strong { color: #E2DCD3; display: block; margin-bottom: 2px;}
 .alert-content { color: #8C8477; line-height: 1.3; }
+
+/* =========================================
+   7. STYLIZACJA ZAKŁADEK I PÓL WYSZUKIWANIA (JAPANDI UI)
+========================================= */
+.module-header-container {
+    margin-bottom: 25px;
+    border-bottom: 1px solid rgba(197, 168, 128, 0.15);
+    padding-bottom: 12px;
+}
+.module-title {
+    color: #E2DCD3;
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'Shippori Mincho', 'Noto Serif JP', serif;
+    letter-spacing: 1.5px;
+    margin: 0 0 4px 0;
+}
+.module-subtitle {
+    color: #C5A880;
+    font-size: 11px;
+    font-family: 'Noto Serif JP', serif;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+[data-baseweb="tab-list"] {
+    gap: 15px;
+    background-color: rgba(28, 26, 24, 0.6);
+    padding: 8px 15px;
+    border-radius: 8px;
+    border: 1px solid rgba(197, 168, 128, 0.2);
+    backdrop-filter: blur(8px);
+}
+[data-baseweb="tab"] {
+    height: 36px;
+    background-color: transparent !important;
+    border-radius: 6px !important;
+    color: #A39B8F !important;
+    font-family: 'Shippori Mincho', 'Noto Serif JP', serif !important;
+    font-weight: 600 !important;
+    font-size: 12px !important;
+    letter-spacing: 1px !important;
+    padding: 0 20px !important;
+    transition: all 0.2s ease !important;
+}
+[data-baseweb="tab"]:hover {
+    color: #C5A880 !important;
+    background-color: rgba(197, 168, 128, 0.08) !important;
+}
+[aria-selected="true"] {
+    background: linear-gradient(135deg, rgba(197, 168, 128, 0.25) 0%, rgba(197, 168, 128, 0.08) 100%) !important;
+    color: #FDFBF7 !important;
+    border: 1px solid rgba(197, 168, 128, 0.4) !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+[data-baseweb="input"] {
+    background-color: rgba(28, 26, 24, 0.75) !important;
+    border: 1px solid rgba(197, 168, 128, 0.25) !important;
+    border-radius: 6px !important;
+    color: #E2DCD3 !important;
+    transition: all 0.3s ease !important;
+}
+[data-baseweb="input"]:hover, [data-baseweb="input"]:focus-within {
+    border-color: #C5A880 !important;
+    box-shadow: 0 0 10px rgba(197, 168, 128, 0.15) !important;
+    background-color: rgba(35, 32, 28, 0.9) !important;
+}
+input[type="text"] {
+    color: #E2DCD3 !important;
+    font-family: 'Inter', sans-serif !important;
+    font-size: 12px !important;
+}
