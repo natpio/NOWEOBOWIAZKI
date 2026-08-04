@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 
 def render(sh):
-    # Nagłówek modułu Command Center
     st.markdown('''
         <div class="module-header-container">
             <h1 class="module-title">Command Center</h1>
@@ -10,22 +9,17 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    # 1. POBIERANIE I AGREGACJA DANYCH
-    # Pobieramy Zlecenia Poboczne (jeśli są inne moduły np. Eventy, tu można je łatwo dorzucić)
     try:
         ws_zlecenia = sh.worksheet("Zlecenia Poboczne")
-        # Pobieramy wszystko pomijając pierwszy wiersz jeśli jest pusty (pandas sobie z tym poradzi)
         df_zlecenia = pd.DataFrame(ws_zlecenia.get_all_records())
     except Exception as e:
         st.warning(f"Brak danych lub arkusza 'Zlecenia Poboczne'. ({e})")
         df_zlecenia = pd.DataFrame()
 
-    # Filtrujemy tylko aktywne zlecenia do metryk i problemów
     aktywne_zlecenia = pd.DataFrame()
     if not df_zlecenia.empty and 'Status' in df_zlecenia.columns:
         aktywne_zlecenia = df_zlecenia[df_zlecenia['Status'] != 'ARCHIWUM']
 
-    # Obliczenia globalne
     total_active = len(aktywne_zlecenia)
     
     brak_cmr = len(aktywne_zlecenia[aktywne_zlecenia.get("CMR") == "NIE"]) if not aktywne_zlecenia.empty else 0
@@ -34,7 +28,6 @@ def render(sh):
     
     suma_problemow = brak_cmr + brak_pod + brak_fv
 
-    # 2. SEKCJA METRYK ZAAWANSOWANYCH (Top Dashboard)
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -84,7 +77,6 @@ def render(sh):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 3. SKRZYNKA PROBLEMÓW (ISSUE INBOX) & NOTYFIKACJE
     st.markdown("<h3 class='dash-title'>🚨 Skrzynka Problemów (Issue Inbox)</h3>", unsafe_allow_html=True)
     
     alerts_html = ""
@@ -94,7 +86,6 @@ def render(sh):
             nr = row.get("Nr Zlecenia", "Nieznany")
             przew = row.get("Przewoźnik", "Nieznany przewoźnik")
             
-            # Alert: Brak CMR (Krytyczny)
             if row.get("CMR") == "NIE":
                 alerts_html += f"""
                 <div class="alert-item alert-danger">
@@ -105,7 +96,6 @@ def render(sh):
                     </div>
                 </div>"""
                 
-            # Alert: Brak POD (Ostrzeżenie)
             if row.get("POD") == "NIE":
                 alerts_html += f"""
                 <div class="alert-item alert-warning">
@@ -116,7 +106,6 @@ def render(sh):
                     </div>
                 </div>"""
                 
-            # Alert: Brak Faktury (Neutralny/Złoty)
             if row.get("Faktura") == "NIE":
                 alerts_html += f"""
                 <div class="alert-item" style="border-left: 3px solid #C5A880; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
@@ -127,7 +116,6 @@ def render(sh):
                     </div>
                 </div>"""
 
-    # Jeśli nie ma żadnych alertów – wyświetlamy komunikat "Zen"
     if not alerts_html:
         alerts_html = """
         <div class="alert-item" style="border-left: 3px solid #77A385; background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.1);">
@@ -139,7 +127,6 @@ def render(sh):
         </div>
         """
     
-    # Zamknięcie alertów w przewijanym, designerskim kontenerze
     col_alerts, col_info = st.columns([2, 1])
     
     with col_alerts:
