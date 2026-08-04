@@ -399,6 +399,7 @@ def render(sh):
         _, df_ev = load_data(sh, "DB_Eventy")
         _, df_sub = load_data(sh, "DB_Subrenty")
         _, df_yt = load_data(sh, "DB_Yestech")
+        _, df_sloty = load_data(sh, "DB_Sloty") # Dodano ładowanie slotów
     except Exception as e:
         st.error(f"Krytyczny błąd pobierania danych: {e}")
         return
@@ -449,60 +450,128 @@ def render(sh):
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- 3. DYNAMICZNY MICRO-FRONTEND WIZUALNY ---
-    st.markdown('<h3 class="dash-title">Rzeczywisty Przepływ Operacyjny (Live)</h3>', unsafe_allow_html=True)
-    
-    # Generowanie HTML'a zasilonego prawdziwymi danymi ze SQM Sheets
-    html_flow = build_dynamic_flow_html(aktywne_ev, zamkniete_ev)
-    components.html(html_flow, height=360)
+    # --- 3. PODZIAŁ NA ZAKŁADKI (DASHBOARD VS RAPORTY 360) ---
+    tab_dashboard, tab_raporty = st.tabs(["🌍 Live Dashboard (Operacje)", "📊 Raporty 360° (Eventy & Przewoźnicy)"])
 
-    # --- 4. ISSUE INBOX ORAZ TABELA FAKTUR ---
-    col_inbox, col_fin = st.columns([35, 65], gap="large")
-
-    with col_inbox:
-        st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
-        st.markdown('<h3 class="dash-title">Skrzynka Problemów (Issue Inbox)</h3>', unsafe_allow_html=True)
+    with tab_dashboard:
+        st.markdown('<h3 class="dash-title">Rzeczywisty Przepływ Operacyjny (Live)</h3>', unsafe_allow_html=True)
         
-        if not alerty:
-            st.markdown("<div style='color: #10B981; padding: 20px 0; font-size: 13px; text-align: center;'>✅ Brak palących problemów operacyjnych w bazach danych.</div>", unsafe_allow_html=True)
-        else:
-            html_inbox = ""
-            for a in alerty:
-                k_boczna = "alert-danger" if a["typ"] == "krytyczny" else ("alert-warning" if a["typ"] == "ostrzezenie" else "alert-warning")
-                html_inbox += f"""
-                <div class="alert-item {k_boczna}" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
-                    <div style="display: flex; gap: 10px; align-items: flex-start;">
-                        <div style="font-size: 16px;">{a['ikona']}</div>
-                        <div>
-                            <strong style="color: #F8FAFC; display: block; font-size: 12px; margin-bottom: 2px;">{a['tytul']}</strong>
-                            <span style="color: #94A3B8; font-size: 11px; line-height: 1.3;">{a['opis']}</span>
+        # Generowanie HTML'a zasilonego prawdziwymi danymi ze SQM Sheets
+        html_flow = build_dynamic_flow_html(aktywne_ev, zamkniete_ev)
+        components.html(html_flow, height=360)
+
+        # Skrzynka Problemów Oraz Tabela Faktur
+        col_inbox, col_fin = st.columns([35, 65], gap="large")
+
+        with col_inbox:
+            st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
+            st.markdown('<h3 class="dash-title">Skrzynka Problemów (Issue Inbox)</h3>', unsafe_allow_html=True)
+            
+            if not alerty:
+                st.markdown("<div style='color: #10B981; padding: 20px 0; font-size: 13px; text-align: center;'>✅ Brak palących problemów operacyjnych w bazach danych.</div>", unsafe_allow_html=True)
+            else:
+                html_inbox = ""
+                for a in alerty:
+                    k_boczna = "alert-danger" if a["typ"] == "krytyczny" else ("alert-warning" if a["typ"] == "ostrzezenie" else "alert-warning")
+                    html_inbox += f"""
+                    <div class="alert-item {k_boczna}" style="background: rgba(0,0,0,0.2); border-radius: 6px; padding: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; gap: 10px; align-items: flex-start;">
+                            <div style="font-size: 16px;">{a['ikona']}</div>
+                            <div>
+                                <strong style="color: #F8FAFC; display: block; font-size: 12px; margin-bottom: 2px;">{a['tytul']}</strong>
+                                <span style="color: #94A3B8; font-size: 11px; line-height: 1.3;">{a['opis']}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                """
-            st.markdown(html_inbox, unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+                    """
+                st.markdown(html_inbox, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    with col_fin:
-        st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
-        st.markdown(f'<h3 class="dash-title" style="color: #ef4444;">Faktury oczekujące na opłacenie (Zobowiązania: {kwota_suma:,.2f} €)</h3>', unsafe_allow_html=True)
-        
-        if not df_finanse.empty:
-            def color_status(val):
-                if "Przeterminowana" in str(val): return 'color: #ef4444; font-weight: bold;'
-                if "W terminie" in str(val): return 'color: #10B981;'
-                return 'color: #94A3B8;'
+        with col_fin:
+            st.markdown('<div class="dash-card" style="height: 100%;">', unsafe_allow_html=True)
+            st.markdown(f'<h3 class="dash-title" style="color: #ef4444;">Faktury oczekujące na opłacenie (Zobowiązania: {kwota_suma:,.2f} €)</h3>', unsafe_allow_html=True)
+            
+            if not df_finanse.empty:
+                def color_status(val):
+                    if "Przeterminowana" in str(val): return 'color: #ef4444; font-weight: bold;'
+                    if "W terminie" in str(val): return 'color: #10B981;'
+                    return 'color: #94A3B8;'
 
-            df_widok = df_finanse.drop(columns=["Dni_Opoznienia"])
-            styled_df = df_widok.style.map(color_status, subset=['Status']).format({'Kwota (€)': "{:.2f} €"})
-            
-            st.dataframe(
-                styled_df, 
-                use_container_width=True, 
-                hide_index=True,
-                height=260
-            )
-        else:
-            st.info("✅ Brak nieopłaconych faktur zewnętrznych w systemie (Subrenty, Yestech, Eventy).")
-            
-        st.markdown('</div>', unsafe_allow_html=True)
+                df_widok = df_finanse.drop(columns=["Dni_Opoznienia"])
+                styled_df = df_widok.style.map(color_status, subset=['Status']).format({'Kwota (€)': "{:.2f} €"})
+                
+                st.dataframe(
+                    styled_df, 
+                    use_container_width=True, 
+                    hide_index=True,
+                    height=260
+                )
+            else:
+                st.info("✅ Brak nieopłaconych faktur zewnętrznych w systemie.")
+                
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    with tab_raporty:
+        st.markdown('<h3 class="dash-title">Zestawienia Analityczne</h3>', unsafe_allow_html=True)
+        tryb_raportu = st.radio("Wybierz perspektywę:", ["🚚 Według Przewoźnika", "🎪 Według Eventu / Targów"], horizontal=True)
+        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
+
+        if tryb_raportu == "🚚 Według Przewoźnika":
+            if df_ev.empty:
+                st.warning("Brak danych o eventach w bazie.")
+            else:
+                lista_przewoznikow = sorted([p for p in df_ev["Przewoznik"].unique() if str(p).strip() != ""])
+                wybrany_przew = st.selectbox("Wybierz przewoźnika:", ["-- Wybierz --"] + lista_przewoznikow)
+                
+                if wybrany_przew != "-- Wybierz --":
+                    # Filtrujemy wszystkie zlecenia (aktywne i archiwalne) dla wybranego przewoźnika
+                    df_przew_ev = df_ev[df_ev["Przewoznik"] == wybrany_przew].copy()
+                    
+                    st.markdown(f"#### 📦 Historia i Zlecenia: {wybrany_przew}")
+                    df_przew_ev_widok = df_przew_ev[['Nazwa_Targow', 'Data_Zlecenia_Tr', 'Typ_Pojazdu', 'Faza_Procesu', 'ID_Zlecenia']]
+                    st.dataframe(df_przew_ev_widok, use_container_width=True, hide_index=True)
+
+                    st.markdown("#### ⏱️ Przypisane Sloty Zleceń")
+                    id_zlecen_przew = df_przew_ev["ID_Zlecenia"].tolist()
+                    sloty_przew = df_sloty[df_sloty["ID_Zlecenia"].isin(id_zlecen_przew)] if not df_sloty.empty else pd.DataFrame()
+                    if not sloty_przew.empty:
+                        st.dataframe(sloty_przew[['ID_Zlecenia', 'Typ_Operacji', 'Data_Slota', 'Godzina_Od', 'Godzina_Do', 'Brama_Rampa']], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Brak przypisanych slotów w harmonogramie dla tego przewoźnika.")
+
+                    st.markdown("#### 🚨 Braki i Zobowiązania (POD / Faktury)")
+                    braki_przew = df_przew_ev[(df_przew_ev["CMR_Podpisane_POD"] == "NIE") | (df_przew_ev["Faktura_Oplacona"] == "NIE")]
+                    if not braki_przew.empty:
+                        st.dataframe(braki_przew[['Nazwa_Targow', 'CMR_Podpisane_POD', 'Faktura_Oplacona', 'Koszt_Transportu_EUR', 'Data_Platnosci']], use_container_width=True, hide_index=True)
+                    else:
+                        st.success("Wszystkie dokumenty POD i płatności są uregulowane dla tego przewoźnika!")
+
+        elif tryb_raportu == "🎪 Według Eventu / Targów":
+            if df_ev.empty:
+                st.warning("Brak danych o eventach w bazie.")
+            else:
+                lista_targow = sorted([t for t in df_ev["Nazwa_Targow"].unique() if str(t).strip() != ""])
+                wybrane_targi = st.selectbox("Wybierz Event:", ["-- Wybierz --"] + lista_targow)
+                
+                if wybrane_targi != "-- Wybierz --":
+                    df_targi = df_ev[df_ev["Nazwa_Targow"] == wybrane_targi].copy()
+                    
+                    st.markdown(f"#### 🚛 Flota i Przewoźnicy obsługujący: {wybrane_targi}")
+                    st.dataframe(df_targi[['Przewoznik', 'Typ_Pojazdu', 'Data_Zlecenia_Tr', 'Faza_Procesu', 'ID_Zlecenia']], use_container_width=True, hide_index=True)
+
+                    st.markdown("#### ⏱️ Zarezerwowane Sloty dla tego Eventu")
+                    id_zlecen_targow = df_targi["ID_Zlecenia"].tolist()
+                    sloty_targow = df_sloty[df_sloty["ID_Zlecenia"].isin(id_zlecen_targow)] if not df_sloty.empty else pd.DataFrame()
+                    if not sloty_targow.empty:
+                        # Łączenie z tabelą eventów, aby dopasować przewoźnika do slotu bazując na ID_Zlecenia
+                        sloty_targow_merged = pd.merge(sloty_targow, df_targi[['ID_Zlecenia', 'Przewoznik']], on='ID_Zlecenia', how='left')
+                        st.dataframe(sloty_targow_merged[['Przewoznik', 'Typ_Operacji', 'Data_Slota', 'Godzina_Od', 'Godzina_Do', 'Brama_Rampa']], use_container_width=True, hide_index=True)
+                    else:
+                        st.info("Brak zdefiniowanych slotów dla wybranego eventu.")
+
+                    st.markdown("#### 🚨 Status Rozliczeń Eventu (POD / Faktury)")
+                    braki_targi = df_targi[(df_targi["CMR_Podpisane_POD"] == "NIE") | (df_targi["Faktura_Oplacona"] == "NIE")]
+                    if not braki_targi.empty:
+                        st.dataframe(braki_targi[['Przewoznik', 'CMR_Podpisane_POD', 'Faktura_Oplacona', 'Koszt_Transportu_EUR']], use_container_width=True, hide_index=True)
+                    else:
+                        st.success("Kompletna dokumentacja POD i rozliczenia dla tego eventu!")
