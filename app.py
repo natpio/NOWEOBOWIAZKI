@@ -21,17 +21,20 @@ def local_css(file_name):
         with open(file_name, "r", encoding="utf-8") as f:
             css_content = f.read()
         
-        # Konwersja tła głównego (fuji_bg.png) na Base64
         if os.path.exists("fuji_bg.png"):
             with open("fuji_bg.png", "rb") as img_f:
                 b64_fuji = base64.b64encode(img_f.read()).decode()
             css_content = css_content.replace("url('fuji_bg.png')", f"url('data:image/png;base64,{b64_fuji}')")
             
-        # Konwersja tła paska bocznego (lantern_bg.png) na Base64
         if os.path.exists("lantern_bg.png"):
             with open("lantern_bg.png", "rb") as img_l:
                 b64_lantern = base64.b64encode(img_l.read()).decode()
             css_content = css_content.replace("url('lantern_bg.png')", f"url('data:image/png;base64,{b64_lantern}')")
+
+        if os.path.exists("washi_bg.jpg"):
+            with open("washi_bg.jpg", "rb") as img_w:
+                b64_washi = base64.b64encode(img_w.read()).decode()
+            css_content = css_content.replace("url('washi_bg.jpg')", f"url('data:image/jpeg;base64,{b64_washi}')")
             
         st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
@@ -43,23 +46,7 @@ def init_connection():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
-    
-    # Pobieramy identyfikator lub nazwę z secrets (domyślnie NOWY PODZIAŁ OBOWIĄZKÓW)
-    spreadsheet_identifier = st.secrets.get("spreadsheet_id", "NOWY PODZIAŁ OBOWIĄZKÓW")
-    
-    try:
-        if len(spreadsheet_identifier) > 20 and " " not in spreadsheet_identifier:
-            return client.open_by_key(spreadsheet_identifier)
-        else:
-            return client.open(spreadsheet_identifier)
-    except Exception as e:
-        try:
-            return client.open_by_key(spreadsheet_identifier)
-        except:
-            try:
-                return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
-            except Exception as final_e:
-                raise final_e
+    return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
 # 4. EKRAN LOGOWANIA (Styl Zen/Japandi)
 def login_screen():
