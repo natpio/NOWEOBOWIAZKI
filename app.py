@@ -12,7 +12,7 @@ import mod_zlecenia_poboczne
 import mod_subrenty
 import mod_yestech
 import mod_finanse
-import mod_bazy_danych
+import mod_bazy_danych  # NOWY IMPORT
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
@@ -105,10 +105,11 @@ def main():
                 "EVENTY / TARGI", 
                 "ZLECENIA POBOCZNE",
                 "SUBRENTY", 
-                "YESTECH EXPORT", 
+                "YESTECH EXPORT",
+                "BAZY DANYCH / SŁOWNIKI", # ZAKTUALIZOWANA POZYCJA MENU
                 "FINANSE I RAPORTY"
             ],
-            icons=["cpu", "truck", "briefcase", "box", "globe", "graph-up"],
+            icons=["cpu", "truck", "briefcase", "box", "globe", "database", "graph-up"], # ZAKTUALIZOWANE IKONY
             default_index=1,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -157,6 +158,8 @@ def main():
         mod_subrenty.render(sh)
     elif wybrany_modul == "YESTECH EXPORT":
         mod_yestech.render(sh)
+    elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI": # ZAKTUALIZOWANY ROUTING
+        mod_bazy_danych.render(sh)
     elif wybrany_modul == "FINANSE I RAPORTY":
         mod_finanse.render(sh)
 
