@@ -8,9 +8,8 @@ import os
 import hashlib
 import difflib
 
-# Importujemy scentralizowany silnik bazy danych
+# Importujemy scentralizowany silnik bazy danych (Bez pricing.py)
 import db
-from pricing import get_all_carrier_rates, TRANSIT_DAYS
 
 # --- GLOBALNY FILTR ZNAKÓW DLA FPDF ---
 def pdf_sanitize(text):
@@ -197,7 +196,7 @@ def generate_pro_pdf(dane):
     return bytes(pdf.output(dest='S').encode('latin1'))
 
 # =======================================================
-# GŁÓWNA FUNKCJA RENDERUJĄCA WIDOK (Zastępuje st.set_page_config)
+# GŁÓWNA FUNKCJA RENDERUJĄCA WIDOK 
 # =======================================================
 def render(sh):
     st.markdown('''
@@ -211,7 +210,7 @@ def render(sh):
     tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    with st.spinner("Ładowanie telemetrii..."):
+    with st.spinner("Ładowanie telemetrii bazy danych..."):
         df_projekty = db.fetch_data("Projekty")
         df_miejsca = db.fetch_data("Miejsca")
         df_przewoznicy = db.fetch_data("Zleceniobiorcy")
@@ -231,7 +230,7 @@ def render(sh):
     val_data_roz = datetime.now().date()
     val_data_emp_in = datetime.now().date()
     val_data_emp_out = datetime.now().date()
-    val_zrodlo = "Przewoźnik stały (Cennik)"
+    val_zrodlo = "Przewoźnik stały (Baza)"
     val_nazwa_przewoznika = "Wybierz..."
     val_detale_przewoznika = ""
     val_stawka_final = 0.0
@@ -244,7 +243,6 @@ def render(sh):
     val_wartosc_towaru = 100000
     val_instrukcje = domyslny_tekst
     val_podpis = "PD"
-    val_miasto_docelowe = "Wybierz..."
     val_miejsca_rozladunku_raw = []
 
     # Filtrowanie zleceń Cargo
@@ -315,16 +313,16 @@ def render(sh):
                 if not r_p.empty:
                     r = r_p.iloc[0]
                     val_detale_przewoznika = f"{str(r.get('Pełna Nazwa', ''))}\n{str(r.get('Ulica i numer', ''))}\n{str(r.get('Kod pocztowy i Miasto', ''))}, {str(r.get('Kraj', 'Polska'))}\nNIP: {str(r.get('NIP', ''))}".strip()
-                    val_zrodlo = "Przewoźnik stały (Cennik)"
+                    val_zrodlo = "Przewoźnik stały (Baza)"
                 else:
-                    val_zrodlo = "Przewoźnik z giełdy (Stawka własna)"
-                    val_detale_przewoznika = "Zweryfikuj dane adresowe giełdy..."
+                    val_zrodlo = "Przewoźnik z giełdy (Jednorazowy)"
+                    val_detale_przewoznika = "Zweryfikuj dane adresowe z giełdy..."
         else:
             st.warning("Baza zleceń jest pusta - brak danych do edycji.")
             st.stop()
 
     # --- SŁOWNIK MIEJSC: PRZEGLĄDARKA ---
-    with st.expander("🔍 Przeglądaj i wyszukaj miejsca w bazie"):
+    with st.expander("🔍 Przeglądaj i wyszukaj miejsca z Bazy Lokalizacji"):
         wyszukiwana_fraza = st.text_input("Wpisz szukaną frazę (nazwa, miasto, ulica, kod):", placeholder="np. Messe Berlin...")
         if not df_miejsca.empty:
             if wyszukiwana_fraza:
@@ -334,7 +332,7 @@ def render(sh):
                 st.dataframe(df_miejsca, use_container_width=True, hide_index=True)
 
     # --- SZYBKIE DODAWANIE NOWEGO MIEJSCA ---
-    with st.expander("➕ Brak miejsca na liście? Dodaj nową lokalizację na stałe"):
+    with st.expander("➕ Brak miejsca na liście? Dodaj nową lokalizację do Słownika"):
         with st.form("form_nowe_miejsce", clear_on_submit=True):
             nowa_nazwa_lista = st.text_input("Nazwa skrócona (do listy wyboru):*", placeholder="np. BERLIN, DE - Messe Berlin")
             nowa_firma = st.text_input("Pełna nazwa / Firma:")
@@ -360,18 +358,8 @@ def render(sh):
     typ_zlecenia = st.radio("Tryb operacji:", ["Tylko dostawa", "Pełny event"], index=tryb_idx, horizontal=True)
 
     with st.container(border=True):
-        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>1. Kierunek i Harmonogram</p>", unsafe_allow_html=True)
-        lista_miast = sorted(list(TRANSIT_DAYS.keys()))
-        
-        def_miasto_idx = 0
-        if tryb_pracy == "Edycja Istniejącego Zlecenia":
-            for m in lista_miast:
-                if m.lower() in val_z_sel.lower() or any(m.lower() in str(drop).lower() for drop in val_miejsca_rozladunku_raw):
-                    def_miasto_idx = lista_miast.index(m) + 1
-                    break
-                    
-        miasto_docelowe = st.selectbox("Miasto docelowe:", ["Wybierz..."] + lista_miast, index=def_miasto_idx)
-        waga = st.number_input("Waga (kg):", min_value=100, step=100, value=val_waga)
+        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>1. Harmonogram Zlecenia</p>", unsafe_allow_html=True)
+        waga = st.number_input("Waga ładunku (kg):", min_value=100, step=100, value=val_waga)
         
         d1, d2 = st.columns(2)
         data_zal = d1.date_input("Data załadunku (PL):", val_data_zal)
@@ -379,24 +367,22 @@ def render(sh):
         
         if typ_zlecenia == "Pełny event":
             h1, h2 = st.columns(2)
-            data_emp_in = h1.date_input("Odbiór pustych:", val_data_emp_in)
-            data_emp_out = h2.date_input("Powrót / Załadunek:", val_data_emp_out)
+            data_emp_in = h1.date_input("Odbiór pustych (Empties):", val_data_emp_in)
+            data_emp_out = h2.date_input("Data załadunku powrotnego:", val_data_emp_out)
         else:
             data_emp_in, data_emp_out = "", ""
 
-    slownik_stawek = get_all_carrier_rates(miasto_docelowe, waga, data_zal, data_roz, data_emp_out, typ_zlecenia)
-
     with st.container(border=True):
-        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>2. Wybór Przewoźnika i Koszty</p>", unsafe_allow_html=True)
-        zrodlo_idx = ["Przewoźnik stały (Cennik)", "Przewoźnik z giełdy (Stawka własna)"].index(val_zrodlo)
-        zrodlo = st.radio("Typ przewoźnika:", ["Przewoźnik stały (Cennik)", "Przewoźnik z giełdy (Stawka własna)"], index=zrodlo_idx, horizontal=True)
+        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>2. Wybór Przewoźnika i Stawka</p>", unsafe_allow_html=True)
+        zrodlo_idx = ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"].index(val_zrodlo) if val_zrodlo in ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"] else 0
+        zrodlo = st.radio("Sposób wyboru podwykonawcy:", ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"], index=zrodlo_idx, horizontal=True)
         
         detale_przewoznika = ""
         nazwa_przewoznika = ""
 
-        if zrodlo == "Przewoźnik stały (Cennik)":
+        if zrodlo == "Przewoźnik stały (Baza)":
             f1, f2, f3, f4 = st.columns([2, 1, 1, 1])
-            lista_cennikowa = list(slownik_stawek.keys()) if isinstance(slownik_stawek, dict) and slownik_stawek else []
+            lista_cennikowa = df_przewoznicy['Skrócona Nazwa'].dropna().tolist() if not df_przewoznicy.empty else []
             if tryb_pracy == "Edycja Istniejącego Zlecenia" and val_nazwa_przewoznika not in lista_cennikowa:
                 lista_cennikowa.append(val_nazwa_przewoznika)
                 
@@ -404,48 +390,40 @@ def render(sh):
             if val_nazwa_przewoznika in lista_cennikowa:
                 def_p_idx = lista_cennikowa.index(val_nazwa_przewoznika) + 1
                 
-            nazwa_przewoznika = f1.selectbox("Wybierz partnera:", ["Wybierz..."] + lista_cennikowa, index=def_p_idx)
+            nazwa_przewoznika = f1.selectbox("Wybierz partnera ze słownika:", ["Wybierz..."] + lista_cennikowa, index=def_p_idx)
             
             if nazwa_przewoznika != "Wybierz...":
                 if not df_przewoznicy.empty and 'Skrócona Nazwa' in df_przewoznicy.columns:
-                    lista_nazw_w_bazie = df_przewoznicy['Skrócona Nazwa'].dropna().astype(str).tolist()
-                    najlepsze_dopasowania = difflib.get_close_matches(nazwa_przewoznika, lista_nazw_w_bazie, n=1, cutoff=0.4)
-                    
-                    if najlepsze_dopasowania:
-                        dopasowana_nazwa = najlepsze_dopasowania[0]
-                        row_p = df_przewoznicy[df_przewoznicy['Skrócona Nazwa'] == dopasowana_nazwa]
+                    row_p = df_przewoznicy[df_przewoznicy['Skrócona Nazwa'] == nazwa_przewoznika]
+                    if not row_p.empty:
                         r = row_p.iloc[0]
-                        detale_przewoznika = f"{str(r.get('Pełna Nazwa', dopasowana_nazwa))}\n{str(r.get('Ulica i numer', ''))}\n{str(r.get('Kod pocztowy i Miasto', ''))}, {str(r.get('Kraj', 'Polska'))}\nNIP: {str(r.get('NIP', ''))}".strip()
-                        st.info(f"🔗 Połączono: **{dopasowana_nazwa}**")
+                        detale_przewoznika = f"{str(r.get('Pełna Nazwa', nazwa_przewoznika))}\n{str(r.get('Ulica i numer', ''))}\n{str(r.get('Kod pocztowy i Miasto', ''))}, {str(r.get('Kraj', 'Polska'))}\nNIP: {str(r.get('NIP', ''))}".strip()
                     else:
                         detale_przewoznika = nazwa_przewoznika
-                else: detale_przewoznika = nazwa_przewoznika
+                else: 
+                    detale_przewoznika = nazwa_przewoznika
 
-            dane_wybranego = slownik_stawek.get(nazwa_przewoznika, {"cost": 0.0, "postoj": 0.0}) if isinstance(slownik_stawek, dict) else {}
-            
-            init_cost = val_stawka_final if tryb_pracy == "Edycja Istniejącego Zlecenia" else float(dane_wybranego.get("cost", 0.0))
-            stawka_final = f2.number_input("Cena Total:", value=float(init_cost))
+            stawka_final = f2.number_input("Stawka Total:", value=float(val_stawka_final))
             
             currency_idx = ["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0
             waluta = f3.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
             
-            init_postoj = val_postoj if tryb_pracy == "Edycja Istniejącego Zlecenia" else float(dane_wybranego.get("postoj", 0.0))
-            postoj = f4.number_input("Postój:", value=float(init_postoj)) if typ_zlecenia == "Pełny event" else 0.0
+            postoj = f4.number_input("Postój:", value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
                 
         else:
             nazwa_przewoznika = st.text_input("Nazwa firmy z giełdy:", value=val_nazwa_przewoznika)
-            detale_przewoznika = st.text_area("Pełne dane (Adres, NIP):", value=val_detale_przewoznika)
+            detale_przewoznika = st.text_area("Pełne dane (Adres, NIP do zlecenia):", value=val_detale_przewoznika)
             f1, f2, f3 = st.columns(3)
-            stawka_final = f1.number_input("Stawka netto:", min_value=0.0, value=val_stawka_final)
+            stawka_final = f1.number_input("Stawka netto:", min_value=0.0, value=float(val_stawka_final))
             currency_idx = ["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0
             waluta = f2.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
-            postoj = f3.number_input("Postój:", min_value=0.0, value=val_postoj) if typ_zlecenia == "Pełny event" else 0.0
+            postoj = f3.number_input("Postój:", min_value=0.0, value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
 
     with st.container(border=True):
         st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>3. Logistyka Miejsc</p>", unsafe_allow_html=True)
         
         def_proj_idx = lista_eventow.index(val_projekt) if val_projekt in lista_eventow else 0
-        projekt = st.selectbox("Przypisz do Projektu:", lista_eventow, index=def_proj_idx)
+        projekt = st.selectbox("Przypisz do Projektu (Opcjonalnie):", lista_eventow, index=def_proj_idx)
         
         l1, l2 = st.columns(2)
         with l1:
@@ -456,13 +434,13 @@ def render(sh):
                 idx_z = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
                 init_z_man = val_z_sel
                 
-            z_sel = st.selectbox("Miejsce startu:", opcje_lokalizacji, index=idx_z)
+            z_sel = st.selectbox("Miejsce startu (Załadunek):", opcje_lokalizacji, index=idx_z)
             z_man = st.text_input("Adres startu (ręcznie):", value=init_z_man) if z_sel == "INNE (wpisz ręcznie)" else ""
             
         miejsca_rozladunku = []
         with l2:
             if typ_zlecenia == "Tylko dostawa":
-                st.markdown("🚚 **Dostawa wieloetapowa**")
+                st.markdown("🚚 **Dostawa wieloetapowa (Drop)**")
                 init_len = len(val_miejsca_rozladunku_raw) if len(val_miejsca_rozladunku_raw) > 0 else 1
                 liczba_punktow = st.number_input("Liczba miejsc rozładunku:", min_value=1, max_value=10, value=int(init_len), step=1)
                 
@@ -475,8 +453,8 @@ def render(sh):
                         idx_r = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
                         init_r_man = def_r_item if def_r_item != "Wybierz..." else ""
                         
-                    r_s = st.selectbox(f"Miejsce celu {i+1}:", opcje_lokalizacji, index=idx_r, key=f"r_sel_{i}")
-                    r_m = st.text_input(f"Adres celu {i+1} (ręcznie):", value=init_r_man, key=f"r_man_{i}") if r_s == "INNE (wpisz ręcznie)" else ""
+                    r_s = st.selectbox(f"Cel dostawy DROP {i+1}:", opcje_lokalizacji, index=idx_r, key=f"r_sel_{i}")
+                    r_m = st.text_input(f"Adres DROP {i+1} (ręcznie):", value=init_r_man, key=f"r_man_{i}") if r_s == "INNE (wpisz ręcznie)" else ""
                     miejsca_rozladunku.append((r_s, r_m))
             else:
                 def_r_item = val_miejsca_rozladunku_raw[0] if len(val_miejsca_rozladunku_raw) > 0 else "Wybierz..."
@@ -487,29 +465,29 @@ def render(sh):
                     idx_r = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
                     init_r_man = def_r_item if def_r_item != "Wybierz..." else ""
                     
-                r_s = st.selectbox("Miejsce celu:", opcje_lokalizacji, index=idx_r)
+                r_s = st.selectbox("Miejsce celu (Targi):", opcje_lokalizacji, index=idx_r)
                 r_m = st.text_input("Adres celu (ręcznie):", value=init_r_man) if r_s == "INNE (wpisz ręcznie)" else ""
                 miejsca_rozladunku.append((r_s, r_m))
 
     with st.container(border=True):
-        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>4. Realizacja i Uwagi</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>4. Realizacja i Dodatkowe Uwagi</p>", unsafe_allow_html=True)
         d_auto, d_wart = st.columns(2)
         c_auto = d_auto.text_input("Auto / Kierowca:", value=val_c_auto, placeholder="np. PO 12345 / Jan Kowalski")
-        wartosc_towaru = d_wart.number_input("Wartość towaru (PLN):", min_value=0, value=val_wartosc_towaru)
+        wartosc_towaru = d_wart.number_input("Wymagana Gwarancja OCP / Wartość towaru (PLN):", min_value=0, value=val_wartosc_towaru)
         
         u1, u2 = st.columns([3, 1])
-        instrukcje = u1.text_area("Instrukcje dodatkowe:", value=val_instrukcje, height=80)
+        instrukcje = u1.text_area("Instrukcje dodatkowe na Zlecenie:", value=val_instrukcje, height=80)
         
         podpis_idx = ["PD", "PK"].index(val_podpis) if val_podpis in ["PD", "PK"] else 0
-        podpis = u2.radio("Podpis na dokumencie:", ["PD", "PK"], index=podpis_idx, horizontal=True)
+        podpis = u2.radio("Podpis Koordynatora:", ["PD", "PK"], index=podpis_idx, horizontal=True)
 
     btn_label = "⚡ ZAPISZ ZMIANY I REGENERUJ PDF" if tryb_pracy == "Edycja Istniejącego Zlecenia" else "⚡ GENERUJ I ZAPISZ ZLECENIE PRO"
 
     if st.button(btn_label, type="primary", use_container_width=True):
         if not nazwa_przewoznika or nazwa_przewoznika == "Wybierz...":
-            st.error("Podaj nazwę przewoźnika!")
+            st.error("Wybierz lub wpisz firmę przewozową!")
         else:
-            with st.spinner("Przetwarzanie dokumentów i bazy..."):
+            with st.spinner("Generowanie pliku PDF i aktualizacja chmury..."):
                 final_zal_db = z_man if z_sel == "INNE (wpisz ręcznie)" else z_sel
                 
                 def build_full_address(place_name, manual_addr, df):
@@ -574,7 +552,7 @@ def render(sh):
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
                         st.success(f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!")
                     else:
-                        st.success(f"✅ Zlecenie {nr_zlecenia} zapisane z pełnymi uwagami!")
+                        st.success(f"✅ Zlecenie {nr_zlecenia} zapisane poprawnie!")
                         
                     st.download_button("📥 POBIERZ DOKUMENT PDF", data=pdf_bytes, file_name=f"Order_{nr_zlecenia.replace('/', '_')}.pdf", mime="application/pdf", use_container_width=True)
                     st.cache_data.clear()
