@@ -239,12 +239,18 @@ def render(sh):
                     elif "sol" in typ_pojazdu_lower: plik_img = "solowka.png"
                     else: plik_img = "default.png"
                     
-                    if os.path.exists(plik_img):
+                   if os.path.exists(plik_img):
                         with open(plik_img, "rb") as f:
                             b64_img = base64.b64encode(f.read()).decode()
                         st.markdown(f"""
-                        <div style="width: 100%; text-align: center; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; margin: 15px 0;">
-                            <img src="data:image/png;base64,{b64_img}" style="max-width: 100%; max-height: 180px; object-fit: contain;">
+                        <div style="width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin: 15px 0; border: 1px solid rgba(197, 168, 128, 0.2);">
+                            <img src="data:image/png;base64,{b64_img}" style="width: 100%; height: auto; display: block; object-fit: cover;">
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown(f"""
+                        <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
+                            <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
                         </div>
                         """, unsafe_allow_html=True)
                     else:
