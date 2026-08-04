@@ -3,7 +3,6 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from streamlit_option_menu import option_menu
 import os
-import base64
 
 # Import modułów aplikacji
 import mod_command_center
@@ -15,25 +14,11 @@ import mod_finanse
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
 
-# 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA
+# 2. ŁADOWANIE LOKALNEGO CSS
 def local_css(file_name):
     if os.path.exists(file_name):
-        with open(file_name, "r", encoding="utf-8") as f:
-            css_content = f.read()
-        
-        # Konwersja tła głównego (fuji_bg.png) na Base64
-        if os.path.exists("fuji_bg.png"):
-            with open("fuji_bg.png", "rb") as img_f:
-                b64_fuji = base64.b64encode(img_f.read()).decode()
-            css_content = css_content.replace("url('fuji_bg.png')", f"url('data:image/png;base64,{b64_fuji}')")
-            
-        # Konwersja tła paska bocznego (lantern_bg.png) na Base64
-        if os.path.exists("lantern_bg.png"):
-            with open("lantern_bg.png", "rb") as img_l:
-                b64_lantern = base64.b64encode(img_l.read()).decode()
-            css_content = css_content.replace("url('lantern_bg.png')", f"url('data:image/png;base64,{b64_lantern}')")
-            
-        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+        with open(file_name) as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 local_css("style.css")
 
@@ -43,7 +28,7 @@ def init_connection():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
-    return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
+    return client.open("SQM_Logistyka_DB")
 
 # 4. EKRAN LOGOWANIA (Styl Zen/Japandi)
 def login_screen():
@@ -85,12 +70,13 @@ def main():
 
     # --- MENU BOCZNE (SIDEBAR) ---
     with st.sidebar:
-        # Nowe logo z japońskim podtytułem
         st.markdown('''
-            <div class="sidebar-logo-text">
-                <span style="font-size: 24px; margin-right: 5px;">✺</span> SQM <span>HUB</span>
+            <div class="sidebar-logo-container">
+                <div class="sidebar-logo-text">
+                    <span style="font-size: 24px; color: #C5A880; margin-right: 2px;">✺</span> SQM <span>HUB</span>
+                </div>
+                <div class="sidebar-logo-sub">ヤスミ・ハブ ✦ ロジスティクス</div>
             </div>
-            <div class="sidebar-logo-sub">ヤスミ・ハブ</div>
         ''', unsafe_allow_html=True)
         
         wybrany_modul = option_menu(
@@ -107,17 +93,39 @@ def main():
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#C5A880", "font-size": "14px"},
-                "nav-link": {"color": "#8C8477", "font-size": "11px", "font-weight": "600", "letter-spacing": "1px", "text-align": "left", "margin":"4px 0", "border-radius": "4px"},
-                "nav-link-selected": {"background-color": "rgba(197,168,128,0.05)", "color": "#C5A880", "border-left": "2px solid #C5A880"},
+                "nav-link": {
+                    "color": "#8C8477", 
+                    "font-size": "11px", 
+                    "font-weight": "600", 
+                    "letter-spacing": "1px", 
+                    "text-align": "left", 
+                    "margin": "6px 0", 
+                    "border-radius": "6px",
+                    "transition": "all 0.2s ease"
+                },
+                "nav-link-selected": {
+                    "background": "linear-gradient(135deg, rgba(197, 168, 128, 0.25) 0%, rgba(197, 168, 128, 0.08) 100%)", 
+                    "color": "#E2DCD3", 
+                    "border-left": "3px solid #C5A880",
+                    "box-shadow": "0 4px 15px rgba(0,0,0,0.2)"
+                },
             }
         )
         
-        st.markdown("<div style='margin-top: 50px;'></div>", unsafe_allow_html=True)
-        st.caption("👤 Piotr Dukiel | Logistics Mgr<br><span style='font-size: 9px; color: #5C554D;'>ロジスティクスマネージャー</span>", unsafe_allow_html=True)
+        st.markdown('''
+            <div class="sidebar-profile-card">
+                <div style="font-size: 11px; color: #E2DCD3; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <span>👤</span> Piotr Dukiel
+                </div>
+                <div style="font-size: 10px; color: #C5A880; letter-spacing: 0.5px; margin-bottom: 4px;">Logistics Manager</div>
+                <div style="font-size: 9px; color: #5C554D; letter-spacing: 1px;">ロジスティクスマネージャー</div>
+            </div>
+        ''', unsafe_allow_html=True)
         
-        if st.button("🚪 WYLOGUJ\nログアウト", use_container_width=True):
+        if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True, type="secondary"):
             st.session_state["zalogowany"] = False
             st.rerun()
+
 
     # --- ROUTING MODUŁÓW ---
     if wybrany_modul == "COMMAND CENTER":
