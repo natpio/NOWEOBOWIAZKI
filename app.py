@@ -8,6 +8,7 @@ import base64
 # Import modułów aplikacji
 import mod_command_center
 import mod_eventy
+import mod_zlecenia_poboczne  # NOWY MODUŁ
 import mod_subrenty
 import mod_yestech
 import mod_finanse
@@ -101,11 +102,12 @@ def main():
             options=[
                 "COMMAND CENTER", 
                 "EVENTY / TARGI", 
+                "ZLECENIA POBOCZNE",
                 "SUBRENTY", 
                 "YESTECH EXPORT", 
                 "FINANSE I RAPORTY"
             ],
-            icons=["cpu", "truck", "box", "globe", "graph-up"],
+            icons=["cpu", "truck", "briefcase", "box", "globe", "graph-up"],
             default_index=1,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -148,6 +150,8 @@ def main():
         mod_command_center.render(sh)
     elif wybrany_modul == "EVENTY / TARGI":
         mod_eventy.render(sh)
+    elif wybrany_modul == "ZLECENIA POBOCZNE":
+        mod_zlecenia_poboczne.render(sh)
     elif wybrany_modul == "SUBRENTY":
         mod_subrenty.render(sh)
     elif wybrany_modul == "YESTECH EXPORT":
