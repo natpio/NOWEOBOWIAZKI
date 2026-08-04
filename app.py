@@ -12,7 +12,8 @@ import mod_zlecenia_poboczne
 import mod_subrenty
 import mod_yestech
 import mod_finanse
-import mod_bazy_danych  # NOWY IMPORT
+import mod_bazy_danych
+import mod_generator_pdf  # NOWY IMPORT
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
@@ -101,16 +102,17 @@ def main():
         wybrany_modul = option_menu(
             menu_title=None,
             options=[
-                "COMMAND CENTER", 
+                "COMMAND CENTER",
+                "GENERATOR ZLECEŃ PRO", # ZAKTUALIZOWANA POZYCJA
                 "EVENTY / TARGI", 
                 "ZLECENIA POBOCZNE",
                 "SUBRENTY", 
                 "YESTECH EXPORT",
-                "BAZY DANYCH / SŁOWNIKI", # ZAKTUALIZOWANA POZYCJA MENU
+                "BAZY DANYCH / SŁOWNIKI", 
                 "FINANSE I RAPORTY"
             ],
-            icons=["cpu", "truck", "briefcase", "box", "globe", "database", "graph-up"], # ZAKTUALIZOWANE IKONY
-            default_index=1,
+            icons=["cpu", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"], # IKONA PDF
+            default_index=0,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#C5A880", "font-size": "14px"},
@@ -150,6 +152,8 @@ def main():
     # --- ROUTING MODUŁÓW ---
     if wybrany_modul == "COMMAND CENTER":
         mod_command_center.render(sh)
+    elif wybrany_modul == "GENERATOR ZLECEŃ PRO":
+        mod_generator_pdf.render(sh) # ROUTING DO NOWEGO MODUŁU
     elif wybrany_modul == "EVENTY / TARGI":
         mod_eventy.render(sh)
     elif wybrany_modul == "ZLECENIA POBOCZNE":
@@ -158,7 +162,7 @@ def main():
         mod_subrenty.render(sh)
     elif wybrany_modul == "YESTECH EXPORT":
         mod_yestech.render(sh)
-    elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI": # ZAKTUALIZOWANY ROUTING
+    elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI":
         mod_bazy_danych.render(sh)
     elif wybrany_modul == "FINANSE I RAPORTY":
         mod_finanse.render(sh)
