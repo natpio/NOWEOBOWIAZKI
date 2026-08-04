@@ -28,7 +28,7 @@ def init_connection():
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(st.secrets["gcp_service_account"], scope)
     client = gspread.authorize(creds)
-    return client.open("SQM_Logistyka_DB")
+    return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
 # 4. EKRAN LOGOWANIA (Styl Zen/Japandi)
 def login_screen():
