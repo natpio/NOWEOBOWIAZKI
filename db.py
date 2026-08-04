@@ -6,8 +6,9 @@ import re
 
 @st.cache_resource
 def init_connection():
+    # Poprawione połączenie - otwiera Twój właściwy arkusz po nazwie
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-    sh = gc.open_by_key("1Vw72-HoJhhYMvI5FpcrmeFAhXfDF-mcjpSazyak9Tc4") 
+    sh = gc.open("NOWY PODZIAŁ OBOWIĄZKÓW") 
     return sh
 
 def load_data(sh, sheet_name):
