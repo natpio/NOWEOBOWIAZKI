@@ -43,7 +43,6 @@ def render(sh):
         df_poboczne = db.fetch_data("Zlecenia Poboczne")
 
     # --- AGREGACJA ZDARZEŃ W SŁOWNIKU ---
-    # Słownik w formacie: {'YYYY-MM-DD': [lista_zdarzen]}
     all_events = defaultdict(list)
 
     # 1. Analiza Zleceń PRO
@@ -107,67 +106,125 @@ def render(sh):
                 })
 
     # --- INTERFEJS KALENDARZA ---
-    st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 10px; text-transform: uppercase;'>🗓️ Interaktywny Kalendarz Operacyjny</p>", unsafe_allow_html=True)
+    st.markdown("""
+        <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
+            <div>
+                <h3 style='color: #E2DCD3; font-family: "Shippori Mincho", serif; margin: 0;'>🗓️ Interaktywny Radar</h3>
+                <div style='color: #8C8477; font-size: 11px; letter-spacing: 1px;'>Zarządzaj przepływem operacji i płatnościami</div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
     
-    # Wybór miesiąca i roku
-    c_m, c_y, _ = st.columns([1, 1, 3])
+    # Wybór miesiąca i roku (Nowoczesny pasek nawigacyjny)
+    c_m, c_y, c_btn, _ = st.columns([2, 2, 2, 4])
+    
+    nazwy_miesiecy = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"]
+    
     with c_m:
-        miesiac = st.selectbox("Miesiąc", range(1, 13), index=st.session_state.cal_month - 1)
+        miesiac_nazwa = st.selectbox("Miesiąc", nazwy_miesiecy, index=st.session_state.cal_month - 1, label_visibility="collapsed")
+        miesiac = nazwy_miesiecy.index(miesiac_nazwa) + 1
         st.session_state.cal_month = miesiac
     with c_y:
-        rok = st.selectbox("Rok", [2025, 2026, 2027], index=[2025, 2026, 2027].index(st.session_state.cal_year))
+        rok = st.selectbox("Rok", [2025, 2026, 2027], index=[2025, 2026, 2027].index(st.session_state.cal_year), label_visibility="collapsed")
         st.session_state.cal_year = rok
+    with c_btn:
+        if st.button("📍 Wróć do dzisiaj", use_container_width=True):
+            dzis = datetime.now()
+            st.session_state.cal_month = dzis.month
+            st.session_state.cal_year = dzis.year
+            st.session_state.cal_selected_date = dzis.strftime("%Y-%m-%d")
+            st.rerun()
 
-    # Renderowanie siatki kalendarza
-    with st.container(border=True):
-        cal = calendar.monthcalendar(rok, miesiac)
-        dni_tyg = ["PONIEDZIAŁEK", "WTOREK", "ŚRODA", "CZWARTEK", "PIĄTEK", "SOBOTA", "NIEDZIELA"]
+    # Renderowanie siatki kalendarza w szklanym kontenerze
+    with st.container():
+        st.markdown("""
+            <style>
+            .cal-header {
+                text-align: center;
+                color: #C5A880;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 2px;
+                text-transform: uppercase;
+                padding-bottom: 10px;
+                border-bottom: 1px solid rgba(197, 168, 128, 0.2);
+                margin-bottom: 15px;
+            }
+            .cal-empty {
+                background: rgba(28, 26, 24, 0.3);
+                border: 1px dashed rgba(197, 168, 128, 0.15);
+                border-radius: 6px;
+                min-height: 52px;
+                margin-bottom: 15px;
+            }
+            </style>
+        """, unsafe_allow_html=True)
         
-        # Nagłówki dni
+        st.markdown("<div style='background: rgba(28, 26, 24, 0.6); border: 1px solid rgba(197, 168, 128, 0.2); border-radius: 12px; padding: 25px; backdrop-filter: blur(10px); margin-top: 5px;'>", unsafe_allow_html=True)
+        
+        cal = calendar.monthcalendar(rok, miesiac)
+        dni_tyg = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"]
+        
         cols = st.columns(7)
         for i, nazwa_dnia in enumerate(dni_tyg):
-            cols[i].markdown(f"<div style='text-align: center; color: #8C8477; font-size: 10px; font-weight: bold;'>{nazwa_dnia}</div>", unsafe_allow_html=True)
+            cols[i].markdown(f"<div class='cal-header'>{nazwa_dnia}</div>", unsafe_allow_html=True)
             
-        st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.1);'>", unsafe_allow_html=True)
+        dzis_str = datetime.now().strftime("%Y-%m-%d")
 
-        # Generowanie przycisków dni
         for week in cal:
             cols = st.columns(7)
             for i, day in enumerate(week):
                 if day == 0:
-                    cols[i].markdown("<div style='min-height: 40px;'></div>", unsafe_allow_html=True)
+                    cols[i].markdown("<div class='cal-empty'></div>", unsafe_allow_html=True)
                 else:
                     d_str = f"{rok}-{miesiac:02d}-{day:02d}"
                     lista_zdarzen = all_events.get(d_str, [])
                     liczba_zdarzen = len(lista_zdarzen)
                     
-                    # Wizualne wskazanie wybranego dnia
                     is_selected = (st.session_state.cal_selected_date == d_str)
                     btn_type = "primary" if is_selected else "secondary"
                     
-                    # Formaty etykiety w zależności od ilości zdarzeń
-                    if liczba_zdarzen > 0:
-                        label = f"{day} \n 🔥 [{liczba_zdarzen}]"
-                    else:
-                        label = f"{day}"
+                    # Generowanie estetycznych ikon zamiast zwykłego tekstu
+                    ikonki = []
+                    for ev in lista_zdarzen:
+                        if "PŁATNOŚCI" in ev['typ'] and "💳" not in ikonki: ikonki.append("💳")
+                        elif "PRO" in ev['typ'] and "📦" not in ikonki: ikonki.append("📦")
+                        elif "POBOCZNE" in ev['typ'] and "🚚" not in ikonki: ikonki.append("🚚")
                     
-                    # Kliknięcie w dzień aktualizuje stan i przeładowuje widok
+                    ikony_str = " ".join(ikonki) if ikonki else "-"
+                    
+                    is_today = (d_str == dzis_str)
+                    prefix = "📍 " if is_today else ""
+                    
+                    label = f"{prefix}{day}\n{ikony_str}"
+                    
                     if cols[i].button(label, key=f"btn_{d_str}", use_container_width=True, type=btn_type):
                         st.session_state.cal_selected_date = d_str
                         st.rerun()
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # --- SZCZEGÓŁY WYBRANEGO DNIA (ROZKŁAD JAZDY) ---
     wybrana_data_str = st.session_state.cal_selected_date
     zdarzenia_wybranego_dnia = all_events.get(wybrana_data_str, [])
     
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(f"<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>🔎 Rozkład na dzień: {wybrana_data_str}</h3>", unsafe_allow_html=True)
+    try:
+        dt_obj = datetime.strptime(wybrana_data_str, "%Y-%m-%d")
+        wyswietlana_data = f"{dt_obj.day} {nazwy_miesiecy[dt_obj.month - 1]} {dt_obj.year}"
+    except:
+        wyswietlana_data = wybrana_data_str
+
+    st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 30px; margin-bottom: 15px;">
+            <div style="width: 4px; height: 24px; background-color: #C5A880; border-radius: 2px;"></div>
+            <h3 style='color: #E2DCD3; font-family: "Shippori Mincho", serif; margin: 0;'>Agenda logistyczna: <span style="color: #C5A880;">{wyswietlana_data}</span></h3>
+        </div>
+    """, unsafe_allow_html=True)
 
     if not zdarzenia_wybranego_dnia:
         st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
     else:
         for idx, ev in enumerate(zdarzenia_wybranego_dnia):
-            # Używamy kolumn, by przycisk nawigacji był estetycznie ułożony po prawej stronie kafelka
             c1, c2 = st.columns([5, 1])
             
             with c1:
@@ -185,16 +242,12 @@ def render(sh):
                 """, unsafe_allow_html=True)
                 
             with c2:
-                # Delikatny margines, aby wyśrodkować przycisk względem kafelka
                 st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
                 
-                # Unikalny klucz dla każdego przycisku
                 if st.button("Otwórz ➔", key=f"link_{wybrana_data_str}_{idx}_{ev['nr']}", use_container_width=True):
                     
-                    # 1. Zapisujemy w pamięci, co chcemy otworzyć (możesz to później wykorzystać w modułach do auto-wyszukiwania)
                     st.session_state['przekierowanie_nr_zlecenia'] = ev['nr']
                     
-                    # 2. Mechanizm przełączania kart
                     if "PRO" in ev['typ']:
                         st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO" 
                     else:
