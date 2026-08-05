@@ -163,16 +163,40 @@ def render(sh):
     if not zdarzenia_wybranego_dnia:
         st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
     else:
-        for ev in zdarzenia_wybranego_dnia:
-            st.markdown(f"""
-            <div class="custom-row" style="border-left: 3px solid {ev['kolor']}; margin-bottom: 8px;">
-                <div class="cr-col">
-                    <div class="cr-title" style="color: {ev['kolor']}; font-size: 12px; margin-bottom: 2px;">
-                        {ev['ikona']} <strong>{ev['typ']}</strong> | {ev['nr']}
-                    </div>
-                    <div class="cr-text" style="font-size: 13px; color: #E2DCD3;">
-                        {ev['szczegoly']}
+        for idx, ev in enumerate(zdarzenia_wybranego_dnia):
+            # Używamy kolumn, by przycisk nawigacji był estetycznie ułożony po prawej stronie kafelka
+            c1, c2 = st.columns([5, 1])
+            
+            with c1:
+                st.markdown(f"""
+                <div class="custom-row" style="border-left: 3px solid {ev['kolor']}; margin-bottom: 8px;">
+                    <div class="cr-col">
+                        <div class="cr-title" style="color: {ev['kolor']}; font-size: 12px; margin-bottom: 2px;">
+                            {ev['ikona']} <strong>{ev['typ']}</strong> | {ev['nr']}
+                        </div>
+                        <div class="cr-text" style="font-size: 13px; color: #E2DCD3;">
+                            {ev['szczegoly']}
+                        </div>
                     </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
+                
+            with c2:
+                # Delikatny margines, aby wyśrodkować przycisk względem kafelka
+                st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+                
+                # Unikalny klucz dla każdego przycisku
+                if st.button("Otwórz ➔", key=f"link_{wybrana_data_str}_{idx}_{ev['nr']}", use_container_width=True):
+                    
+                    # 1. Zapisujemy w pamięci, co chcemy otworzyć (możesz to później wykorzystać w modułach do auto-wyszukiwania)
+                    st.session_state['przekierowanie_nr_zlecenia'] = ev['nr']
+                    
+                    # 2. Mechanizm przełączania kart
+                    # Zmienna 'menu_option' musi odpowiadać nazwie klucza, którym sterujesz menu w pliku app.py.
+                    # Jeśli używasz innej nazwy zmiennej (np. st.session_state.current_page), podmień poniższe klucze.
+                    if "PRO" in ev['typ']:
+                        st.session_state['menu_option'] = "Generator Zleceń PRO" 
+                    else:
+                        st.session_state['menu_option'] = "Zlecenia Poboczne"
+                        
+                    st.rerun()
