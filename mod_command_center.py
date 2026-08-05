@@ -76,25 +76,28 @@ def render(sh):
             nr = row.get("Nr Zlecenia", "Brak NR")
             przewoznik = row.get("Przewoźnik", "Brak danych")
             
-            # Załadunki Poboczne
+            # Weryfikacja czy to jest zlecenie wygenerowane z PRO
+            is_pro_order = str(nr).startswith("CRG")
+            
+            # Załadunki Poboczne (pomijamy dla PRO)
             d_zal_p = normalize_date(row.get("Data Załadunku"))
-            if d_zal_p:
+            if d_zal_p and not is_pro_order:
                 all_events[d_zal_p].append({
                     "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, 
                     "szczegoly": f"Przewoźnik: {przewoznik} | Opis: {row.get('Opis Ładunku / Trasy', '')}", 
                     "kolor": "#AF8FC9", "ikona": "🟡"
                 })
             
-            # Rozładunki Poboczne
+            # Rozładunki Poboczne (pomijamy dla PRO)
             d_roz_p = normalize_date(row.get("Data Rozładunku"))
-            if d_roz_p:
+            if d_roz_p and not is_pro_order:
                 all_events[d_roz_p].append({
                     "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, 
                     "szczegoly": f"Przewoźnik: {przewoznik} | Cel osiągnięty", 
                     "kolor": "#77A385", "ikona": "🚩"
                 })
                 
-            # Terminy Płatności
+            # Terminy Płatności (ZOSTAWIAMY dla wszystkich, również dla PRO)
             d_plat_p = normalize_date(row.get("Data Płatności"))
             if d_plat_p:
                 all_events[d_plat_p].append({
@@ -192,11 +195,9 @@ def render(sh):
                     st.session_state['przekierowanie_nr_zlecenia'] = ev['nr']
                     
                     # 2. Mechanizm przełączania kart
-                    # Zmienna 'menu_option' musi odpowiadać nazwie klucza, którym sterujesz menu w pliku app.py.
-                    # Jeśli używasz innej nazwy zmiennej (np. st.session_state.current_page), podmień poniższe klucze.
                     if "PRO" in ev['typ']:
-                        st.session_state['menu_option'] = "Generator Zleceń PRO" 
+                        st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO" 
                     else:
-                        st.session_state['menu_option'] = "Zlecenia Poboczne"
+                        st.session_state['menu_option'] = "ZLECENIA POBOCZNE"
                         
                     st.rerun()
