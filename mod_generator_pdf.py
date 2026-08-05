@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from fpdf import FPDF
 import qrcode
 import tempfile
@@ -8,7 +8,7 @@ import os
 import hashlib
 import difflib
 
-# Importujemy scentralizowany silnik bazy danych (Bez pricing.py)
+# Importujemy scentralizowany silnik bazy danych
 import db
 
 # --- GLOBALNY FILTR ZNAKÓW DLA FPDF ---
@@ -46,10 +46,8 @@ class PRO_TransportOrder(FPDF):
     def header(self):
         try:
             if os.path.exists("logosqm.png"):
-                # Powiększone logo o 15%
                 self.image("logosqm.png", 10, 8, 57.5)
             elif os.path.exists("logosqm.jpg"):
-                # Powiększone logo o 15%
                 self.image("logosqm.jpg", 10, 8, 57.5)
         except:
             pass
@@ -178,18 +176,28 @@ def generate_pro_pdf(dane):
     # 03 FINANCIALS
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
     sy = pdf.get_y()
-    pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 80, 25, 'F')
-    pdf.set_xy(125, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
-    pdf.cell(70, 5, pdf_sanitize("TOTAL NET RATE / KWOTA NETTO"), ln=True)
-    pdf.set_xy(125, sy + 10); pdf.set_font("Arial", 'B', 20)
-    pdf.cell(70, 10, pdf_sanitize(f"{dane['stawka']} {dane['waluta']}"), ln=True)
     
+    # Prawy boks z ceną
+    pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 25, 25, 'F') # Ciemne tło dla ikonki
+    pdf.set_xy(145, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(145, sy, 55, 25, 'F')
+    pdf.set_xy(145, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
+    pdf.cell(50, 5, pdf_sanitize("TOTAL NET RATE / KWOTA NETTO"), ln=True)
+    pdf.set_xy(145, sy + 10); pdf.set_font("Arial", 'B', 20)
+    pdf.cell(50, 10, pdf_sanitize(f"{dane['stawka']} {dane['waluta']}"), ln=True)
+    
+    # Lewy panel z informacjami o ładunku i płatności
     pdf.set_xy(10, sy)
     pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("CARGO TYPE / RODZAJ TOWARU:"), border=0)
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, sy); pdf.multi_cell(50, 5, pdf_sanitize("Exhibition Structures / AV Equipment"))
-    pdf.set_xy(10, pdf.get_y() + 2)
+    
+    pdf.set_xy(10, pdf.get_y() + 1)
     pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("GROSS WEIGHT / WAGA BRUTTO:"), border=0)
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 5, pdf_sanitize(f"{dane['waga']} kg"))
+
+    # Dodany wiersz terminów płatności
+    pdf.set_xy(10, pdf.get_y() + 6)
+    pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("PAYMENT / PŁATNOŚĆ:"), border=0)
+    pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 5, pdf_sanitize(f"{dane['termin_dni']} dni / days ({dane['data_platnosci']})"))
     
     pdf.set_xy(10, sy + 35)
     draw_section_header(4, "SPECIAL PROVISIONS / UWAGI SPECJALNE")
@@ -232,6 +240,7 @@ def render(sh):
     val_data_roz = datetime.now().date()
     val_data_emp_in = datetime.now().date()
     val_data_emp_out = datetime.now().date()
+    val_termin_dni = 30
     val_zrodlo = "Przewoźnik stały (Baza)"
     val_nazwa_przewoznika = "Wybierz..."
     val_detale_przewoznika = ""
@@ -375,7 +384,7 @@ def render(sh):
             data_emp_in, data_emp_out = "", ""
 
     with st.container(border=True):
-        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>2. Wybór Przewoźnika i Stawka</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>2. Wybór Przewoźnika i Płatności</p>", unsafe_allow_html=True)
         zrodlo_idx = ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"].index(val_zrodlo) if val_zrodlo in ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"] else 0
         zrodlo = st.radio("Sposób wyboru podwykonawcy:", ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"], index=zrodlo_idx, horizontal=True)
         
@@ -420,6 +429,12 @@ def render(sh):
             currency_idx = ["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0
             waluta = f2.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
             postoj = f3.number_input("Postój:", min_value=0.0, value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
+            
+        # Dodany panel kalkulacji terminów płatności
+        t1, t2 = st.columns([1, 2])
+        termin_dni = t1.number_input("Termin płatności (dni od rozładunku):", min_value=0, max_value=120, value=val_termin_dni, step=1)
+        data_platnosci = data_roz + timedelta(days=termin_dni)
+        t2.info(f"📅 Wyliczona data zapłaty: **{data_platnosci.strftime('%d.%m.%Y')}**")
 
     with st.container(border=True):
         st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>3. Logistyka Miejsc</p>", unsafe_allow_html=True)
@@ -535,13 +550,14 @@ def render(sh):
                     "zaladunek": full_zal_pdf, "data_zal": str(data_zal),
                     "rozladunek": full_roz_pdf, "data_roz": str(data_roz),
                     "data_emp_in": str(data_emp_in), "data_emp_out": str(data_emp_out),
-                    "waga": waga, "auto": c_auto, "uwagi": uwagi_na_pdf, "opiekun": podpis 
+                    "waga": waga, "auto": c_auto, "uwagi": uwagi_na_pdf, "opiekun": podpis,
+                    "termin_dni": termin_dni, "data_platnosci": data_platnosci.strftime('%d.%m.%Y')
                 }
                 
                 wiersz_db = [
                     datetime.now().strftime("%Y-%m-%d %H:%M"), nr_zlecenia, "LOGISTYKA CARGO", nazwa_przewoznika,
                     final_zal_db, final_roz_db, str(data_zal), str(data_roz), "Zabudowa Targowa PRO",
-                    "", "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}"
+                    str(data_platnosci), "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}"
                 ]
                 
                 if tryb_pracy == "Edycja Istniejącego Zlecenia":
