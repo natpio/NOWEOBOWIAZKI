@@ -50,7 +50,9 @@ def render(sh):
         st.error(f"Błąd komunikacji z Google Sheets: {e}. Upewnij się, że zakładka 'Zlecenia Poboczne' istnieje.")
         return
 
+    # ==========================================
     # KARTA 1: AKTYWNE ZLECENIA
+    # ==========================================
     with tab1:
         st.markdown("<div style='font-size: 10px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px;'>⚡ WYSZUKAJ I FILTRUJ ZLECENIA:</div>", unsafe_allow_html=True)
         search_query = st.text_input("", placeholder="🔍 Wpisz nazwę przewoźnika, opis, numer...", label_visibility="collapsed")
@@ -101,12 +103,16 @@ def render(sh):
                 tags_html = f'<div class="cr-col" style="flex: 2; flex-direction: row; gap: 8px;">{tag_cmr}{tag_pod}{tag_fv}</div>'
 
                 status_val = str(row.get('Status', 'PLANOWANIE')).lower()
+                nr_zlecenia_wyswietl = row.get('Nr Zlecenia', 'Brak nr')
+                
+                # KLUCZOWE: Konwersja indeksu z Numpy na standardowy int Pythona!
+                row_idx = int(row['sheet_row']) 
                 
                 # Renderowanie kafelka (Japandi)
                 st.markdown(f"""
                 <div class="custom-row">
                     <div class="cr-col" style="flex: 2.5;">
-                        <div class="cr-title">{row.get('Nr Zlecenia', 'Brak nr')}</div>
+                        <div class="cr-title">{nr_zlecenia_wyswietl}</div>
                         <div class="cr-text">🚛 Przewoźnik: {row.get('Przewoźnik', 'Brak danych')}</div>
                         <div class="cr-text" style="color: #C5A880; font-style: italic;">📝 {row.get('Opis Ładunku / Trasy', '---')}</div>
                     </div>
@@ -120,18 +126,17 @@ def render(sh):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Panel edycji pod kafelkiem - zmiana wprowadzania z palca na kalendarze
-                with st.expander(f"✏️ Edytuj / Archiwizuj zlec. {row.get('Nr Zlecenia', '')}"):
-                    with st.form(key=f"edit_form_{row['sheet_row']}", clear_on_submit=False):
+                # Panel edycji pod kafelkiem
+                with st.expander(f"✏️ Edytuj / Archiwizuj zlec. {nr_zlecenia_wyswietl}"):
+                    with st.form(key=f"edit_form_{row_idx}", clear_on_submit=False):
                         ecol1, ecol2, ecol3 = st.columns([1.5, 1, 1])
                         
                         with ecol1:
-                            e_nr = st.text_input("Numer zlecenia", value=row.get('Nr Zlecenia', ''))
+                            e_nr = st.text_input("Numer zlecenia", value=nr_zlecenia_wyswietl)
                             e_przew = st.text_input("Przewoźnik", value=row.get('Przewoźnik', ''))
                             e_opis = st.text_area("Opis Ładunku / Trasy", value=row.get('Opis Ładunku / Trasy', ''), height=115)
                             
                         with ecol2:
-                            # Przetworzenie dat z bazy dla kalendarza
                             val_dz = parse_date(row.get('Data Załadunku', ''))
                             val_dr = parse_date(row.get('Data Rozładunku', ''))
                             val_dp = parse_date(row.get('Data Płatności', ''))
@@ -159,11 +164,7 @@ def render(sh):
                         save_btn = st.form_submit_button("💾 Zapisz zmiany", type="primary")
                         
                         if save_btn:
-                            # Przeliczamy ponownie płatność w tle na wypadek, gdyby ktoś zmienił dni, 
-                            # a zapomniał manualnie zmienić na kalendarzu (lub zostawiamy wybraną z kalendarza)
-                            # Tutaj aplikacja ufa dacie wybranej z kalendarza przez użytkownika.
-                            
-                            zakres = f"A{row['sheet_row']}:K{row['sheet_row']}"
+                            zakres = f"A{row_idx}:K{row_idx}"
                             nowe_wartosci = [[
                                 e_nr, e_przew, e_opis, 
                                 str(e_data_zal), str(e_data_roz), str(e_termin), str(e_data_plat.strftime('%d.%m.%Y')), 
@@ -175,10 +176,21 @@ def render(sh):
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Błąd podczas aktualizacji: {e}")
+                                
+                    # NOWOŚĆ: Przycisk trwałego usunięcia pod formularzem (używa delete_row zamiast delete_rows)
+                    if st.button("🗑️ Usuń trwale to zlecenie z bazy", key=f"del_{row_idx}"):
+                        try:
+                            worksheet.delete_row(row_idx) 
+                            st.success(f"Zlecenie usunięte pomyślnie. Odświeżam...")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Błąd podczas usuwania: {e}")
         else:
             st.info("Brak aktywnych zleceń pobocznych spełniających kryteria.")
 
+    # ==========================================
     # KARTA 2: UTWÓRZ NOWE ZLECENIE
+    # ==========================================
     with tab2:
         st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Utwórz Nowe Zlecenie Poboczne</h3>", unsafe_allow_html=True)
         with st.form("form_zlecenia_poboczne", clear_on_submit=True):
@@ -188,7 +200,6 @@ def render(sh):
                 przewoznik = st.text_input("Przewoźnik")
                 opis_ladunku = st.text_area("Opis Ładunku / Trasy (Co, dokąd, szczegóły)", height=115)
                 
-                # Dodany układ trzech kolumn do wyliczania płatności
                 d1, d2, d3 = st.columns(3)
                 with d1: 
                     data_zal = st.date_input("Data załadunku", datetime.today())
@@ -223,17 +234,22 @@ def render(sh):
                     except Exception as e:
                         st.error(f"Błąd podczas zapisu do bazy: {e}")
 
+    # ==========================================
     # KARTA 3: ARCHIWUM
+    # ==========================================
     with tab3:
         st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne</h3>", unsafe_allow_html=True)
         archive_df = df[df['Status'] == 'ARCHIWUM'] if not df.empty else df[0:0]
         
         if not archive_df.empty:
             for index, row in archive_df.iterrows():
+                nr_zlecenia_arch = row.get('Nr Zlecenia', 'Brak nr')
+                row_idx_arch = int(row['sheet_row']) # Bezpieczna konwersja
+                
                 st.markdown(f"""
                 <div class="custom-row" style="opacity: 0.6; background: rgba(20, 18, 16, 0.5);">
                     <div class="cr-col" style="flex: 2.5;">
-                        <div class="cr-title" style="text-decoration: line-through;">{row.get('Nr Zlecenia', 'Brak nr')}</div>
+                        <div class="cr-title" style="text-decoration: line-through;">{nr_zlecenia_arch}</div>
                         <div class="cr-text">🚛 Przewoźnik: {row.get('Przewoźnik', '')}</div>
                         <div class="cr-text">📝 {row.get('Opis Ładunku / Trasy', '')}</div>
                     </div>
@@ -245,14 +261,25 @@ def render(sh):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                with st.expander(f"⚙️ Zarządzaj archiwalnym {row.get('Nr Zlecenia', '')}"):
-                    if st.button("🔄 Przywróć zlecenia do statusu ZAMKNIĘTE", key=f"restore_{row['sheet_row']}"):
-                        try:
-                            # Zaktualizowana kolumna 8 to Status
-                            worksheet.update_cell(row['sheet_row'], 8, "ZAMKNIĘTE") 
-                            st.success("Zlecenie przywrócone! Odświeżam...")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Błąd: {e}")
+                with st.expander(f"⚙️ Zarządzaj archiwalnym {nr_zlecenia_arch}"):
+                    a1, a2 = st.columns(2)
+                    
+                    with a1:
+                        if st.button("🔄 Przywróć status", key=f"restore_{row_idx_arch}", use_container_width=True):
+                            try:
+                                worksheet.update_cell(row_idx_arch, 8, "ZAMKNIĘTE") 
+                                st.success("Zlecenie przywrócone! Odświeżam...")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Błąd: {e}")
+                    
+                    with a2:
+                        if st.button("🗑️ Trwale usuń", key=f"del_arch_{row_idx_arch}", use_container_width=True):
+                            try:
+                                worksheet.delete_row(row_idx_arch)
+                                st.success("Zlecenie całkowicie usunięte! Odświeżam...")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Błąd podczas usuwania: {e}")
         else:
             st.info("Archiwum jest obecnie puste.")
