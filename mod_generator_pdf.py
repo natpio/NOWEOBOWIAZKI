@@ -248,6 +248,15 @@ def pobierz_dane_z_bazy():
     return df_projekty, df_miejsca, df_przewoznicy, df_zlecenia
 
 def render(sh):
+    # INICJALIZACJA ZMIENNYCH SESYJNYCH (zapobiega znikaniu przycisków pobierania)
+    if 'dokumenty_wygenerowane' not in st.session_state:
+        st.session_state.dokumenty_wygenerowane = False
+        st.session_state.pdf_bytes = None
+        st.session_state.cmr_bytes = None
+        st.session_state.nazwa_pdf = ""
+        st.session_state.nazwa_cmr = ""
+        st.session_state.komunikat = ""
+
     st.markdown('''
         <div class="module-header-container">
             <h1 class="module-title">Generator Zleceń PRO</h1>
@@ -536,6 +545,7 @@ def render(sh):
 
         btn_label = "⚡ ZAPISZ ZMIANY I REGENERUJ DOKUMENTY" if tryb_pracy == "Edycja Istniejącego Zlecenia" else "⚡ GENERUJ I ZAPISZ ZLECENIE PRO"
 
+        # GŁÓWNA LOGIKA ZAPISU I GENEROWANIA
         if st.button(btn_label, type="primary", use_container_width=True):
             if not nazwa_przewoznika or nazwa_przewoznika == "Wybierz...":
                 st.error("Wybierz lub wpisz firmę przewozową!")
@@ -622,7 +632,6 @@ def render(sh):
                             auto_val = parts_auto[0].strip()
                             kierowca_val = parts_auto[1].strip()
                             
-                        # --- 1. WYZNACZANIE MIASTA ZAŁADUNKU ---
                         if z_sel == "Magazyn SQM Komorniki":
                             miasto_zal_val = "Komorniki"
                         elif z_sel == "INNE (wpisz ręcznie)":
@@ -634,7 +643,6 @@ def render(sh):
                                 if not row_m.empty:
                                     miasto_zal_val = str(row_m.iloc[0].get("Miasto", z_sel)).strip()
                         
-                        # --- 2. DYNAMICZNA NUMERACJA CMR ---
                         base_cmr = 24122250
                         if tryb_pracy == "Edycja Istniejącego Zlecenia":
                             numer_cmr_final = str(base_cmr + int(idx_pd))
@@ -656,29 +664,45 @@ def render(sh):
                         cmr_bytes = generate_cmr_excel(dane_cmr)
                         
                         if tryb_pracy == "Edycja Istniejącego Zlecenia":
-                            st.success(f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!")
+                            st.session_state.komunikat = f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!"
                         else:
-                            st.success(f"✅ Zlecenie {nr_zlecenia} zostało wygenerowane i zapisane pomyślnie!")
+                            st.session_state.komunikat = f"✅ Zlecenie {nr_zlecenia} zostało wygenerowane i zapisane pomyślnie!"
                             
-                        col_pdf, col_cmr = st.columns(2)
-                        with col_pdf:
-                            st.download_button(
-                                "📥 POBIERZ ZLECENIE (PDF)", 
-                                data=pdf_bytes, 
-                                file_name=f"Order_{nr_zlecenia.replace('/', '_')}.pdf", 
-                                mime="application/pdf", 
-                                use_container_width=True
-                            )
-                        with col_cmr:
-                            st.download_button(
-                                "📝 POBIERZ GOTOWY CMR (5 STRON)", 
-                                data=cmr_bytes, 
-                                file_name=f"CMR_{nr_zlecenia.replace('/', '_')}.xlsx", 
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                                use_container_width=True
-                            )
-                            
+                        # -- ZAPIS PLIKÓW DO SESJI I WYMUSZENIE ODŚWIEŻENIA EKRANU --
+                        st.session_state.pdf_bytes = pdf_bytes
+                        st.session_state.cmr_bytes = cmr_bytes
+                        st.session_state.nazwa_pdf = f"Order_{nr_zlecenia.replace('/', '_')}.pdf"
+                        st.session_state.nazwa_cmr = f"CMR_{nr_zlecenia.replace('/', '_')}.xlsx"
+                        st.session_state.dokumenty_wygenerowane = True
+                        
                         st.cache_data.clear()
+                        st.rerun() # ← To jest ta sztuczka, która zapobiega znikaniu przycisków!
+
+        # WYŚWIETLANIE ZAPISANYCH W SESJI PRZYCISKÓW POBIERANIA (odporne na kliknięcia)
+        if st.session_state.dokumenty_wygenerowane:
+            st.success(st.session_state.komunikat)
+            col_pdf, col_cmr = st.columns(2)
+            with col_pdf:
+                st.download_button(
+                    "📥 POBIERZ ZLECENIE (PDF)", 
+                    data=st.session_state.pdf_bytes, 
+                    file_name=st.session_state.nazwa_pdf, 
+                    mime="application/pdf", 
+                    use_container_width=True
+                )
+            with col_cmr:
+                st.download_button(
+                    "📝 POBIERZ GOTOWY CMR (5 STRON)", 
+                    data=st.session_state.cmr_bytes, 
+                    file_name=st.session_state.nazwa_cmr, 
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                    use_container_width=True
+                )
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🔄 Wyczyść i przygotuj nowe zlecenie", use_container_width=True):
+                st.session_state.dokumenty_wygenerowane = False
+                st.rerun()
 
     with tab2:
         st.markdown('<h3 style="color: #E2DCD3; font-family: \'Shippori Mincho\', serif;">Aktywne Zlecenia PRO</h3>', unsafe_allow_html=True)
