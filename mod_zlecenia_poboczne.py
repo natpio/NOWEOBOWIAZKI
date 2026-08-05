@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def render(sh):
     # Nagłówek w stylu Japandi
@@ -19,9 +19,9 @@ def render(sh):
         worksheet = sh.worksheet("Zlecenia Poboczne")
         data = worksheet.get_all_values()
         
-        # Jeśli arkusz jest całkowicie pusty, inicjujemy nagłówki
+        # Jeśli arkusz jest całkowicie pusty, inicjujemy nowe, poszerzone nagłówki
         if not data:
-            headers = ["Nr Zlecenia", "Przewoźnik", "Opis Ładunku / Trasy", "Data Załadunku", "Status", "CMR", "POD", "Faktura"]
+            headers = ["Nr Zlecenia", "Przewoźnik", "Opis Ładunku / Trasy", "Data Załadunku", "Data Rozładunku", "Termin Dni", "Data Płatności", "Status", "CMR", "POD", "Faktura"]
             worksheet.append_row(headers)
             data = [headers]
             
@@ -91,7 +91,7 @@ def render(sh):
                 # Pigułka statusu - dynamiczny kolor
                 status_val = str(row.get('Status', 'PLANOWANIE')).lower()
                 
-                # Renderowanie kafelka (Japandi)
+                # Renderowanie kafelka (Japandi) z dodanymi informacjami o datach
                 st.markdown(f"""
                 <div class="custom-row">
                     <div class="cr-col" style="flex: 2.5;">
@@ -101,25 +101,33 @@ def render(sh):
                     </div>
                     <div class="cr-col" style="flex: 1.5;">
                         <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
-                        <div class="cr-badge {status_val}" style="width: max-content;">{row.get('Status', 'PLANOWANIE')}</div>
+                        <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
+                        <div class="cr-text" style="color: #8C8477;">💳 Zapłata: <strong>{row.get('Data Płatności', '---')}</strong></div>
+                        <div class="cr-badge {status_val}" style="width: max-content; margin-top: 4px;">{row.get('Status', 'PLANOWANIE')}</div>
                     </div>
                     {tags_html}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Panel edycji pod kafelkiem
+                # Panel edycji pod kafelkiem - poszerzony o 3 nowe kolumny
                 with st.expander(f"✏️ Edytuj / Archiwizuj zlec. {row.get('Nr Zlecenia', '')}"):
                     with st.form(key=f"edit_form_{row['sheet_row']}", clear_on_submit=False):
-                        ecol1, ecol2 = st.columns(2)
+                        ecol1, ecol2, ecol3 = st.columns([1.5, 1, 1])
+                        
                         with ecol1:
                             e_nr = st.text_input("Numer zlecenia", value=row.get('Nr Zlecenia', ''))
                             e_przew = st.text_input("Przewoźnik", value=row.get('Przewoźnik', ''))
                             e_opis = st.text_area("Opis Ładunku / Trasy", value=row.get('Opis Ładunku / Trasy', ''), height=115)
+                            
                         with ecol2:
-                            e_data = st.text_input("Data załadunku", value=row.get('Data Załadunku', ''))
-                            # Domyślny indeks dla selectboxa
+                            e_data_zal = st.text_input("Data załadunku", value=row.get('Data Załadunku', ''))
+                            e_data_roz = st.text_input("Data rozładunku", value=row.get('Data Rozładunku', ''))
+                            e_termin = st.text_input("Termin (dni)", value=row.get('Termin Dni', '30'))
+                            e_data_plat = st.text_input("Wyliczona zapłata", value=row.get('Data Płatności', ''))
+                            
+                        with ecol3:
                             statusy = ["INICJACJA", "PLANOWANIE", "ZAŁADUNEK", "TRASA", "ZAMKNIĘTE", "ARCHIWUM"]
-                            e_status = st.selectbox("Status (Wybierz ARCHIWUM aby zarchiwizować)", statusy, index=statusy.index(row.get('Status', 'PLANOWANIE')) if row.get('Status') in statusy else 1)
+                            e_status = st.selectbox("Status", statusy, index=statusy.index(row.get('Status', 'PLANOWANIE')) if row.get('Status') in statusy else 1)
                             
                             opcje_cmr = ["TAK", "NIE", "NIE POTRZEBA"]
                             e_cmr = st.selectbox("Status CMR", opcje_cmr, index=opcje_cmr.index(row.get('CMR', 'NIE')) if row.get('CMR') in opcje_cmr else 1)
@@ -131,9 +139,9 @@ def render(sh):
                         save_btn = st.form_submit_button("💾 Zapisz zmiany", type="primary")
                         
                         if save_btn:
-                            # Aktualizacja wskazanego wiersza w Google Sheets (kolumny A do H)
-                            zakres = f"A{row['sheet_row']}:H{row['sheet_row']}"
-                            nowe_wartosci = [[e_nr, e_przew, e_opis, e_data, e_status, e_cmr, e_pod, e_fv]]
+                            # Aktualizacja wskazanego wiersza (kolumny A do K)
+                            zakres = f"A{row['sheet_row']}:K{row['sheet_row']}"
+                            nowe_wartosci = [[e_nr, e_przew, e_opis, e_data_zal, e_data_roz, e_termin, e_data_plat, e_status, e_cmr, e_pod, e_fv]]
                             try:
                                 worksheet.update(values=nowe_wartosci, range_name=zakres)
                                 st.success("Zmiany zostały zapisane! Odświeżam...")
@@ -152,7 +160,19 @@ def render(sh):
                 nr_zlecenia = st.text_input("Numer zlecenia")
                 przewoznik = st.text_input("Przewoźnik")
                 opis_ladunku = st.text_area("Opis Ładunku / Trasy (Co, dokąd, szczegóły)", height=115)
-                data_zal = st.date_input("Data załadunku", datetime.today())
+                
+                # Dodany układ trzech kolumn do wyliczania płatności z modułu PRO
+                d1, d2, d3 = st.columns(3)
+                with d1: 
+                    data_zal = st.date_input("Data załadunku", datetime.today())
+                with d2: 
+                    data_roz = st.date_input("Data rozładunku", datetime.today())
+                with d3: 
+                    termin_dni = st.number_input("Termin (dni)", min_value=0, max_value=120, value=30)
+                
+                data_platnosci = data_roz + timedelta(days=termin_dni)
+                st.info(f"📅 Wyliczona data zapłaty: **{data_platnosci.strftime('%d.%m.%Y')}**")
+
             with col2:
                 status = st.selectbox("Status", ["INICJACJA", "PLANOWANIE", "ZAŁADUNEK", "TRASA", "ZAMKNIĘTE"])
                 cmr = st.selectbox("Status CMR", ["TAK", "NIE", "NIE POTRZEBA"], index=1)
@@ -166,7 +186,11 @@ def render(sh):
                     st.error("Numer zlecenia i Przewoźnik są wymagane!")
                 else:
                     try:
-                        worksheet.append_row([nr_zlecenia, przewoznik, opis_ladunku, str(data_zal), status, cmr, pod, faktura])
+                        worksheet.append_row([
+                            nr_zlecenia, przewoznik, opis_ladunku, 
+                            str(data_zal), str(data_roz), str(termin_dni), str(data_platnosci.strftime('%d.%m.%Y')), 
+                            status, cmr, pod, faktura
+                        ])
                         st.success(f"Pomyślnie dodano zlecenie {nr_zlecenia} do bazy Google Sheets!")
                         st.rerun()
                     except Exception as e:
@@ -188,7 +212,8 @@ def render(sh):
                     </div>
                     <div class="cr-col" style="flex: 1.5;">
                         <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
-                        <div class="cr-badge domyslny" style="width: max-content;">ARCHIWIZOWANO</div>
+                        <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
+                        <div class="cr-badge domyslny" style="width: max-content; margin-top: 4px;">ARCHIWIZOWANO</div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -197,7 +222,8 @@ def render(sh):
                 with st.expander(f"⚙️ Zarządzaj archiwalnym {row.get('Nr Zlecenia', '')}"):
                     if st.button("🔄 Przywróć zlecenia do statusu ZAMKNIĘTE", key=f"restore_{row['sheet_row']}"):
                         try:
-                            worksheet.update_cell(row['sheet_row'], 5, "ZAMKNIĘTE") # Kolumna 5 to Status
+                            # Zaktualizowana kolumna 8 to Status (wcześniej była to kolumna 5)
+                            worksheet.update_cell(row['sheet_row'], 8, "ZAMKNIĘTE") 
                             st.success("Zlecenie przywrócone! Odświeżam...")
                             st.rerun()
                         except Exception as e:
