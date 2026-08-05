@@ -135,7 +135,7 @@ def render(sh):
             st.session_state.cal_selected_date = dzis.strftime("%Y-%m-%d")
             st.rerun()
 
-    # Renderowanie siatki kalendarza
+    # Renderowanie siatki kalendarza z nieprzezroczystym, solidnym tłem
     with st.container(border=True):
         st.markdown("""
             <style>
@@ -149,13 +149,25 @@ def render(sh):
                 padding-bottom: 10px;
                 border-bottom: 1px solid rgba(197, 168, 128, 0.2);
                 margin-bottom: 15px;
+                background-color: #12100E;
+                padding-top: 10px;
+                border-radius: 4px;
             }
             .cal-empty {
-                background: rgba(28, 26, 24, 0.3);
-                border: 1px dashed rgba(197, 168, 128, 0.15);
+                background-color: #1C1A18 !important;
+                border: 1px solid rgba(197, 168, 128, 0.15) !important;
                 border-radius: 6px;
                 min-height: 52px;
                 margin-bottom: 15px;
+            }
+            /* Lokalne nadpisanie CSS tylko dla tego widoku, aby przyciski dni nie były przezroczyste */
+            div[data-testid="stVerticalBlock"] div[data-testid="column"] button[kind="secondary"] {
+                background-color: #1C1A18 !important;
+                border: 1px solid rgba(140, 132, 119, 0.3) !important;
+            }
+            div[data-testid="stVerticalBlock"] div[data-testid="column"] button[kind="secondary"]:hover {
+                background-color: #2E2A26 !important;
+                border-color: #C5A880 !important;
             }
             </style>
         """, unsafe_allow_html=True)
