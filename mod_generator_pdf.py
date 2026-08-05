@@ -229,8 +229,16 @@ def render(sh):
     # KARTA 1: GENERATOR PDF I FORMULARZ
     # ---------------------------------------------------------
     with tab1:
-        # --- BOCZNY PANEL: WYBÓR TRYBU PRACY ---
-        tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
+        # --- BOCZNY PANEL: WYBÓR TRYBU PRACY I KATEGORII ---
+        c1, c2 = st.columns(2)
+        with c1:
+            tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
+        with c2:
+            kategoria_zlecenia = st.radio(
+                "Kategoria zlecenia (gdzie zapisać?):", 
+                ["Zlecenie Poboczne (Eksport do rejestru)", "Zlecenie Eventowe (Pomiń rejestr poboczny)"], 
+                horizontal=True
+            )
         st.markdown("<br>", unsafe_allow_html=True)
 
         # Domyślny tekst uwag
@@ -574,7 +582,7 @@ def render(sh):
                         operacja_sukces = db.append_data("Zlecenia", wiersz_db)
                         
                         # 2. Automatyczny eksport do Zleceń Pobocznych
-                        if operacja_sukces:
+                        if operacja_sukces and kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
                             wiersz_poboczne = [
                                 nr_zlecenia,                           
                                 nazwa_przewoznika,                     
@@ -595,7 +603,10 @@ def render(sh):
                         if tryb_pracy == "Edycja Istniejącego Zlecenia":
                             st.success(f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!")
                         else:
-                            st.success(f"✅ Zlecenie {nr_zlecenia} zapisane poprawnie w PRO oraz przesłane do Pobocznych!")
+                            if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
+                                st.success(f"✅ Zlecenie {nr_zlecenia} zapisane w PRO oraz wyeksportowane do Zleceń Pobocznych!")
+                            else:
+                                st.success(f"✅ Zlecenie {nr_zlecenia} wygenerowane jako Eventowe (bez zapisu do Zleceń Pobocznych).")
                             
                         st.download_button("📥 POBIERZ DOKUMENT PDF", data=pdf_bytes, file_name=f"Order_{nr_zlecenia.replace('/', '_')}.pdf", mime="application/pdf", use_container_width=True)
                         st.cache_data.clear()
@@ -648,11 +659,12 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Logika usuwania wiersza bezpośrednio z chmury Google Sheets
+                        # Logika usuwania wiersza bezpośrednio z chmury Google Sheets - ZABEZPIECZONA
                         c1, c2 = st.columns([4, 1])
                         with c2:
                             if st.button("🗑️ Usuń zlecenie", key=f"del_pro_{row['sheet_row']}", use_container_width=True):
-                                ws_zlecenia.delete_rows(row['sheet_row'])
+                                # Zmiana na bezpieczny format dla Gspread (int i delete_row)
+                                ws_zlecenia.delete_row(int(row['sheet_row']))
                                 st.success(f"Zlecenie {nr} zostało trwale usunięte!")
                                 st.rerun()
                         
