@@ -570,14 +570,32 @@ def render(sh):
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
                         operacja_sukces = db.update_row("Zlecenia", gs_row_index, wiersz_db)
                     else:
+                        # 1. Zapis do głównej bazy PRO
                         operacja_sukces = db.append_data("Zlecenia", wiersz_db)
                         
+                        # 2. Automatyczny eksport do Zleceń Pobocznych
+                        if operacja_sukces:
+                            wiersz_poboczne = [
+                                nr_zlecenia,                           
+                                nazwa_przewoznika,                     
+                                f"PROJEKT: {projekt} | {instrukcje}",  
+                                str(data_zal),                         
+                                str(data_roz),                         
+                                str(termin_dni),                       
+                                data_platnosci.strftime('%d.%m.%Y'),   
+                                "PLANOWANIE",                          
+                                "NIE",                                 
+                                "NIE",                                 
+                                "NIE"                                  
+                            ]
+                            db.append_data("Zlecenia Poboczne", wiersz_poboczne)
+                            
                     if operacja_sukces:
                         pdf_bytes = generate_pro_pdf(paczka_pdf)
                         if tryb_pracy == "Edycja Istniejącego Zlecenia":
                             st.success(f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!")
                         else:
-                            st.success(f"✅ Zlecenie {nr_zlecenia} zapisane poprawnie!")
+                            st.success(f"✅ Zlecenie {nr_zlecenia} zapisane poprawnie w PRO oraz przesłane do Pobocznych!")
                             
                         st.download_button("📥 POBIERZ DOKUMENT PDF", data=pdf_bytes, file_name=f"Order_{nr_zlecenia.replace('/', '_')}.pdf", mime="application/pdf", use_container_width=True)
                         st.cache_data.clear()
