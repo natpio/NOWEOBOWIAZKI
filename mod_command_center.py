@@ -1,184 +1,178 @@
 import streamlit as st
 import pandas as pd
+import calendar
+from datetime import datetime
+from collections import defaultdict
+import db
+
+def normalize_date(date_val):
+    """Bezpiecznie konwertuje różne formaty dat z bazy na standard YYYY-MM-DD"""
+    if pd.isna(date_val) or not str(date_val).strip():
+        return None
+    d_str = str(date_val).strip()
+    try:
+        if "." in d_str:
+            return datetime.strptime(d_str, "%d.%m.%Y").strftime("%Y-%m-%d")
+        elif "-" in d_str:
+            # Próbuje zinterpretować długą datę z godziną lub krótką
+            return datetime.strptime(d_str.split(" ")[0], "%Y-%m-%d").strftime("%Y-%m-%d")
+    except:
+        return None
+    return None
 
 def render(sh):
     st.markdown('''
         <div class="module-header-container">
             <h1 class="module-title">Command Center</h1>
-            <div class="module-subtitle">コマンドセンター ✦ GŁÓWNY PANEL STEROWANIA</div>
+            <div class="module-subtitle">コマンドセンター ✦ LOGISTICS DASHBOARD</div>
         </div>
     ''', unsafe_allow_html=True)
 
-    # ==========================================
-    # 1. POBIERANIE DANYCH ZE WSZYSTKICH MODUŁÓW
-    # ==========================================
-    
-    # --- A. EVENTY I FLOTA (Twój dotychczasowy kod) ---
-    try:
-        # Zakładam, że tak nazywa się Twój główny arkusz z eventami
-        ws_eventy = sh.worksheet("Eventy") 
-        df_eventy = pd.DataFrame(ws_eventy.get_all_records())
-    except Exception as e:
-        df_eventy = pd.DataFrame()
-        # st.warning(f"Brak danych Eventów: {e}")
+    # --- INICJALIZACJA STANU DLA KALENDARZA ---
+    today = datetime.now()
+    if 'cal_month' not in st.session_state:
+        st.session_state.cal_month = today.month
+    if 'cal_year' not in st.session_state:
+        st.session_state.cal_year = today.year
+    if 'cal_selected_date' not in st.session_state:
+        st.session_state.cal_selected_date = today.strftime("%Y-%m-%d")
 
-    # --- B. ZLECENIA POBOCZNE (Nowy moduł) ---
-    try:
-        ws_zlecenia = sh.worksheet("Zlecenia Poboczne")
-        df_zlecenia = pd.DataFrame(ws_zlecenia.get_all_records())
-    except Exception as e:
-        df_zlecenia = pd.DataFrame()
+    # --- POBIERANIE DANYCH Z CHMURY ---
+    with st.spinner("Synchronizacja radaru operacyjnego..."):
+        df_zlecenia = db.fetch_data("Zlecenia")
+        df_poboczne = db.fetch_data("Zlecenia Poboczne")
 
-    # ==========================================
-    # 2. PRZETWARZANIE I FILTROWANIE DANYCH
-    # ==========================================
-    
-    # Filtrujemy tylko aktywne Zlecenia Poboczne
-    aktywne_zlecenia = pd.DataFrame()
-    if not df_zlecenia.empty and 'Status' in df_zlecenia.columns:
-        aktywne_zlecenia = df_zlecenia[df_zlecenia['Status'] != 'ARCHIWUM']
+    # --- AGREGACJA ZDARZEŃ W SŁOWNIKU ---
+    # Słownik w formacie: {'YYYY-MM-DD': [lista_zdarzen]}
+    all_events = defaultdict(list)
 
-    total_active_poboczne = len(aktywne_zlecenia)
-    brak_cmr = len(aktywne_zlecenia[aktywne_zlecenia.get("CMR") == "NIE"]) if not aktywne_zlecenia.empty else 0
-    brak_pod = len(aktywne_zlecenia[aktywne_zlecenia.get("POD") == "NIE"]) if not aktywne_zlecenia.empty else 0
-    brak_fv = len(aktywne_zlecenia[aktywne_zlecenia.get("Faktura") == "NIE"]) if not aktywne_zlecenia.empty else 0
-    
-    suma_problemow_poboczne = brak_cmr + brak_pod + brak_fv
-
-    # (Tutaj możesz dodać zmienne obliczeniowe dla Eventów, jeśli miałeś)
-    # total_active_eventy = len(df_eventy[...])
-
-    # ==========================================
-    # 3. GŁÓWNE KARTY KPI (WIDOK ZAAWANSOWANY)
-    # ==========================================
-    
-    st.markdown("<h3 class='dash-title'>Wskaźniki Zleceń Pobocznych</h3>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="dash-card">
-            <div class="kpi-advanced">
-                <div class="kpi-adv-header">
-                    <span>Aktywne Operacje (Poboczne)</span>
-                    <span class="icon">🚛</span>
-                </div>
-                <div class="kpi-adv-value">{total_active_poboczne}</div>
-                <div class="kpi-progress-bar"><div class="kpi-progress" style="width: 100%;"></div></div>
-                <div style="font-size: 10px; color: #8C8477;">Bieżące zlecenia w realizacji</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col2:
-        st.markdown(f"""
-        <div class="dash-card">
-            <div class="kpi-advanced">
-                <div class="kpi-adv-header">
-                    <span>Otwarte Kwestie Dokumentacyjne</span>
-                    <span class="icon">📑</span>
-                </div>
-                <div class="kpi-adv-value">{brak_cmr + brak_pod}</div>
-                <div class="kpi-progress-bar"><div class="kpi-progress" style="width: 75%; background: #C77F4A;"></div></div>
-                <div style="font-size: 10px; color: #8C8477;">Braki CMR oraz POD z tras</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    with col3:
-        st.markdown(f"""
-        <div class="dash-card">
-            <div class="kpi-advanced">
-                <div class="kpi-adv-header">
-                    <span>Zadłużenie / Brak Płatności</span>
-                    <span class="icon">💰</span>
-                </div>
-                <div class="kpi-adv-value">{brak_fv}</div>
-                <div class="kpi-progress-bar"><div class="kpi-progress" style="width: 40%; background: #BA4949;"></div></div>
-                <div style="font-size: 10px; color: #8C8477;">Wymagają domknięcia księgowego</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # ==========================================
-    # 4. SKRZYNKA PROBLEMÓW (ISSUE INBOX) DLA CAŁEJ FIRMY
-    # ==========================================
-    st.markdown("<h3 class='dash-title'>🚨 Skrzynka Problemów (Issue Inbox)</h3>", unsafe_allow_html=True)
-    
-    alerts_html = ""
-    suma_calkowita_problemow = suma_problemow_poboczne
-    
-    # --- ALERTY Z EVENTÓW (Miejsce na Twój kod) ---
-    # Jeśli masz logikę sprawdzającą braki w eventach, dodaj ją tutaj:
-    # for index, row in df_eventy.iterrows():
-    #     if row.get("Jakiś Status") == "Brak":
-    #         alerts_html += f"""<div class="alert-item alert-danger">...</div>"""
-    #         suma_calkowita_problemow += 1
-
-    # --- ALERTY ZE ZLECEŃ POBOCZNYCH ---
-    if not aktywne_zlecenia.empty:
-        for index, row in aktywne_zlecenia.iterrows():
-            nr = row.get("Nr Zlecenia", "Nieznany")
-            przew = row.get("Przewoźnik", "Nieznany przewoźnik")
+    # 1. Analiza Zleceń PRO
+    if not df_zlecenia.empty:
+        for _, row in df_zlecenia.iterrows():
+            nr = row.get("Numer zlecenia", "Brak NR")
+            projekt = row.get("ID Projektu", "")
             
-            # Kod HTML wyrównany do lewej, aby uniknąć błędów Markdown
-            if row.get("CMR") == "NIE":
-                alerts_html += f"""<div class="alert-item alert-danger">
-<div class="alert-icon">📄</div>
-<div class="alert-content">
-<strong>Krytyczny brak dokumentu CMR!</strong>
-Zlecenie poboczne <b>{nr}</b> ({przew}) nie posiada przypisanego listu przewozowego.
-</div>
-</div>"""
-                
-            if row.get("POD") == "NIE":
-                alerts_html += f"""<div class="alert-item alert-warning">
-<div class="alert-icon">📋</div>
-<div class="alert-content">
-<strong>Brak zwrotu dokumentów dostawy (POD)</strong>
-Przewoźnik <b>{przew}</b> nie dostarczył potwierdzenia rozładunku dla zlecenia <b>{nr}</b>.
-</div>
-</div>"""
-                
-            if row.get("Faktura") == "NIE":
-                alerts_html += f"""<div class="alert-item" style="border-left: 3px solid #C5A880; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
-<div class="alert-icon" style="opacity: 0.8;">💳</div>
-<div class="alert-content">
-<strong style="color: #E2DCD3;">Nieopłacona Faktura Transportowa</strong>
-Zlecenie <b>{nr}</b> oczekuje na spływ lub zaksięgowanie faktury.
-</div>
-</div>"""
+            # Załadunki PRO
+            d_zal = normalize_date(row.get("Data załadunku"))
+            if d_zal:
+                all_events[d_zal].append({
+                    "typ": "ZAŁADUNEK (PRO)", "nr": nr, 
+                    "szczegoly": f"Projekt: {projekt} | Miejsce: {row.get('Miejsce Zaladunku', '')}", 
+                    "kolor": "#C9A471", "ikona": "🟢"
+                })
+            
+            # Rozładunki PRO
+            d_roz = normalize_date(row.get("Data rozładunku"))
+            if d_roz:
+                all_events[d_roz].append({
+                    "typ": "ROZŁADUNEK (PRO)", "nr": nr, 
+                    "szczegoly": f"Projekt: {projekt} | Miejsce: {row.get('Miejsce Rozladunku', '')}", 
+                    "kolor": "#83A5DB", "ikona": "🏁"
+                })
 
-    # Jeśli system nie znalazł żadnych błędów
-    if not alerts_html:
-        alerts_html = """<div class="alert-item" style="border-left: 3px solid #77A385; background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.1);">
-<div class="alert-icon" style="opacity: 1;">🍵</div>
-<div class="alert-content">
-<strong style="color: #77A385;">Wszystko w porządku (Czysta karta)</strong>
-Brak aktywnych problemów operacyjnych i finansowych. Pełen spokój.
-</div>
-</div>"""
+    # 2. Analiza Zleceń Pobocznych
+    if not df_poboczne.empty:
+        for _, row in df_poboczne.iterrows():
+            nr = row.get("Nr Zlecenia", "Brak NR")
+            przewoznik = row.get("Przewoźnik", "Brak danych")
+            
+            # Załadunki Poboczne
+            d_zal_p = normalize_date(row.get("Data Załadunku"))
+            if d_zal_p:
+                all_events[d_zal_p].append({
+                    "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, 
+                    "szczegoly": f"Przewoźnik: {przewoznik} | Opis: {row.get('Opis Ładunku / Trasy', '')}", 
+                    "kolor": "#AF8FC9", "ikona": "🟡"
+                })
+            
+            # Rozładunki Poboczne
+            d_roz_p = normalize_date(row.get("Data Rozładunku"))
+            if d_roz_p:
+                all_events[d_roz_p].append({
+                    "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, 
+                    "szczegoly": f"Przewoźnik: {przewoznik} | Cel osiągnięty", 
+                    "kolor": "#77A385", "ikona": "🚩"
+                })
+                
+            # Terminy Płatności
+            d_plat_p = normalize_date(row.get("Data Płatności"))
+            if d_plat_p:
+                all_events[d_plat_p].append({
+                    "typ": "TERMIN PŁATNOŚCI FAKTURY", "nr": nr, 
+                    "szczegoly": f"Przewoźnik: {przewoznik} (Ostateczny dzień płatności)", 
+                    "kolor": "#BA4949", "ikona": "💳"
+                })
+
+    # --- INTERFEJS KALENDARZA ---
+    st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 10px; text-transform: uppercase;'>🗓️ Interaktywny Kalendarz Operacyjny</p>", unsafe_allow_html=True)
     
-    # Wyświetlanie Skrzynki
-    col_alerts, col_info = st.columns([2, 1])
-    
-    with col_alerts:
-        st.markdown(f'''<div class="dash-card" style="max-height: 450px; overflow-y: auto; padding-right: 15px;">
-{alerts_html}
-</div>''', unsafe_allow_html=True)
+    # Wybór miesiąca i roku
+    c_m, c_y, _ = st.columns([1, 1, 3])
+    with c_m:
+        miesiac = st.selectbox("Miesiąc", range(1, 13), index=st.session_state.cal_month - 1)
+        st.session_state.cal_month = miesiac
+    with c_y:
+        rok = st.selectbox("Rok", [2025, 2026, 2027], index=[2025, 2026, 2027].index(st.session_state.cal_year))
+        st.session_state.cal_year = rok
+
+    # Renderowanie siatki kalendarza
+    with st.container(border=True):
+        cal = calendar.monthcalendar(rok, miesiac)
+        dni_tyg = ["PONIEDZIAŁEK", "WTOREK", "ŚRODA", "CZWARTEK", "PIĄTEK", "SOBOTA", "NIEDZIELA"]
         
-    with col_info:
-        st.markdown(f'''<div class="dash-card">
-<div class="dash-title">Status Operacyjny</div>
-<div style="color: #8C8477; font-size: 12px; line-height: 1.6;">
-System analizuje obecnie statusy połączonych modułów operacyjnych (w tym <b>Zlecenia Poboczne</b>). 
-<br><br>
-Alerty klasyfikowane są na podstawie ważności:<br>
-<span style="color: #BA4949;">■ Krytyczne</span> (Wymagają natychmiastowej akcji)<br>
-<span style="color: #C77F4A;">■ Ostrzeżenia</span> (Opóźnienia dokumentacyjne)<br>
-<span style="color: #C5A880;">■ Administracyjne</span> (Księgowość i finanse)<br><br>
-Łączna liczba wymaganych akcji: <b>{suma_calkowita_problemow}</b>
-</div>
-</div>''', unsafe_allow_html=True)
+        # Nagłówki dni
+        cols = st.columns(7)
+        for i, nazwa_dnia in enumerate(dni_tyg):
+            cols[i].markdown(f"<div style='text-align: center; color: #8C8477; font-size: 10px; font-weight: bold;'>{nazwa_dnia}</div>", unsafe_allow_html=True)
+            
+        st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.1);'>", unsafe_allow_html=True)
+
+        # Generowanie przycisków dni
+        for week in cal:
+            cols = st.columns(7)
+            for i, day in enumerate(week):
+                if day == 0:
+                    cols[i].markdown("<div style='min-height: 40px;'></div>", unsafe_allow_html=True)
+                else:
+                    d_str = f"{rok}-{miesiac:02d}-{day:02d}"
+                    lista_zdarzen = all_events.get(d_str, [])
+                    liczba_zdarzen = len(lista_zdarzen)
+                    
+                    # Wizualne wskazanie wybranego dnia
+                    is_selected = (st.session_state.cal_selected_date == d_str)
+                    btn_type = "primary" if is_selected else "secondary"
+                    
+                    # Formaty etykiety w zależności od ilości zdarzeń
+                    if liczba_zdarzen > 0:
+                        label = f"{day} \n 🔥 [{liczba_zdarzen}]"
+                    else:
+                        label = f"{day}"
+                    
+                    # Kliknięcie w dzień aktualizuje stan i przeładowuje widok
+                    if cols[i].button(label, key=f"btn_{d_str}", use_container_width=True, type=btn_type):
+                        st.session_state.cal_selected_date = d_str
+                        st.rerun()
+
+    # --- SZCZEGÓŁY WYBRANEGO DNIA (ROZKŁAD JAZDY) ---
+    wybrana_data_str = st.session_state.cal_selected_date
+    zdarzenia_wybranego_dnia = all_events.get(wybrana_data_str, [])
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f"<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>🔎 Rozkład na dzień: {wybrana_data_str}</h3>", unsafe_allow_html=True)
+
+    if not zdarzenia_wybranego_dnia:
+        st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
+    else:
+        for ev in zdarzenia_wybranego_dnia:
+            st.markdown(f"""
+            <div class="custom-row" style="border-left: 3px solid {ev['kolor']}; margin-bottom: 8px;">
+                <div class="cr-col">
+                    <div class="cr-title" style="color: {ev['kolor']}; font-size: 12px; margin-bottom: 2px;">
+                        {ev['ikona']} <strong>{ev['typ']}</strong> | {ev['nr']}
+                    </div>
+                    <div class="cr-text" style="font-size: 13px; color: #E2DCD3;">
+                        {ev['szczegoly']}
+                    </div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
