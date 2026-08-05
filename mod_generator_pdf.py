@@ -8,6 +8,7 @@ import os
 import hashlib
 import difflib
 import openpyxl
+from openpyxl.cell.cell import MergedCell
 import io
 
 # Importujemy scentralizowany silnik bazy danych
@@ -198,6 +199,18 @@ def generate_pro_pdf(dane):
 
     return bytes(pdf.output(dest='S').encode('latin1'))
 
+# --- BEZPIECZNA FUNKCJA ZAPISU DO KOMÓREK (OBSŁUGA SCALENIA) ---
+def safe_set_cell(sheet, coordinate, value):
+    try:
+        sheet[coordinate] = value
+    except AttributeError:
+        # Jeśli komórka jest scalona, szukamy górnego lewego rogu zakresu
+        for cr in sheet.merged_cells.ranges:
+            if coordinate in cr:
+                top_left = str(cr).split(':')[0]
+                sheet[top_left] = value
+                break
+
 # --- GENERATOR 5-STRONICOWEGO CMR W EXCELU ---
 def generate_cmr_excel(dane):
     szablon_path = "Szablon_CMR.xlsx"
@@ -208,18 +221,18 @@ def generate_cmr_excel(dane):
     nadawca_tekst = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
     
     for sheet in wb.worksheets:
-        sheet['D6'] = nadawca_tekst
-        sheet['D14'] = dane.get('odbiorca', '')
-        sheet['D20'] = dane.get('miejsce_przeznaczenia', '')
-        sheet['D24'] = dane.get('data_zal', '')
-        sheet['H24'] = dane.get('miasto_zal', '')
-        sheet['D33'] = dane.get('opis_ladunku', 'MULTIMEDIA / Exhibition Equipment')
-        sheet['Q38'] = dane.get('waga', 0)
-        sheet['E69'] = dane.get('miasto_zal', '')  # Wystawiono w
-        sheet['H69'] = dane.get('data_zal', '')   # Dnia
-        sheet['T6'] = dane.get('nr_cmr', '24122250')
-        sheet['L14'] = dane.get('auto', '')
-        sheet['L15'] = dane.get('kierowca', '')
+        safe_set_cell(sheet, 'D6', nadawca_tekst)
+        safe_set_cell(sheet, 'D14', dane.get('odbiorca', ''))
+        safe_set_cell(sheet, 'D20', dane.get('miejsce_przeznaczenia', ''))
+        safe_set_cell(sheet, 'D24', dane.get('data_zal', ''))
+        safe_set_cell(sheet, 'H24', dane.get('miasto_zal', ''))
+        safe_set_cell(sheet, 'D33', dane.get('opis_ladunku', 'MULTIMEDIA / Exhibition Equipment'))
+        safe_set_cell(sheet, 'Q38', dane.get('waga', 0))
+        safe_set_cell(sheet, 'E69', dane.get('miasto_zal', ''))  # Wystawiono w
+        safe_set_cell(sheet, 'H69', dane.get('data_zal', ''))   # Dnia
+        safe_set_cell(sheet, 'T6', dane.get('nr_cmr', '24122250'))
+        safe_set_cell(sheet, 'L14', dane.get('auto', ''))
+        safe_set_cell(sheet, 'L15', dane.get('kierowca', ''))
         
     output = io.BytesIO()
     wb.save(output)
@@ -633,7 +646,6 @@ def render(sh):
                         else:
                             st.success(f"✅ Zlecenie {nr_zlecenia} zostało wygenerowane i zapisane pomyślnie!")
                             
-                        # Dwa przyciski pobierania obok siebie
                         col_pdf, col_cmr = st.columns(2)
                         with col_pdf:
                             st.download_button(
