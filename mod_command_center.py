@@ -135,8 +135,8 @@ def render(sh):
             st.session_state.cal_selected_date = dzis.strftime("%Y-%m-%d")
             st.rerun()
 
-    # Renderowanie siatki kalendarza w szklanym kontenerze
-    with st.container():
+    # Renderowanie siatki kalendarza
+    with st.container(border=True):
         st.markdown("""
             <style>
             .cal-header {
@@ -160,8 +160,6 @@ def render(sh):
             </style>
         """, unsafe_allow_html=True)
         
-        st.markdown("<div style='background: rgba(28, 26, 24, 0.6); border: 1px solid rgba(197, 168, 128, 0.2); border-radius: 12px; padding: 25px; backdrop-filter: blur(10px); margin-top: 5px;'>", unsafe_allow_html=True)
-        
         cal = calendar.monthcalendar(rok, miesiac)
         dni_tyg = ["Pon", "Wto", "Śro", "Czw", "Pią", "Sob", "Nie"]
         
@@ -179,7 +177,6 @@ def render(sh):
                 else:
                     d_str = f"{rok}-{miesiac:02d}-{day:02d}"
                     lista_zdarzen = all_events.get(d_str, [])
-                    liczba_zdarzen = len(lista_zdarzen)
                     
                     is_selected = (st.session_state.cal_selected_date == d_str)
                     btn_type = "primary" if is_selected else "secondary"
@@ -201,8 +198,6 @@ def render(sh):
                     if cols[i].button(label, key=f"btn_{d_str}", use_container_width=True, type=btn_type):
                         st.session_state.cal_selected_date = d_str
                         st.rerun()
-
-        st.markdown("</div>", unsafe_allow_html=True)
 
     # --- SZCZEGÓŁY WYBRANEGO DNIA (ROZKŁAD JAZDY) ---
     wybrana_data_str = st.session_state.cal_selected_date
