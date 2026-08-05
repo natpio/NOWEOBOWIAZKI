@@ -6,9 +6,9 @@ import tempfile
 from fpdf import FPDF
 import openpyxl
 from openpyxl.styles import PatternFill
-pandas as pd
+import pandas as pd
 import qrcode
-streamlit as st
+import streamlit as st
 
 # Importujemy scentralizowany silnik bazy danych
 import db
@@ -325,7 +325,6 @@ def generate_cmr_excel(dane):
   )
 
   for sheet in wb.worksheets:
-    # Automatyczne usuwanie czarnych teł z szablonu (naprawa czarnych plam)
     for row in sheet.iter_rows(min_row=1, max_row=75, min_col=1, max_col=24):
       for cell in row:
         if cell.fill and cell.fill.start_color:
@@ -342,8 +341,8 @@ def generate_cmr_excel(dane):
         sheet, "D33", dane.get("opis_ladunku", "MULTIMEDIA / Exhibition Equipment")
     )
     safe_set_cell(sheet, "Q38", dane.get("waga", 0))
-    safe_set_cell(sheet, "E69", dane.get("miasto_zal", ""))  # Wystawiono w
-    safe_set_cell(sheet, "H69", dane.get("data_zal", ""))  # Dnia
+    safe_set_cell(sheet, "E69", dane.get("miasto_zal", ""))
+    safe_set_cell(sheet, "H69", dane.get("data_zal", ""))
     safe_set_cell(sheet, "T6", dane.get("nr_cmr", "24122250"))
     safe_set_cell(sheet, "L14", dane.get("auto", ""))
     safe_set_cell(sheet, "L15", dane.get("kierowca", ""))
