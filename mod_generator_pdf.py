@@ -622,7 +622,24 @@ def render(sh):
                             auto_val = parts_auto[0].strip()
                             kierowca_val = parts_auto[1].strip()
                             
-                        miasto_zal_val = z_man if z_sel == "INNE (wpisz ręcznie)" else z_sel
+                        # --- 1. WYZNACZANIE MIASTA ZAŁADUNKU ---
+                        if z_sel == "Magazyn SQM Komorniki":
+                            miasto_zal_val = "Komorniki"
+                        elif z_sel == "INNE (wpisz ręcznie)":
+                            miasto_zal_val = z_man.split(',')[-1].strip() if ',' in z_man else z_man
+                        else:
+                            miasto_zal_val = z_sel
+                            if not df_miejsca.empty:
+                                row_m = df_miejsca[df_miejsca["Nazwa do listy"] == z_sel]
+                                if not row_m.empty:
+                                    miasto_zal_val = str(row_m.iloc[0].get("Miasto", z_sel)).strip()
+                        
+                        # --- 2. DYNAMICZNA NUMERACJA CMR ---
+                        base_cmr = 24122250
+                        if tryb_pracy == "Edycja Istniejącego Zlecenia":
+                            numer_cmr_final = str(base_cmr + int(idx_pd))
+                        else:
+                            numer_cmr_final = str(base_cmr + len(df_zlecenia))
                         
                         dane_cmr = {
                             "odbiorca": full_roz_pdf,
@@ -631,7 +648,7 @@ def render(sh):
                             "miasto_zal": miasto_zal_val,
                             "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
                             "waga": waga,
-                            "nr_cmr": "24122250",
+                            "nr_cmr": numer_cmr_final,
                             "auto": auto_val,
                             "kierowca": kierowca_val
                         }
