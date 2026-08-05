@@ -114,17 +114,19 @@ def main():
         if "menu_option" not in st.session_state:
             st.session_state["menu_option"] = "COMMAND CENTER"
             
-        # Zabezpieczenie przed różnicami w wielkości liter z innych modułów
-        stan_menu = st.session_state["menu_option"].upper()
-        if stan_menu not in opcje_menu:
-            if "PRO" in stan_menu:
+        # Wymuszamy NATYCHMIASTOWĄ zamianę stanu w pamięci na wielkie litery
+        st.session_state["menu_option"] = str(st.session_state["menu_option"]).upper()
+        
+        # Zabezpieczenie przed błędnymi nazwami (gdyby pojawiła się jakaś inna zła nazwa)
+        if st.session_state["menu_option"] not in opcje_menu:
+            if "PRO" in st.session_state["menu_option"]:
                 st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
-            elif "POBOCZNE" in stan_menu:
+            elif "POBOCZNE" in st.session_state["menu_option"]:
                 st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
             else:
                 st.session_state["menu_option"] = "COMMAND CENTER"
 
-        # Pobieramy indeks dla komponentu option_menu
+        # Teraz możemy bezpiecznie szukać indeksu, bo wartości są zawsze z wielkich liter
         aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
         
         wybrany_modul = option_menu(
