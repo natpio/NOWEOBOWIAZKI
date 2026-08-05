@@ -7,6 +7,8 @@ import tempfile
 import os
 import hashlib
 import difflib
+import openpyxl
+import io
 
 # Importujemy scentralizowany silnik bazy danych
 import db
@@ -29,7 +31,6 @@ class PRO_TransportOrder(FPDF):
         super().__init__()
         self.watermark_text = pdf_sanitize(watermark_text)
         self.opiekun = opiekun
-        # Klasyczne, oryginalne kolory (Niebieski SQM)
         self.primary_color = (25, 118, 210) 
         self.dark_text = (40, 40, 40)
         self.light_text = (100, 100, 100)
@@ -93,7 +94,6 @@ def generate_pro_pdf(dane):
     pdf.add_page()
     pdf.add_watermark()
 
-    # KOD QR 
     token_base = f"{dane['nr']}-{dane['przewoznik_nazwa']}-{dane['stawka']}"
     secure_hash = hashlib.md5(token_base.encode()).hexdigest()[:12].upper()
     qr_content = f"SQM-VERIFY: {dane['nr']}\nVALID-HASH: {secure_hash}\nSYSTEM: SQM HUB"
@@ -109,7 +109,6 @@ def generate_pro_pdf(dane):
     pdf.image(qr_path, 175, 10, 25)
     if os.path.exists(qr_path): os.remove(qr_path)
 
-    # BLOKI: REF & DATE
     pdf.set_xy(10, 40)
     pdf.set_font("Arial", 'B', 9)
     pdf.set_fill_color(25, 118, 210) 
@@ -153,14 +152,12 @@ def generate_pro_pdf(dane):
             pdf.line(10, y_end, 200, y_end)
         pdf.set_xy(10, y_end + 2)
 
-    # 01 PARTIES
     draw_section_header(1, "PARTIES & ASSETS / STRONY I POJAZD")
     draw_row("CONTRACTOR / PRZEWOŹNIK:", dane['przewoznik_detale'])
     draw_row("VEHICLE & DRIVER / AUTO I KIEROWCA:", dane['auto'] if dane['auto'] else "TBA / Do podania")
     draw_row("VALUATION MODEL / TRYB WYCENY:", dane['typ_zlecenia'], border_b=False)
     pdf.ln(4)
 
-    # 02 LOGISTICS TIMELINE
     draw_section_header(2, "LOGISTICS TIMELINE / HARMONOGRAM LOGISTYCZNY")
     draw_row("LOADING PLACE / MIEJSCE ZAŁADUNKU:", dane['zaladunek'])
     draw_row("LOADING DATE / DATA ZAŁADUNKU:", dane['data_zal'])
@@ -173,11 +170,9 @@ def generate_pro_pdf(dane):
         draw_row("UNLOADING DATE / DATA ROZŁADUNKU:", dane['data_roz'], border_b=False)
     pdf.ln(4)
 
-    # 03 FINANCIALS
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
     sy = pdf.get_y()
     
-    # Prawy boks z ceną
     pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 25, 25, 'F') 
     pdf.set_xy(145, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(145, sy, 55, 25, 'F')
     pdf.set_xy(145, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
@@ -185,7 +180,6 @@ def generate_pro_pdf(dane):
     pdf.set_xy(145, sy + 10); pdf.set_font("Arial", 'B', 20)
     pdf.cell(50, 10, pdf_sanitize(f"{dane['stawka']} {dane['waluta']}"), ln=True)
     
-    # Lewy panel z informacjami o ładunku i płatności
     pdf.set_xy(10, sy)
     pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("CARGO TYPE / RODZAJ TOWARU:"), border=0)
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, sy); pdf.multi_cell(50, 5, pdf_sanitize("Exhibition Structures / AV Equipment"))
@@ -194,7 +188,6 @@ def generate_pro_pdf(dane):
     pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("GROSS WEIGHT / WAGA BRUTTO:"), border=0)
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 5, pdf_sanitize(f"{dane['waga']} kg"))
 
-    # Dodany wiersz terminów płatności
     pdf.set_xy(10, pdf.get_y() + 6)
     pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("PAYMENT / PŁATNOŚĆ:"), border=0)
     pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 5, pdf_sanitize(f"{dane['termin_dni']} dni / days ({dane['data_platnosci']})"))
@@ -204,6 +197,34 @@ def generate_pro_pdf(dane):
     pdf.set_font("Arial", 'I', 10); pdf.multi_cell(0, 6, pdf_sanitize(dane['uwagi']))
 
     return bytes(pdf.output(dest='S').encode('latin1'))
+
+# --- GENERATOR 5-STRONICOWEGO CMR W EXCELU ---
+def generate_cmr_excel(dane):
+    szablon_path = "Szablon_CMR.xlsx"
+    if not os.path.exists(szablon_path):
+        raise FileNotFoundError(f"Nie znaleziono pliku szablonu: {szablon_path}. Umieść go w katalogu głównym.")
+        
+    wb = openpyxl.load_workbook(szablon_path)
+    nadawca_tekst = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+    
+    for sheet in wb.worksheets:
+        sheet['D6'] = nadawca_tekst
+        sheet['D14'] = dane.get('odbiorca', '')
+        sheet['D20'] = dane.get('miejsce_przeznaczenia', '')
+        sheet['D24'] = dane.get('data_zal', '')
+        sheet['H24'] = dane.get('miasto_zal', '')
+        sheet['D33'] = dane.get('opis_ladunku', 'MULTIMEDIA / Exhibition Equipment')
+        sheet['Q38'] = dane.get('waga', 0)
+        sheet['E69'] = dane.get('miasto_zal', '')  # Wystawiono w
+        sheet['H69'] = dane.get('data_zal', '')   # Dnia
+        sheet['T6'] = dane.get('nr_cmr', '24122250')
+        sheet['L14'] = dane.get('auto', '')
+        sheet['L15'] = dane.get('kierowca', '')
+        
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.read()
 
 # =======================================================
 # GŁÓWNA FUNKCJA RENDERUJĄCA WIDOK 
@@ -216,7 +237,6 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    # Ładujemy dane przed podziałem na zakładki, by obie miały do nich dostęp
     with st.spinner("Ładowanie telemetrii bazy danych..."):
         df_projekty = db.fetch_data("Projekty")
         df_miejsca = db.fetch_data("Miejsca")
@@ -229,7 +249,6 @@ def render(sh):
     # KARTA 1: GENERATOR PDF I FORMULARZ
     # ---------------------------------------------------------
     with tab1:
-        # --- BOCZNY PANEL: WYBÓR TRYBU PRACY I KATEGORII ---
         c1, c2 = st.columns(2)
         with c1:
             tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
@@ -241,14 +260,11 @@ def render(sh):
             )
         st.markdown("<br>", unsafe_allow_html=True)
 
-        # Domyślny tekst uwag
         domyslny_tekst = "Parking strzeżony, pasy zabezpieczające; załadować po długości, casy nie mogą leżeć, kłódka / Guarded parking, safety belts; load lengthwise, cases cannot lie down, safe lock."
 
-        # --- PROFILOWANIE TRYBU EDYCJI ---
         wybrane_zlecenie_nr = None
         gs_row_index = None
 
-        # Inicjalizacja domyślnych wartości zmiennych dla formularza
         val_typ_zlecenia = "Tylko dostawa"
         val_waga = 1000
         val_data_zal = datetime.now().date()
@@ -271,7 +287,6 @@ def render(sh):
         val_podpis = "PD"
         val_miejsca_rozladunku_raw = []
 
-        # Filtrowanie zleceń Cargo
         if not df_zlecenia.empty:
             if 'Dział' in df_zlecenia.columns:
                 df_cargo = df_zlecenia[df_zlecenia['Dział'] == 'LOGISTYKA CARGO'].copy()
@@ -347,7 +362,6 @@ def render(sh):
                 st.warning("Baza zleceń jest pusta - brak danych do edycji.")
                 st.stop()
 
-        # --- SŁOWNIK MIEJSC: PRZEGLĄDARKA ---
         with st.expander("🔍 Przeglądaj i wyszukaj miejsca z Bazy Lokalizacji"):
             wyszukiwana_fraza = st.text_input("Wpisz szukaną frazę (nazwa, miasto, ulica, kod):", placeholder="np. Messe Berlin...")
             if not df_miejsca.empty:
@@ -357,7 +371,6 @@ def render(sh):
                 else:
                     st.dataframe(df_miejsca, use_container_width=True, hide_index=True)
 
-        # --- SZYBKIE DODAWANIE NOWEGO MIEJSCA ---
         with st.expander("➕ Brak miejsca na liście? Dodaj nową lokalizację do Słownika"):
             with st.form("form_nowe_miejsce", clear_on_submit=True):
                 nowa_nazwa_lista = st.text_input("Nazwa skrócona (do listy wyboru):*", placeholder="np. BERLIN, DE - Messe Berlin")
@@ -430,12 +443,9 @@ def render(sh):
                         detale_przewoznika = nazwa_przewoznika
 
                 stawka_final = f2.number_input("Stawka Total:", value=float(val_stawka_final))
-                
                 currency_idx = ["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0
                 waluta = f3.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
-                
                 postoj = f4.number_input("Postój:", value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
-                    
             else:
                 nazwa_przewoznika = st.text_input("Nazwa firmy z giełdy:", value=val_nazwa_przewoznika)
                 detale_przewoznika = st.text_area("Pełne dane (Adres, NIP do zlecenia):", value=val_detale_przewoznika)
@@ -445,7 +455,6 @@ def render(sh):
                 waluta = f2.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
                 postoj = f3.number_input("Postój:", min_value=0.0, value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
                 
-            # Dodany panel kalkulacji terminów płatności
             t1, t2 = st.columns([1, 2])
             termin_dni = t1.number_input("Termin płatności (dni od rozładunku):", min_value=0, max_value=120, value=val_termin_dni, step=1)
             data_platnosci = data_roz + timedelta(days=termin_dni)
@@ -513,13 +522,13 @@ def render(sh):
             podpis_idx = ["PD", "PK"].index(val_podpis) if val_podpis in ["PD", "PK"] else 0
             podpis = u2.radio("Podpis Koordynatora:", ["PD", "PK"], index=podpis_idx, horizontal=True)
 
-        btn_label = "⚡ ZAPISZ ZMIANY I REGENERUJ PDF" if tryb_pracy == "Edycja Istniejącego Zlecenia" else "⚡ GENERUJ I ZAPISZ ZLECENIE PRO"
+        btn_label = "⚡ ZAPISZ ZMIANY I REGENERUJ DOKUMENTY" if tryb_pracy == "Edycja Istniejącego Zlecenia" else "⚡ GENERUJ I ZAPISZ ZLECENIE PRO"
 
         if st.button(btn_label, type="primary", use_container_width=True):
             if not nazwa_przewoznika or nazwa_przewoznika == "Wybierz...":
                 st.error("Wybierz lub wpisz firmę przewozową!")
             else:
-                with st.spinner("Generowanie pliku PDF i aktualizacja chmury..."):
+                with st.spinner("Generowanie dokumentów i aktualizacja chmury..."):
                     final_zal_db = z_man if z_sel == "INNE (wpisz ręcznie)" else z_sel
                     
                     def build_full_address(place_name, manual_addr, df):
@@ -556,13 +565,10 @@ def render(sh):
                         nr_zlecenia = wybrane_zlecenie_nr
                     else:
                         idx = db.get_next_daily_number(datetime.now().strftime("%Y-%m-%d"))
-                        
-                        # --- NOWA LOGIKA PREFIKSU ZLECENIA ---
                         if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
                             prefix = "ZLP"
                         else:
                             prefix = "EVT"
-                            
                         nr_zlecenia = f"{prefix}{datetime.now().strftime('%y/%m%d')}/{podpis}{idx:02d}"
                     
                     paczka_pdf = {
@@ -585,41 +591,71 @@ def render(sh):
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
                         operacja_sukces = db.update_row("Zlecenia", gs_row_index, wiersz_db)
                     else:
-                        # 1. Zapis do głównej bazy PRO
                         operacja_sukces = db.append_data("Zlecenia", wiersz_db)
-                        
-                        # 2. Automatyczny eksport do Zleceń Pobocznych
                         if operacja_sukces and kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
                             wiersz_poboczne = [
-                                nr_zlecenia,                           
-                                nazwa_przewoznika,                     
-                                f"PROJEKT: {projekt} | {instrukcje}",  
-                                str(data_zal),                         
-                                str(data_roz),                         
-                                str(termin_dni),                       
-                                data_platnosci.strftime('%d.%m.%Y'),   
-                                "PLANOWANIE",                          
-                                "NIE",                                 
-                                "NIE",                                 
-                                "NIE"                                  
+                                nr_zlecenia, nazwa_przewoznika, f"PROJEKT: {projekt} | {instrukcje}",  
+                                str(data_zal), str(data_roz), str(termin_dni),                       
+                                data_platnosci.strftime('%d.%m.%Y'), "PLANOWANIE", "NIE", "NIE", "NIE"                                  
                             ]
                             db.append_data("Zlecenia Poboczne", wiersz_poboczne)
                             
                     if operacja_sukces:
+                        # Generowanie PDF
                         pdf_bytes = generate_pro_pdf(paczka_pdf)
+                        
+                        # Przygotowanie danych do pliku CMR (5 stron)
+                        auto_val = c_auto
+                        kierowca_val = ""
+                        if "/" in c_auto:
+                            parts_auto = c_auto.split("/", 1)
+                            auto_val = parts_auto[0].strip()
+                            kierowca_val = parts_auto[1].strip()
+                            
+                        miasto_zal_val = z_man if z_sel == "INNE (wpisz ręcznie)" else z_sel
+                        
+                        dane_cmr = {
+                            "odbiorca": full_roz_pdf,
+                            "miejsce_przeznaczenia": full_roz_pdf,
+                            "data_zal": str(data_zal),
+                            "miasto_zal": miasto_zal_val,
+                            "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                            "waga": waga,
+                            "nr_cmr": "24122250",
+                            "auto": auto_val,
+                            "kierowca": kierowca_val
+                        }
+                        
+                        cmr_bytes = generate_cmr_excel(dane_cmr)
+                        
                         if tryb_pracy == "Edycja Istniejącego Zlecenia":
                             st.success(f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!")
                         else:
-                            if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
-                                st.success(f"✅ Zlecenie {nr_zlecenia} zapisane w PRO oraz wyeksportowane do Zleceń Pobocznych!")
-                            else:
-                                st.success(f"✅ Zlecenie {nr_zlecenia} wygenerowane jako Eventowe (bez zapisu do Zleceń Pobocznych).")
+                            st.success(f"✅ Zlecenie {nr_zlecenia} zostało wygenerowane i zapisane pomyślnie!")
                             
-                        st.download_button("📥 POBIERZ DOKUMENT PDF", data=pdf_bytes, file_name=f"Order_{nr_zlecenia.replace('/', '_')}.pdf", mime="application/pdf", use_container_width=True)
+                        # Dwa przyciski pobierania obok siebie
+                        col_pdf, col_cmr = st.columns(2)
+                        with col_pdf:
+                            st.download_button(
+                                "📥 POBIERZ ZLECENIE (PDF)", 
+                                data=pdf_bytes, 
+                                file_name=f"Order_{nr_zlecenia.replace('/', '_')}.pdf", 
+                                mime="application/pdf", 
+                                use_container_width=True
+                            )
+                        with col_cmr:
+                            st.download_button(
+                                "📝 POBIERZ GOTOWY CMR (5 STRON)", 
+                                data=cmr_bytes, 
+                                file_name=f"CMR_{nr_zlecenia.replace('/', '_')}.xlsx", 
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                                use_container_width=True
+                            )
+                            
                         st.cache_data.clear()
 
     # ---------------------------------------------------------
-    # KARTA 2: NOWA LISTA ZLECEŃ Z OPCJĄ USUWANIA
+    # KARTA 2: BAZA ZLECEŃ PRO Z OPCJĄ USUWANIA
     # ---------------------------------------------------------
     with tab2:
         st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Aktywne Zlecenia PRO</h3>", unsafe_allow_html=True)
@@ -631,15 +667,11 @@ def render(sh):
             if len(data) > 1:
                 headers = data[0]
                 df_pro = pd.DataFrame(data[1:], columns=headers)
-                
-                # Zapisujemy dokładny wiersz z Arkusza Google, aby można było go precyzyjnie usunąć
                 df_pro['sheet_row'] = df_pro.index + 2
                 
-                # Filtrujemy tylko zlecenia LOGISTYKA CARGO (czyli moduł PRO)
                 if 'Dział' in df_pro.columns:
                     df_pro = df_pro[df_pro['Dział'] == 'LOGISTYKA CARGO']
                 
-                # Odwracamy kolejność, żeby najnowsze były na samej górze
                 df_pro = df_pro.iloc[::-1]
                 
                 if df_pro.empty:
@@ -666,11 +698,9 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        # Logika usuwania wiersza bezpośrednio z chmury Google Sheets - ZABEZPIECZONA
                         c1, c2 = st.columns([4, 1])
                         with c2:
                             if st.button("🗑️ Usuń zlecenie", key=f"del_pro_{row['sheet_row']}", use_container_width=True):
-                                # Zmiana na bezpieczny format dla Gspread (int i delete_row)
                                 ws_zlecenia.delete_row(int(row['sheet_row']))
                                 st.success(f"Zlecenie {nr} zostało trwale usunięte!")
                                 st.rerun()
