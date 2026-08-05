@@ -99,20 +99,39 @@ def main():
             </div>
         ''', unsafe_allow_html=True)
         
+        opcje_menu = [
+            "COMMAND CENTER",
+            "GENERATOR ZLECEŃ PRO", 
+            "EVENTY / TARGI", 
+            "ZLECENIA POBOCZNE",
+            "SUBRENTY", 
+            "YESTECH EXPORT",
+            "BAZY DANYCH / SŁOWNIKI", 
+            "FINANSE I RAPORTY"
+        ]
+
+        # --- Inicjalizacja stanu menu ---
+        if "menu_option" not in st.session_state:
+            st.session_state["menu_option"] = "COMMAND CENTER"
+            
+        # Zabezpieczenie przed różnicami w wielkości liter z innych modułów
+        stan_menu = st.session_state["menu_option"].upper()
+        if stan_menu not in opcje_menu:
+            if "PRO" in stan_menu:
+                st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
+            elif "POBOCZNE" in stan_menu:
+                st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
+            else:
+                st.session_state["menu_option"] = "COMMAND CENTER"
+
+        # Pobieramy indeks dla komponentu option_menu
+        aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
+        
         wybrany_modul = option_menu(
             menu_title=None,
-            options=[
-                "COMMAND CENTER",
-                "GENERATOR ZLECEŃ PRO", # ZAKTUALIZOWANA POZYCJA
-                "EVENTY / TARGI", 
-                "ZLECENIA POBOCZNE",
-                "SUBRENTY", 
-                "YESTECH EXPORT",
-                "BAZY DANYCH / SŁOWNIKI", 
-                "FINANSE I RAPORTY"
-            ],
-            icons=["cpu", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"], # IKONA PDF
-            default_index=0,
+            options=opcje_menu,
+            icons=["cpu", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"], 
+            default_index=aktualny_indeks,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
                 "icon": {"color": "#C5A880", "font-size": "14px"},
@@ -135,6 +154,9 @@ def main():
             }
         )
         
+        # Aktualizacja stanu w przypadku ręcznego kliknięcia w menu boczne
+        st.session_state["menu_option"] = wybrany_modul
+        
         st.markdown('''
             <div class="sidebar-profile-card">
                 <div style="font-size: 11px; color: #E2DCD3; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
@@ -153,7 +175,7 @@ def main():
     if wybrany_modul == "COMMAND CENTER":
         mod_command_center.render(sh)
     elif wybrany_modul == "GENERATOR ZLECEŃ PRO":
-        mod_generator_pdf.render(sh) # ROUTING DO NOWEGO MODUŁU
+        mod_generator_pdf.render(sh) 
     elif wybrany_modul == "EVENTY / TARGI":
         mod_eventy.render(sh)
     elif wybrany_modul == "ZLECENIA POBOCZNE":
