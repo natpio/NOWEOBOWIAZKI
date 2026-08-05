@@ -239,6 +239,132 @@ def generate_cmr_excel(dane):
     output.seek(0)
     return output.read()
 
+# --- MODUŁ INŻYNIERII WSTECZNEJ (ODTWARZANIE DANYCH Z BAZY DO PDF/CMR) ---
+def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
+    nr_zlecenia = str(r.get('Numer zlecenia', ''))
+    podpis = "".join([c for c in nr_zlecenia.split("/")[-1] if c.isalpha()])[:2] if "/" in nr_zlecenia else "PD"
+
+    data_zal = str(r.get('Data załadunku', ''))
+    data_roz = str(r.get('Data rozładunku', ''))
+    data_platnosci = str(r.get('Data płatności (szacowana)', ''))
+    
+    stawka_str = str(r.get('Stawka', '0 EUR'))
+    stawka_final = 0.0
+    waluta = "EUR"
+    if " " in stawka_str:
+        try:
+            stawka_final = float(stawka_str.split(" ")[0])
+            waluta = stawka_str.split(" ")[1]
+        except: pass
+    else:
+        try: stawka_final = float(stawka_str)
+        except: pass
+        
+    nazwa_przewoznika = str(r.get('Zleceniobiorca', ''))
+    detale_przewoznika = nazwa_przewoznika
+    if not df_przewoznicy.empty and 'Skrócona Nazwa' in df_przewoznicy.columns:
+        r_p = df_przewoznicy[df_przewoznicy['Skrócona Nazwa'] == nazwa_przewoznika]
+        if not r_p.empty:
+            rp_row = r_p.iloc[0]
+            detale_przewoznika = f"{str(rp_row.get('Pełna Nazwa', ''))}\n{str(rp_row.get('Ulica i numer', ''))}\n{str(rp_row.get('Kod pocztowy i Miasto', ''))}, {str(rp_row.get('Kraj', 'Polska'))}\nNIP: {str(rp_row.get('NIP', ''))}".strip()
+            
+    z_sel = str(r.get('Miejsce Zaladunku', ''))
+    def build_full_address(place_name, df):
+        if place_name == "Magazyn SQM Komorniki":
+            return "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+        if df is not None and not df.empty:
+            row_df = df[df['Nazwa do listy'] == place_name]
+            if not row_df.empty:
+                r_m = row_df.iloc[0]
+                return f"{r_m.get('Nazwa pełna / Firma', place_name)}\n{r_m.get('Ulica i numer', '')}\n{r_m.get('Kod pocztowy', '')} {r_m.get('Miasto', '')}, {r_m.get('Kraj', '')}"
+        return place_name
+
+    full_zal_pdf = build_full_address(z_sel, df_miejsca)
+    
+    m_roz_baza = str(r.get('Miejsce Rozladunku', ''))
+    roz_list = m_roz_baza.split(" | ")
+    lista_roz_pdf = [build_full_address(x, df_miejsca) for x in roz_list]
+    if len(lista_roz_pdf) > 1:
+        full_roz_pdf = "\n\n".join([f"DROP {idx+1}:\n{tekst}" for idx, tekst in enumerate(lista_roz_pdf)])
+    else:
+        full_roz_pdf = lista_roz_pdf[0] if lista_roz_pdf else ""
+        
+    uwagi_baza = str(r.get('Uwagi / Instrukcje', ''))
+    c_auto = ""
+    val_instrukcje = uwagi_baza
+    data_emp_in = ""
+    data_emp_out = ""
+    
+    if "AUTO: " in uwagi_baza:
+        try: c_auto = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
+        except: pass
+        
+    if " || " in uwagi_baza:
+        parts = uwagi_baza.split(" || ")
+        if len(parts) >= 4:
+            val_instrukcje = parts[3]
+            cykl_part = parts[2]
+        elif len(parts) == 3:
+            val_instrukcje = parts[2]
+            cykl_part = parts[1] if "CYKL:" in parts[1] else ""
+        else:
+            cykl_part = ""
+            
+        if "EMP:" in cykl_part:
+            try: data_emp_in = cykl_part.split("EMP: ")[1].split(" | ")[0]
+            except: pass
+        if "POWRÓT:" in cykl_part:
+            try: data_emp_out = cykl_part.split("POWRÓT: ")[1]
+            except: pass
+
+    typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
+    uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto}\n{val_instrukcje}"
+    
+    paczka_pdf = {
+        "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia,
+        "przewoznik_nazwa": nazwa_przewoznika, "przewoznik_detale": detale_przewoznika,
+        "stawka": stawka_final, "waluta": waluta, "postoj": 0.0,
+        "zaladunek": full_zal_pdf, "data_zal": data_zal,
+        "rozladunek": full_roz_pdf, "data_roz": data_roz,
+        "data_emp_in": data_emp_in, "data_emp_out": data_emp_out,
+        "waga": 1000, 
+        "auto": c_auto, "uwagi": uwagi_na_pdf, "opiekun": podpis,
+        "termin_dni": 30,
+        "data_platnosci": data_platnosci
+    }
+    
+    auto_val = c_auto
+    kierowca_val = ""
+    if "/" in c_auto:
+        parts_auto = c_auto.split("/", 1)
+        auto_val = parts_auto[0].strip()
+        kierowca_val = parts_auto[1].strip()
+        
+    miasto_zal_val = z_sel
+    if z_sel == "Magazyn SQM Komorniki":
+        miasto_zal_val = "Komorniki"
+    elif not df_miejsca.empty:
+        row_m = df_miejsca[df_miejsca["Nazwa do listy"] == z_sel]
+        if not row_m.empty:
+            miasto_zal_val = str(row_m.iloc[0].get("Miasto", z_sel)).strip()
+
+    base_cmr = 24122250
+    numer_cmr_final = str(base_cmr + idx_pd)
+
+    dane_cmr = {
+        "odbiorca": full_roz_pdf,
+        "miejsce_przeznaczenia": full_roz_pdf,
+        "data_zal": data_zal,
+        "miasto_zal": miasto_zal_val,
+        "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+        "waga": 1000,
+        "nr_cmr": numer_cmr_final,
+        "auto": auto_val,
+        "kierowca": kierowca_val
+    }
+    
+    return paczka_pdf, dane_cmr, nr_zlecenia
+
 @st.cache_data(ttl=30, show_spinner=False)
 def pobierz_dane_z_bazy():
     df_projekty = db.fetch_data("Projekty")
@@ -248,7 +374,6 @@ def pobierz_dane_z_bazy():
     return df_projekty, df_miejsca, df_przewoznicy, df_zlecenia
 
 def render(sh):
-    # INICJALIZACJA ZMIENNYCH SESYJNYCH (zapobiega znikaniu przycisków pobierania)
     if 'dokumenty_wygenerowane' not in st.session_state:
         st.session_state.dokumenty_wygenerowane = False
         st.session_state.pdf_bytes = None
@@ -256,6 +381,13 @@ def render(sh):
         st.session_state.nazwa_pdf = ""
         st.session_state.nazwa_cmr = ""
         st.session_state.komunikat = ""
+        
+    # Rejestry historyczne dla Tab 2
+    if 'hist_gen_row' not in st.session_state:
+        st.session_state.hist_gen_row = None
+        st.session_state.hist_pdf_bytes = None
+        st.session_state.hist_cmr_bytes = None
+        st.session_state.hist_nr = ""
 
     st.markdown('''
         <div class="module-header-container">
@@ -545,7 +677,6 @@ def render(sh):
 
         btn_label = "⚡ ZAPISZ ZMIANY I REGENERUJ DOKUMENTY" if tryb_pracy == "Edycja Istniejącego Zlecenia" else "⚡ GENERUJ I ZAPISZ ZLECENIE PRO"
 
-        # GŁÓWNA LOGIKA ZAPISU I GENEROWANIA
         if st.button(btn_label, type="primary", use_container_width=True):
             if not nazwa_przewoznika or nazwa_przewoznika == "Wybierz...":
                 st.error("Wybierz lub wpisz firmę przewozową!")
@@ -668,7 +799,6 @@ def render(sh):
                         else:
                             st.session_state.komunikat = f"✅ Zlecenie {nr_zlecenia} zostało wygenerowane i zapisane pomyślnie!"
                             
-                        # -- ZAPIS PLIKÓW DO SESJI I WYMUSZENIE ODŚWIEŻENIA EKRANU --
                         st.session_state.pdf_bytes = pdf_bytes
                         st.session_state.cmr_bytes = cmr_bytes
                         st.session_state.nazwa_pdf = f"Order_{nr_zlecenia.replace('/', '_')}.pdf"
@@ -676,28 +806,15 @@ def render(sh):
                         st.session_state.dokumenty_wygenerowane = True
                         
                         st.cache_data.clear()
-                        st.rerun() # ← To jest ta sztuczka, która zapobiega znikaniu przycisków!
+                        st.rerun() 
 
-        # WYŚWIETLANIE ZAPISANYCH W SESJI PRZYCISKÓW POBIERANIA (odporne na kliknięcia)
         if st.session_state.dokumenty_wygenerowane:
             st.success(st.session_state.komunikat)
             col_pdf, col_cmr = st.columns(2)
             with col_pdf:
-                st.download_button(
-                    "📥 POBIERZ ZLECENIE (PDF)", 
-                    data=st.session_state.pdf_bytes, 
-                    file_name=st.session_state.nazwa_pdf, 
-                    mime="application/pdf", 
-                    use_container_width=True
-                )
+                st.download_button("📥 POBIERZ ZLECENIE (PDF)", data=st.session_state.pdf_bytes, file_name=st.session_state.nazwa_pdf, mime="application/pdf", use_container_width=True)
             with col_cmr:
-                st.download_button(
-                    "📝 POBIERZ GOTOWY CMR (5 STRON)", 
-                    data=st.session_state.cmr_bytes, 
-                    file_name=st.session_state.nazwa_cmr, 
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                    use_container_width=True
-                )
+                st.download_button("📝 POBIERZ GOTOWY CMR (5 STRON)", data=st.session_state.cmr_bytes, file_name=st.session_state.nazwa_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🔄 Wyczyść i przygotuj nowe zlecenie", use_container_width=True):
@@ -728,6 +845,7 @@ def render(sh):
                         miejsce_zal = row.get("Miejsce Zaladunku", "---")
                         przewoznik = row.get("Zleceniobiorca", "---")
                         row_idx = int(row['sheet_row'])
+                        idx_pd = int(row.name)
                         
                         st.markdown(f"""
                         <div class="custom-row" style="margin-bottom: 5px;">
@@ -743,14 +861,34 @@ def render(sh):
                         </div>
                         """, unsafe_allow_html=True)
                         
-                        c1, c2 = st.columns([4, 1])
-                        with c2:
-                            if st.button("🗑️ Usuń zlecenie", key=f"del_pro_{row_idx}", use_container_width=True):
+                        c_info, c_docs, c_del = st.columns([3, 1.5, 1])
+                        
+                        with c_docs:
+                            if st.button("📄 Przygotuj Dokumenty", key=f"doc_pro_{row_idx}", use_container_width=True):
+                                with st.spinner("Rekonstrukcja danych z bazy..."):
+                                    paczka, cmr, hist_nr = odtworz_dane_zlecenia(row, df_miejsca, df_przewoznicy, idx_pd)
+                                    st.session_state.hist_pdf_bytes = generate_pro_pdf(paczka)
+                                    st.session_state.hist_cmr_bytes = generate_cmr_excel(cmr)
+                                    st.session_state.hist_nr = hist_nr
+                                    st.session_state.hist_gen_row = row_idx
+                                    st.rerun()
+                                    
+                        with c_del:
+                            if st.button("🗑️ Usuń", key=f"del_pro_{row_idx}", use_container_width=True):
                                 ws_zlecenia = sh.worksheet("Zlecenia")
                                 ws_zlecenia.delete_row(row_idx)
                                 st.success(f"Zlecenie {nr} zostało trwale usunięte!")
                                 st.cache_data.clear()
                                 st.rerun()
+                        
+                        # -- Jeśli dla tego wiersza kliknięto "Przygotuj Dokumenty", pokaż przyciski pobierania --
+                        if st.session_state.hist_gen_row == row_idx:
+                            st.success(f"Pliki dla zlecenia {st.session_state.hist_nr} są gotowe do pobrania!")
+                            d1, d2 = st.columns(2)
+                            with d1:
+                                st.download_button("📥 POBIERZ PDF", data=st.session_state.hist_pdf_bytes, file_name=f"Order_{st.session_state.hist_nr.replace('/','_')}.pdf", mime="application/pdf", key=f"dl_pdf_{row_idx}", use_container_width=True)
+                            with d2:
+                                st.download_button("📝 POBIERZ CMR", data=st.session_state.hist_cmr_bytes, file_name=f"CMR_{st.session_state.hist_nr.replace('/','_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_cmr_{row_idx}", use_container_width=True)
                         
                         st.markdown('<hr style="border-color: rgba(197, 168, 128, 0.1); margin: 5px 0 15px 0;">', unsafe_allow_html=True)
             else:
