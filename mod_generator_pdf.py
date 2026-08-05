@@ -556,7 +556,14 @@ def render(sh):
                         nr_zlecenia = wybrane_zlecenie_nr
                     else:
                         idx = db.get_next_daily_number(datetime.now().strftime("%Y-%m-%d"))
-                        nr_zlecenia = f"CRG{datetime.now().strftime('%y/%m%d')}/{podpis}{idx:02d}"
+                        
+                        # --- NOWA LOGIKA PREFIKSU ZLECENIA ---
+                        if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
+                            prefix = "ZLP"
+                        else:
+                            prefix = "EVT"
+                            
+                        nr_zlecenia = f"{prefix}{datetime.now().strftime('%y/%m%d')}/{podpis}{idx:02d}"
                     
                     paczka_pdf = {
                         "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia, 
