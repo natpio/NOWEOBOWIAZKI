@@ -99,7 +99,7 @@ def render(sh):
 
                 tag_cmr = '<span class="tag-zen-orange">Brak CMR</span>' if row.get("CMR") == "NIE" else ('<span class="tag-zen-blue">CMR: Nie Dotyczy</span>' if row.get("CMR") == "NIE POTRZEBA" else '')
                 tag_pod = '<span class="tag-zen-red">Brak POD</span>' if row.get("POD") == "NIE" else ''
-                tag_fv = '<span class="tag-zen-orange">FAKTURA DO OPŁACENIAy</span>' if row.get("Faktura") == "NIE" else ''
+                tag_fv = '<span class="tag-zen-orange">FAKTURA DO OPŁACENIA</span>' if row.get("Faktura") == "NIE" else ''
                 tags_html = f'<div class="cr-col" style="flex: 2; flex-direction: row; gap: 8px;">{tag_cmr}{tag_pod}{tag_fv}</div>'
 
                 status_val = str(row.get('Status', 'PLANOWANIE')).lower()
