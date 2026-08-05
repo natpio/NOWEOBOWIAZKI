@@ -2,6 +2,19 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 
+def parse_date(d_str):
+    """
+    Funkcja pomocnicza zamieniająca tekst z Google Sheets z powrotem na obiekt daty dla kalendarza.
+    Obsługuje formaty YYYY-MM-DD oraz DD.MM.YYYY.
+    """
+    try:
+        if "." in str(d_str):
+            return datetime.strptime(str(d_str), "%d.%m.%Y").date()
+        else:
+            return datetime.strptime(str(d_str), "%Y-%m-%d").date()
+    except:
+        return datetime.today().date()
+
 def render(sh):
     # Nagłówek w stylu Japandi
     st.markdown('''
@@ -14,7 +27,7 @@ def render(sh):
     # Nawigacja - Zakładki
     tab1, tab2, tab3 = st.tabs(["📂 Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum Historyczne"])
 
-    # Pobieranie danych z Google Sheets (odczytujemy surowe wartości, aby mieć kontrolę nad wierszami)
+    # Pobieranie danych z Google Sheets
     try:
         worksheet = sh.worksheet("Zlecenia Poboczne")
         data = worksheet.get_all_values()
@@ -28,7 +41,6 @@ def render(sh):
         headers = data[0]
         if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=headers)
-            # Dodajemy indeks wiersza z arkusza (indeks w df to 0, a w arkuszu dane zaczynają się od wiersza 2)
             df['sheet_row'] = df.index + 2
         else:
             df = pd.DataFrame(columns=headers)
@@ -43,10 +55,10 @@ def render(sh):
         st.markdown("<div style='font-size: 10px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px;'>⚡ WYSZUKAJ I FILTRUJ ZLECENIA:</div>", unsafe_allow_html=True)
         search_query = st.text_input("", placeholder="🔍 Wpisz nazwę przewoźnika, opis, numer...", label_visibility="collapsed")
 
-        # Filtrowanie tylko aktywnych zleceń (odrzucamy ARCHIWUM)
+        # Filtrowanie tylko aktywnych zleceń
         active_df = df[df['Status'] != 'ARCHIWUM'] if not df.empty else df
 
-        # Obliczenia metryk dla kart KPI (tylko dla aktywnych!)
+        # Obliczenia metryk dla kart KPI
         brak_cmr = len(active_df[(active_df.get("CMR") == "NIE")]) if not active_df.empty and "CMR" in active_df.columns else 0
         brak_pod = len(active_df[(active_df.get("POD") == "NIE")]) if not active_df.empty and "POD" in active_df.columns else 0
         brak_fv = len(active_df[(active_df.get("Faktura") == "NIE")]) if not active_df.empty and "Faktura" in active_df.columns else 0
@@ -88,10 +100,9 @@ def render(sh):
                 tag_fv = '<span class="tag-zen-orange">Brak Faktury</span>' if row.get("Faktura") == "NIE" else ''
                 tags_html = f'<div class="cr-col" style="flex: 2; flex-direction: row; gap: 8px;">{tag_cmr}{tag_pod}{tag_fv}</div>'
 
-                # Pigułka statusu - dynamiczny kolor
                 status_val = str(row.get('Status', 'PLANOWANIE')).lower()
                 
-                # Renderowanie kafelka (Japandi) z dodanymi informacjami o datach
+                # Renderowanie kafelka (Japandi)
                 st.markdown(f"""
                 <div class="custom-row">
                     <div class="cr-col" style="flex: 2.5;">
@@ -109,7 +120,7 @@ def render(sh):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Panel edycji pod kafelkiem - poszerzony o 3 nowe kolumny
+                # Panel edycji pod kafelkiem - zmiana wprowadzania z palca na kalendarze
                 with st.expander(f"✏️ Edytuj / Archiwizuj zlec. {row.get('Nr Zlecenia', '')}"):
                     with st.form(key=f"edit_form_{row['sheet_row']}", clear_on_submit=False):
                         ecol1, ecol2, ecol3 = st.columns([1.5, 1, 1])
@@ -120,10 +131,19 @@ def render(sh):
                             e_opis = st.text_area("Opis Ładunku / Trasy", value=row.get('Opis Ładunku / Trasy', ''), height=115)
                             
                         with ecol2:
-                            e_data_zal = st.text_input("Data załadunku", value=row.get('Data Załadunku', ''))
-                            e_data_roz = st.text_input("Data rozładunku", value=row.get('Data Rozładunku', ''))
-                            e_termin = st.text_input("Termin (dni)", value=row.get('Termin Dni', '30'))
-                            e_data_plat = st.text_input("Wyliczona zapłata", value=row.get('Data Płatności', ''))
+                            # Przetworzenie dat z bazy dla kalendarza
+                            val_dz = parse_date(row.get('Data Załadunku', ''))
+                            val_dr = parse_date(row.get('Data Rozładunku', ''))
+                            val_dp = parse_date(row.get('Data Płatności', ''))
+                            try:
+                                val_term = int(row.get('Termin Dni', 30))
+                            except ValueError:
+                                val_term = 30
+                                
+                            e_data_zal = st.date_input("Data załadunku", value=val_dz)
+                            e_data_roz = st.date_input("Data rozładunku", value=val_dr)
+                            e_termin = st.number_input("Termin (dni)", min_value=0, max_value=120, value=val_term, step=1)
+                            e_data_plat = st.date_input("Termin płatności faktury", value=val_dp)
                             
                         with ecol3:
                             statusy = ["INICJACJA", "PLANOWANIE", "ZAŁADUNEK", "TRASA", "ZAMKNIĘTE", "ARCHIWUM"]
@@ -139,9 +159,16 @@ def render(sh):
                         save_btn = st.form_submit_button("💾 Zapisz zmiany", type="primary")
                         
                         if save_btn:
-                            # Aktualizacja wskazanego wiersza (kolumny A do K)
+                            # Przeliczamy ponownie płatność w tle na wypadek, gdyby ktoś zmienił dni, 
+                            # a zapomniał manualnie zmienić na kalendarzu (lub zostawiamy wybraną z kalendarza)
+                            # Tutaj aplikacja ufa dacie wybranej z kalendarza przez użytkownika.
+                            
                             zakres = f"A{row['sheet_row']}:K{row['sheet_row']}"
-                            nowe_wartosci = [[e_nr, e_przew, e_opis, e_data_zal, e_data_roz, e_termin, e_data_plat, e_status, e_cmr, e_pod, e_fv]]
+                            nowe_wartosci = [[
+                                e_nr, e_przew, e_opis, 
+                                str(e_data_zal), str(e_data_roz), str(e_termin), str(e_data_plat.strftime('%d.%m.%Y')), 
+                                e_status, e_cmr, e_pod, e_fv
+                            ]]
                             try:
                                 worksheet.update(values=nowe_wartosci, range_name=zakres)
                                 st.success("Zmiany zostały zapisane! Odświeżam...")
@@ -161,7 +188,7 @@ def render(sh):
                 przewoznik = st.text_input("Przewoźnik")
                 opis_ladunku = st.text_area("Opis Ładunku / Trasy (Co, dokąd, szczegóły)", height=115)
                 
-                # Dodany układ trzech kolumn do wyliczania płatności z modułu PRO
+                # Dodany układ trzech kolumn do wyliczania płatności
                 d1, d2, d3 = st.columns(3)
                 with d1: 
                     data_zal = st.date_input("Data załadunku", datetime.today())
@@ -171,7 +198,7 @@ def render(sh):
                     termin_dni = st.number_input("Termin (dni)", min_value=0, max_value=120, value=30)
                 
                 data_platnosci = data_roz + timedelta(days=termin_dni)
-                st.info(f"📅 Wyliczona data zapłaty: **{data_platnosci.strftime('%d.%m.%Y')}**")
+                st.info(f"📅 Termin płatności faktury: **{data_platnosci.strftime('%d.%m.%Y')}**")
 
             with col2:
                 status = st.selectbox("Status", ["INICJACJA", "PLANOWANIE", "ZAŁADUNEK", "TRASA", "ZAMKNIĘTE"])
@@ -218,11 +245,10 @@ def render(sh):
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # Możliwość przywrócenia z archiwum
                 with st.expander(f"⚙️ Zarządzaj archiwalnym {row.get('Nr Zlecenia', '')}"):
                     if st.button("🔄 Przywróć zlecenia do statusu ZAMKNIĘTE", key=f"restore_{row['sheet_row']}"):
                         try:
-                            # Zaktualizowana kolumna 8 to Status (wcześniej była to kolumna 5)
+                            # Zaktualizowana kolumna 8 to Status
                             worksheet.update_cell(row['sheet_row'], 8, "ZAMKNIĘTE") 
                             st.success("Zlecenie przywrócone! Odświeżam...")
                             st.rerun()
