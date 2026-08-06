@@ -730,7 +730,7 @@ def render(sh):
                 st.markdown("<p style='font-size: 13px; color: #8C8477; margin-bottom: 5px;'>📦 Odbiór pustych skrzyń po rozładunku (Empties In):</p>", unsafe_allow_html=True)
                 e1, e2 = st.columns(2)
                 data_emp_in_1 = e1.date_input("Data odbioru 1:", val_data_emp_in_1)
-                data_emp_in_2 = e2.date_input("Data odbioru 2 (Opcjonalnie):", val_data_emp_in_2, value=None)
+                data_emp_in_2 = e2.date_input("Data odbioru 2 (Opcjonalnie):", value=val_data_emp_in_2)
                 
                 st.markdown("<p style='font-size: 13px; color: #8C8477; margin-top: 10px; margin-bottom: 5px;'>🛠️ Demontaż targów (Powrót):</p>", unsafe_allow_html=True)
                 r1, r2 = st.columns(2)
