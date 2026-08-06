@@ -329,6 +329,8 @@ def render(sh):
                             
                             c_ed1, c_ed2 = st.columns(2)
                             with c_ed1:
+                                # --- NOWOŚĆ: MOŻLIWOŚĆ EDYCJI ID ZLECENIA ---
+                                u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
                                 u_przewoznik = st.text_input("Przewoźnik / Kierowca", value=str(dane_eventu.get('Przewoznik', '')))
                                 u_typ_transp = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"], index=0 if str(dane_eventu.get('Typ_Transportu', '')) == "Zewnętrzny" else 1)
@@ -340,7 +342,8 @@ def render(sh):
                                 
                             with c_ed2:
                                 u_typ_pojazd = st.text_input("Typ Pojazdu", value=str(dane_eventu.get('Typ_Pojazdu', '')))
-                                u_nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewn.", value=str(dane_eventu.get('Nr_Zlecenia_Zewn', '')).replace("N/A", "").replace("FLOTA WŁASNA", ""))
+                                
+                                st.info("💡 Gdy wskażesz transport Zewnętrzny, system sam skopiuje w to miejsce ID Zlecenia jako referencję.")
                                 
                                 dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
                                 try:
@@ -358,17 +361,29 @@ def render(sh):
                             
                             if st.form_submit_button("💾 Zapisz Zmiany"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
+                                
+                                df.at[idx, 'ID_Zlecenia'] = u_id_zlecenia
                                 df.at[idx, 'Nazwa_Targow'] = u_nazwa
                                 df.at[idx, 'Przewoznik'] = u_przewoznik
                                 df.at[idx, 'Typ_Transportu'] = u_typ_transp
                                 df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
-                                df.at[idx, 'Nr_Zlecenia_Zewn'] = u_nr_zlecenia_zewn if u_typ_transp == "Zewnętrzny" else "FLOTA WŁASNA"
+                                
+                                # --- KLUCZOWY WYMÓG: Automatyczne synchronizowanie numeru ---
+                                if u_typ_transp == "Zewnętrzny":
+                                    df.at[idx, 'Nr_Zlecenia_Zewn'] = u_id_zlecenia
+                                else:
+                                    df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
+                                
                                 df.at[idx, 'Faza_Procesu'] = u_faza
                                 df.at[idx, 'Status_Magazyn'] = u_status_mag
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 df.at[idx, 'Notatki'] = u_notatki
                                 
                                 save_data(worksheet, df)
+                                
+                                # Ochrona przed zgubieniem zaznaczenia po zmianie ID
+                                st.session_state["wybrany_event_id"] = u_id_zlecenia 
+                                
                                 st.success("Pomyślnie zaktualizowano dane!")
                                 st.rerun()
 
@@ -451,6 +466,9 @@ def render(sh):
                                     koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
                                     koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
                                     u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
+                                    
+                                    # Info zamiast pola, by ręcznie z tego miejsca nie rozsynchronizować sobie logiki
+                                    st.info(f"Numer referencyjny na zewnątrz: {dane_eventu.get('Nr_Zlecenia_Zewn', '')}")
                                     u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
                                 with col_f2:
                                     u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
@@ -519,6 +537,7 @@ def render(sh):
         with st.form("form_event_pro", clear_on_submit=True):
             f_col1, f_col2 = st.columns(2)
             with f_col1:
+                id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie, z generatora PRO)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
@@ -542,14 +561,13 @@ def render(sh):
                 with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                e_col1, e_col2, e_col3 = st.columns(3)
+                e_col1, e_col2 = st.columns(2)
                 with e_col1: koszt_transportu = st.number_input("Koszt Transportu (€)", min_value=0.0, value=0.0, step=50.0)
-                with e_col2: nr_zlecenia_zewn = st.text_input("Nr Zlecenia Zewnętrznego")
-                with e_col3: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
+                with e_col2: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
             else:
                 st.info("💡 Wybrano Flotę Własną SQM. Sekcja finansowa i zewnętrzna została pominięta.")
                 cmr_podpisane, pp_otrzymane, faktura_opl = "N/A", "N/A", "N/A"
-                koszt_transportu, nr_zlecenia_zewn, nr_faktury = "N/A", "FLOTA WŁASNA", "N/A"
+                koszt_transportu, nr_faktury = "N/A", "N/A"
 
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -557,13 +575,19 @@ def render(sh):
                 if not nazwa_targow or not przewoznik:
                     st.error("❌ Uzupełnij nazwę targów oraz przewoźnika!")
                 else:
+                    # Kopiowanie ID jeśli to zewnętrzny
+                    if typ_transportu == "Zewnętrzny":
+                        nr_zewn_final = id_zlecenia_custom
+                    else:
+                        nr_zewn_final = "FLOTA WŁASNA"
+                        
                     nowy_wiersz = {
-                        "ID_Zlecenia": "", "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
+                        "ID_Zlecenia": id_zlecenia_custom, "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
                         "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
                         "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
                         "Status_Magazyn": status_magazyn,
                         "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
-                        "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zlecenia_zewn, 
+                        "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zewn_final, 
                         "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
                     }
