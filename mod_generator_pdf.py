@@ -347,13 +347,13 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         full_roz_pdf = lista_roz_pdf[0] if lista_roz_pdf else ""
         
     uwagi_baza = str(r.get('Uwagi / Instrukcje', ''))
-    c_auto = ""
+    c_auto_full = ""
     val_instrukcje = uwagi_baza
     data_emp_in = ""
     data_emp_out = ""
     
     if "AUTO: " in uwagi_baza:
-        try: c_auto = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
+        try: c_auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
         except: pass
         
     if " || " in uwagi_baza:
@@ -375,7 +375,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
             except: pass
 
     typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
-    uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto}\n{val_instrukcje}"
+    uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_full}\n{val_instrukcje}"
     
     paczka_pdf = {
         "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia,
@@ -385,15 +385,15 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         "rozladunek": full_roz_pdf, "data_roz": data_roz,
         "data_emp_in": data_emp_in, "data_emp_out": data_emp_out,
         "waga": 1000, 
-        "auto": c_auto, "uwagi": uwagi_na_pdf, "opiekun": podpis,
+        "auto": c_auto_full, "uwagi": uwagi_na_pdf, "opiekun": podpis,
         "termin_dni": 30,
         "data_platnosci": data_platnosci
     }
     
-    auto_val = c_auto
+    auto_val = c_auto_full
     kierowca_val = ""
-    if "/" in c_auto:
-        parts_auto = c_auto.split("/", 1)
+    if "/" in c_auto_full:
+        parts_auto = c_auto_full.split("/", 1)
         auto_val = parts_auto[0].strip()
         kierowca_val = parts_auto[1].strip()
         
@@ -484,7 +484,11 @@ def render(sh):
         val_projekt = "Brak"
         val_z_sel = "Magazyn SQM Komorniki"
         val_z_man = ""
-        val_c_auto = ""
+        
+        # --- Zmiana w zmiennych domyślnych dla Auta i Kierowcy ---
+        val_c_auto_nr = ""
+        val_c_kierowca = ""
+        
         val_wartosc_towaru = 100000
         val_instrukcje = domyslny_tekst
         val_podpis = "PD"
@@ -532,9 +536,18 @@ def render(sh):
                 val_miejsca_rozladunku_raw = m_roz_baza.split(" | ")
                 
                 uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', ''))
+                
+                # --- Rozdzielanie wczytanego starego tekstu na rejestrację i kierowcę ---
                 if "AUTO: " in uwagi_baza:
-                    try: val_c_auto = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
+                    try: 
+                        auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
+                        if "/" in auto_full:
+                            val_c_auto_nr = auto_full.split("/", 1)[0].strip()
+                            val_c_kierowca = auto_full.split("/", 1)[1].strip()
+                        else:
+                            val_c_auto_nr = auto_full.strip()
                     except: pass
+                    
                 if "WART: " in uwagi_baza:
                     try: val_wartosc_towaru = int(uwagi_baza.split("WART: ")[1].split(" PLN")[0])
                     except: pass
@@ -727,9 +740,12 @@ def render(sh):
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>4. Realizacja i Dodatkowe Uwagi</p>", unsafe_allow_html=True)
-            d_auto, d_wart = st.columns(2)
-            c_auto = d_auto.text_input("Auto / Kierowca:", value=val_c_auto, placeholder="np. PO 12345 / Jan Kowalski")
-            wartosc_towaru = d_wart.number_input("Wymagana Gwarancja OCP / Wartość towaru (PLN):", min_value=0, value=val_wartosc_towaru)
+            
+            # --- ZMIANA: ROZDZIELENIE POLA NA 3 OSOBNE KOLUMNY ---
+            col_auto, col_kier, col_wart = st.columns([1.5, 1.5, 1])
+            c_auto_nr = col_auto.text_input("Nr rejestracyjny (Auto):", value=val_c_auto_nr, placeholder="np. PO 12345")
+            c_kierowca = col_kier.text_input("Kierowca (Imię i Nazwisko):", value=val_c_kierowca, placeholder="np. Jan Kowalski")
+            wartosc_towaru = col_wart.number_input("Wymagana Gwarancja OCP (PLN):", min_value=0, value=val_wartosc_towaru)
             
             u1, u2 = st.columns([3, 1])
             instrukcje = u1.text_area("Instrukcje dodatkowe na Zlecenie:", value=val_instrukcje, height=80)
@@ -772,9 +788,12 @@ def render(sh):
                     else:
                         full_roz_pdf = lista_roz_pdf[0]
                     
+                    # --- BUDOWANIE CIĄGU ZNAKÓW AUTO/KIEROWCA DO BAZY I PDF ---
+                    c_auto_combined = f"{c_auto_nr} / {c_kierowca}" if c_auto_nr and c_kierowca else f"{c_auto_nr}{c_kierowca}"
+                    
                     historia_cyklu = f"CYKL: {data_zal} -> {data_roz}" + (f" | EMP: {data_emp_in} | POWRÓT: {data_emp_out}" if typ_zlecenia == "Pełny event" else "")
-                    pelne_uwagi_db = f"AUTO: {c_auto} || WART: {wartosc_towaru} PLN || {historia_cyklu} || {instrukcje}"
-                    uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto}\n{instrukcje}"
+                    pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || {historia_cyklu} || {instrukcje}"
+                    uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_combined}\n{instrukcje}"
                     
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
                         nr_zlecenia = wybrane_zlecenie_nr
@@ -793,7 +812,7 @@ def render(sh):
                         "zaladunek": full_zal_pdf, "data_zal": str(data_zal),
                         "rozladunek": full_roz_pdf, "data_roz": str(data_roz),
                         "data_emp_in": str(data_emp_in), "data_emp_out": str(data_emp_out),
-                        "waga": waga, "auto": c_auto, "uwagi": uwagi_na_pdf, "opiekun": podpis,
+                        "waga": waga, "auto": c_auto_combined, "uwagi": uwagi_na_pdf, "opiekun": podpis,
                         "termin_dni": termin_dni, "data_platnosci": data_platnosci.strftime('%d.%m.%Y')
                     }
                     
@@ -817,13 +836,6 @@ def render(sh):
                             
                     if operacja_sukces:
                         pdf_bytes = generate_pro_pdf(paczka_pdf)
-                        
-                        auto_val = c_auto
-                        kierowca_val = ""
-                        if "/" in c_auto:
-                            parts_auto = c_auto.split("/", 1)
-                            auto_val = parts_auto[0].strip()
-                            kierowca_val = parts_auto[1].strip()
                             
                         miasto_zal_val = get_cmr_city_format(z_sel, z_man, df_miejsca)
                         
@@ -841,8 +853,8 @@ def render(sh):
                             "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
                             "waga": waga,
                             "nr_cmr": numer_cmr_final,
-                            "auto": auto_val,
-                            "kierowca": kierowca_val
+                            "auto": c_auto_nr,       # CZYSTY KOD AUTA DO CMR
+                            "kierowca": c_kierowca   # CZYSTE IMIE KIEROWCY DO CMR
                         }
                         
                         cmr_bytes = generate_cmr_excel(dane_cmr)
