@@ -1041,6 +1041,7 @@ def render(sh):
                         projekt = row.get("ID Projektu", "---")
                         data_zal = row.get("Data załadunku", "---")
                         miejsce_zal = row.get("Miejsce Zaladunku", "---")
+                        miejsce_roz = row.get("Miejsce Rozladunku", "---")
                         przewoznik = row.get("Zleceniobiorca", "---")
                         row_idx = int(row['sheet_row'])
                         idx_pd = int(row.name)
@@ -1055,6 +1056,7 @@ def render(sh):
                             <div class="cr-col" style="flex: 2;">
                                 <div class="cr-text">📅 Załadunek: {data_zal}</div>
                                 <div class="cr-text">📍 Skąd: {miejsce_zal}</div>
+                                <div class="cr-text">🏁 Dokąd: {miejsce_roz}</div>
                             </div>
                         </div>
                         """, unsafe_allow_html=True)
