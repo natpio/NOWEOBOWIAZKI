@@ -160,10 +160,29 @@ def generate_pro_pdf(dane):
     draw_row("LOADING PLACE / MIEJSCE ZAŁADUNKU:", dane['zaladunek'])
     draw_row("LOADING DATE / DATA ZAŁADUNKU:", dane['data_zal'])
     draw_row("UNLOADING PLACE / MIEJSCE ROZŁADUNKU:", dane['rozladunek'])
+    
     if dane['typ_zlecenia'] == "Pełny event":
         draw_row("UNLOADING DATE / DATA ROZŁADUNKU:", dane['data_roz'])
-        draw_row("EMPTIES IN / ODBIÓR PUSTYCH:", dane['data_emp_in'])
-        draw_row("RETURN LOAD / DATA POWROTU:", dane['data_emp_out'], border_b=False)
+        
+        # Odbiór pustych casów (1 lub 2 daty)
+        emp1 = str(dane.get('data_emp_in_1', ''))
+        emp2 = str(dane.get('data_emp_in_2', ''))
+        emp_str = emp1 if (emp1 and emp1 != 'None') else ''
+        if emp2 and emp2 != 'None' and emp2.strip():
+            emp_str += f" & {emp2}" if emp_str else emp2
+            
+        draw_row("EMPTIES IN / ODBIÓR PUSTYCH:", emp_str if emp_str else "---")
+        
+        # Demontaż rozdzielony
+        dost_pust = str(dane.get('data_dostawa_pustych', ''))
+        if dost_pust and dost_pust != 'None' and dost_pust.strip():
+            draw_row("EMPTIES DELIVERY / DOSTAWA PUSTYCH:", dost_pust)
+            
+        odb_peln = str(dane.get('data_odbior_pelnych', '---'))
+        if not odb_peln or odb_peln == 'None' or not odb_peln.strip():
+            odb_peln = '---'
+            
+        draw_row("RETURN LOAD / ODBIÓR PEŁNYCH:", odb_peln, border_b=False)
     else:
         draw_row("UNLOADING DATE / DATA ROZŁADUNKU:", dane['data_roz'], border_b=False)
     pdf.ln(4)
@@ -349,8 +368,11 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     uwagi_baza = str(r.get('Uwagi / Instrukcje', ''))
     c_auto_full = ""
     val_instrukcje = uwagi_baza
-    data_emp_in = ""
-    data_emp_out = ""
+    
+    data_emp_in_1 = ""
+    data_emp_in_2 = ""
+    data_dostawa_pustych = ""
+    data_odbior_pelnych = ""
     
     # --- ODCZYT UKRYTEGO TAGU DLA ODBIORCY NA CMR ---
     odbiorca_cmr_hist = full_roz_pdf
@@ -373,11 +395,31 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         else:
             cykl_part = ""
             
+        # Odtwarzanie nowych pól EMP
         if "EMP:" in cykl_part:
-            try: data_emp_in = cykl_part.split("EMP: ")[1].split(" | ")[0]
+            try:
+                emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
+                if "," in emp_raw:
+                    data_emp_in_1 = emp_raw.split(",")[0].strip()
+                    data_emp_in_2 = emp_raw.split(",")[1].strip()
+                else:
+                    data_emp_in_1 = emp_raw.strip()
             except: pass
-        if "POWRÓT:" in cykl_part:
-            try: data_emp_out = cykl_part.split("POWRÓT: ")[1]
+            
+        # Odtwarzanie nowych pól DEM (Demontaż rozdzielony)
+        if "DEM:" in cykl_part:
+            try:
+                dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
+                if "," in dem_raw:
+                    data_dostawa_pustych = dem_raw.split(",")[0].strip()
+                    data_odbior_pelnych = dem_raw.split(",")[1].strip()
+                else:
+                    data_odbior_pelnych = dem_raw.strip()
+            except: pass
+        elif "POWRÓT:" in cykl_part:
+            # Wsteczna kompatybilność ze starymi zleceniami w bazie
+            try:
+                data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
             except: pass
 
     typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
@@ -389,7 +431,8 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         "stawka": stawka_final, "waluta": waluta, "postoj": 0.0,
         "zaladunek": full_zal_pdf, "data_zal": data_zal,
         "rozladunek": full_roz_pdf, "data_roz": data_roz,
-        "data_emp_in": data_emp_in, "data_emp_out": data_emp_out,
+        "data_emp_in_1": data_emp_in_1, "data_emp_in_2": data_emp_in_2, 
+        "data_dostawa_pustych": data_dostawa_pustych, "data_odbior_pelnych": data_odbior_pelnych,
         "waga": 1000, 
         "auto": c_auto_full, "uwagi": uwagi_na_pdf, "opiekun": podpis,
         "termin_dni": 30,
@@ -478,8 +521,13 @@ def render(sh):
         val_waga = 1000
         val_data_zal = datetime.now().date()
         val_data_roz = datetime.now().date()
-        val_data_emp_in = datetime.now().date()
-        val_data_emp_out = datetime.now().date()
+        
+        # --- Zaktualizowane zmienne domyślne dla nowych dat harmonogramu ---
+        val_data_emp_in_1 = datetime.now().date()
+        val_data_emp_in_2 = None
+        val_data_dostawa_pustych = datetime.now().date()
+        val_data_odbior_pelnych = datetime.now().date()
+        
         val_termin_dni = 30
         val_zrodlo = "Przewoźnik stały (Baza)"
         val_nazwa_przewoznika = "Wybierz..."
@@ -497,7 +545,6 @@ def render(sh):
         val_podpis = "PD"
         val_miejsca_rozladunku_raw = []
         
-        # --- Zmienna dla trybu edycji ---
         val_odbiorca_cmr = "Miejsce przeznaczenia (Klient)"
 
         if not df_zlecenia.empty:
@@ -543,7 +590,6 @@ def render(sh):
                 
                 uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', ''))
                 
-                # --- ODCZYT UKRYTEGO TAGU DLA ODBIORCY NA CMR W TRYBIE EDYCJI ---
                 if "%%CMR:SQM%%" in uwagi_baza:
                     val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
                     uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
@@ -566,8 +612,45 @@ def render(sh):
                     parts = uwagi_baza.split(" || ")
                     if len(parts) >= 4:
                         val_instrukcje = parts[3]
+                        cykl_part = parts[2]
                     elif len(parts) == 3 and "CYKL:" not in parts[2]:
                         val_instrukcje = parts[2]
+                        cykl_part = ""
+                    elif len(parts) == 3 and "CYKL:" in parts[2]:
+                        val_instrukcje = ""
+                        cykl_part = parts[2]
+                    else:
+                        cykl_part = ""
+                        
+                    # Odtwarzanie dat harmonogramu przy edycji
+                    if "EMP:" in cykl_part:
+                        try:
+                            emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
+                            if "," in emp_raw:
+                                e1 = emp_raw.split(",")[0].strip()
+                                e2 = emp_raw.split(",")[1].strip()
+                                if e1: val_data_emp_in_1 = datetime.strptime(e1, "%Y-%m-%d").date()
+                                if e2: val_data_emp_in_2 = datetime.strptime(e2, "%Y-%m-%d").date()
+                            else:
+                                if emp_raw.strip(): val_data_emp_in_1 = datetime.strptime(emp_raw.strip(), "%Y-%m-%d").date()
+                        except: pass
+                        
+                    if "DEM:" in cykl_part:
+                        try:
+                            dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
+                            if "," in dem_raw:
+                                dp = dem_raw.split(",")[0].strip()
+                                op = dem_raw.split(",")[1].strip()
+                                if dp: val_data_dostawa_pustych = datetime.strptime(dp, "%Y-%m-%d").date()
+                                if op: val_data_odbior_pelnych = datetime.strptime(op, "%Y-%m-%d").date()
+                            else:
+                                if dem_raw.strip(): val_data_odbior_pelnych = datetime.strptime(dem_raw.strip(), "%Y-%m-%d").date()
+                        except: pass
+                    elif "POWRÓT:" in cykl_part:
+                        try:
+                            powrot_raw = cykl_part.split("POWRÓT: ")[1].split(" | ")[0]
+                            if powrot_raw.strip(): val_data_odbior_pelnych = datetime.strptime(powrot_raw.strip(), "%Y-%m-%d").date()
+                        except: pass
                         
                 if "/" in wybrane_zlecenie_nr:
                     try:
@@ -643,11 +726,18 @@ def render(sh):
             data_roz = d2.date_input("Data rozładunku (Targi/Cel):", val_data_roz)
             
             if typ_zlecenia == "Pełny event":
-                h1, h2 = st.columns(2)
-                data_emp_in = h1.date_input("Odbiór pustych (Empties):", val_data_emp_in)
-                data_emp_out = h2.date_input("Data załadunku powrotnego:", val_data_emp_out)
+                st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.1);'>", unsafe_allow_html=True)
+                st.markdown("<p style='font-size: 13px; color: #8C8477; margin-bottom: 5px;'>📦 Odbiór pustych skrzyń po rozładunku (Empties In):</p>", unsafe_allow_html=True)
+                e1, e2 = st.columns(2)
+                data_emp_in_1 = e1.date_input("Data odbioru 1:", val_data_emp_in_1)
+                data_emp_in_2 = e2.date_input("Data odbioru 2 (Opcjonalnie):", val_data_emp_in_2, value=None)
+                
+                st.markdown("<p style='font-size: 13px; color: #8C8477; margin-top: 10px; margin-bottom: 5px;'>🛠️ Demontaż targów (Powrót):</p>", unsafe_allow_html=True)
+                r1, r2 = st.columns(2)
+                data_dostawa_pustych = r1.date_input("Dostawa pustych casów:", val_data_dostawa_pustych)
+                data_odbior_pelnych = r2.date_input("Odbiór pełnych po demontażu:", val_data_odbior_pelnych)
             else:
-                data_emp_in, data_emp_out = "", ""
+                data_emp_in_1, data_emp_in_2, data_dostawa_pustych, data_odbior_pelnych = "", "", "", ""
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>2. Wybór Przewoźnika i Płatności</p>", unsafe_allow_html=True)
@@ -808,7 +898,13 @@ def render(sh):
                     
                     c_auto_combined = f"{c_auto_nr} / {c_kierowca}" if c_auto_nr and c_kierowca else f"{c_auto_nr}{c_kierowca}"
                     
-                    historia_cyklu = f"CYKL: {data_zal} -> {data_roz}" + (f" | EMP: {data_emp_in} | POWRÓT: {data_emp_out}" if typ_zlecenia == "Pełny event" else "")
+                    historia_cyklu = f"CYKL: {data_zal} -> {data_roz}"
+                    if typ_zlecenia == "Pełny event":
+                        emp_str = str(data_emp_in_1)
+                        if data_emp_in_2:
+                            emp_str += f",{data_emp_in_2}"
+                        dem_str = f"{data_dostawa_pustych},{data_odbior_pelnych}"
+                        historia_cyklu += f" | EMP: {emp_str} | DEM: {dem_str}"
                     
                     # --- ZAPIS UKRYTEGO TAGU DO BAZY DANYCH ---
                     pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || {historia_cyklu} || {instrukcje}"
@@ -833,7 +929,8 @@ def render(sh):
                         "stawka": stawka_final, "waluta": waluta, "postoj": postoj,
                         "zaladunek": full_zal_pdf, "data_zal": str(data_zal),
                         "rozladunek": full_roz_pdf, "data_roz": str(data_roz),
-                        "data_emp_in": str(data_emp_in), "data_emp_out": str(data_emp_out),
+                        "data_emp_in_1": str(data_emp_in_1), "data_emp_in_2": str(data_emp_in_2) if data_emp_in_2 else "",
+                        "data_dostawa_pustych": str(data_dostawa_pustych), "data_odbior_pelnych": str(data_odbior_pelnych),
                         "waga": waga, "auto": c_auto_combined, "uwagi": uwagi_na_pdf, "opiekun": podpis,
                         "termin_dni": termin_dni, "data_platnosci": data_platnosci.strftime('%d.%m.%Y')
                     }
@@ -867,7 +964,6 @@ def render(sh):
                         else:
                             numer_cmr_final = str(base_cmr + len(df_zlecenia))
                             
-                        # --- WARUNKOWE WSTAWIANIE ODBIORCY DO CMR ---
                         if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
                             odbiorca_cmr_text = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
                         else:
