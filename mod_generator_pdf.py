@@ -239,6 +239,49 @@ def generate_cmr_excel(dane):
     output.seek(0)
     return output.read()
 
+# --- HELPER: FORMATOWANIE MIASTA DO CMR ---
+def get_cmr_city_format(place_name, manual_addr, df):
+    if place_name == "Magazyn SQM Komorniki":
+        return "Komorniki, PL"
+    
+    if place_name == "INNE (wpisz ręcznie)":
+        if ',' in manual_addr:
+            return ", ".join(p.strip() for p in manual_addr.split(',')[-2:])
+        return manual_addr
+        
+    if df is not None and not df.empty:
+        row = df[df['Nazwa do listy'] == place_name]
+        if not row.empty:
+            r = row.iloc[0]
+            miasto = str(r.get('Miasto', place_name)).strip()
+            kraj = str(r.get('Kraj', '')).strip()
+            skrot = str(r.get('Skrót Kraju', '')).strip() if 'Skrót Kraju' in df.columns else ''
+            
+            mapa_krajow = {
+                "Polska": "PL", "Niemcy": "DE", "Francja": "FR", "Hiszpania": "ES",
+                "Włochy": "IT", "Holandia": "NL", "Belgia": "BE", "Szwecja": "SE",
+                "Turcja": "TR", "Szwajcaria": "CH", "Austria": "AT", "Czechy": "CZ",
+                "Słowacja": "SK", "Wielka Brytania": "GB", "USA": "US"
+            }
+            
+            final_kraj = skrot
+            if not final_kraj or final_kraj == 'nan':
+                if kraj in mapa_krajow:
+                    final_kraj = mapa_krajow[kraj]
+                elif len(kraj) == 2:
+                    final_kraj = kraj.upper()
+                elif kraj and kraj != 'nan':
+                    final_kraj = kraj[:2].upper()
+                else:
+                    final_kraj = "PL"
+                    
+            if miasto == 'nan' or not miasto:
+                miasto = place_name
+                
+            return f"{miasto}, {final_kraj}"
+            
+    return place_name
+
 # --- MODUŁ INŻYNIERII WSTECZNEJ (ODTWARZANIE DANYCH Z BAZY DO PDF/CMR) ---
 def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     nr_zlecenia = str(r.get('Numer zlecenia', ''))
@@ -340,13 +383,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         auto_val = parts_auto[0].strip()
         kierowca_val = parts_auto[1].strip()
         
-    miasto_zal_val = z_sel
-    if z_sel == "Magazyn SQM Komorniki":
-        miasto_zal_val = "Komorniki"
-    elif not df_miejsca.empty:
-        row_m = df_miejsca[df_miejsca["Nazwa do listy"] == z_sel]
-        if not row_m.empty:
-            miasto_zal_val = str(row_m.iloc[0].get("Miasto", z_sel)).strip()
+    miasto_zal_val = get_cmr_city_format(z_sel, "", df_miejsca)
 
     base_cmr = 24122250
     numer_cmr_final = str(base_cmr + idx_pd)
@@ -382,7 +419,6 @@ def render(sh):
         st.session_state.nazwa_cmr = ""
         st.session_state.komunikat = ""
         
-    # Rejestry historyczne dla Tab 2
     if 'hist_gen_row' not in st.session_state:
         st.session_state.hist_gen_row = None
         st.session_state.hist_pdf_bytes = None
@@ -531,11 +567,23 @@ def render(sh):
                 nowa_ulica = st.text_input("Ulica i numer:")
                 nowy_kod = st.text_input("Kod pocztowy:")
                 nowe_miasto = st.text_input("Miasto:")
-                nowy_kraj = st.text_input("Kraj:", value="Polska")
+                
+                k1, k2 = st.columns(2)
+                nowy_kraj = k1.text_input("Kraj:", value="Polska")
+                nowy_skrot = k2.text_input("Skrót Kraju (do CMR):", value="PL")
+                
                 if st.form_submit_button("💾 Zapisz lokalizację w bazie"):
                     if nowa_nazwa_lista.strip():
-                        kolumny_miejsca = df_miejsca.columns.tolist() if not df_miejsca.empty else ["Nazwa do listy", "Nazwa pełna / Firma", "Ulica i numer", "Kod pocztowy", "Miasto", "Kraj"]
-                        slownik_nowego = {"Nazwa do listy": nowa_nazwa_lista.strip(), "Nazwa pełna / Firma": nowa_firma.strip(), "Ulica i numer": nowa_ulica.strip(), "Kod pocztowy": nowy_kod.strip(), "Miasto": nowe_miasto.strip(), "Kraj": nowy_kraj.strip()}
+                        kolumny_miejsca = df_miejsca.columns.tolist() if not df_miejsca.empty else ["Nazwa do listy", "Nazwa pełna / Firma", "Ulica i numer", "Kod pocztowy", "Miasto", "Kraj", "Skrót Kraju"]
+                        slownik_nowego = {
+                            "Nazwa do listy": nowa_nazwa_lista.strip(), 
+                            "Nazwa pełna / Firma": nowa_firma.strip(), 
+                            "Ulica i numer": nowa_ulica.strip(), 
+                            "Kod pocztowy": nowy_kod.strip(), 
+                            "Miasto": nowe_miasto.strip(), 
+                            "Kraj": nowy_kraj.strip(),
+                            "Skrót Kraju": nowy_skrot.strip()
+                        }
                         nowy_wiersz = [slownik_nowego.get(kol, "") for kol in kolumny_miejsca]
                         if db.append_data("Miejsca", nowy_wiersz):
                             st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
@@ -763,16 +811,7 @@ def render(sh):
                             auto_val = parts_auto[0].strip()
                             kierowca_val = parts_auto[1].strip()
                             
-                        if z_sel == "Magazyn SQM Komorniki":
-                            miasto_zal_val = "Komorniki"
-                        elif z_sel == "INNE (wpisz ręcznie)":
-                            miasto_zal_val = z_man.split(',')[-1].strip() if ',' in z_man else z_man
-                        else:
-                            miasto_zal_val = z_sel
-                            if not df_miejsca.empty:
-                                row_m = df_miejsca[df_miejsca["Nazwa do listy"] == z_sel]
-                                if not row_m.empty:
-                                    miasto_zal_val = str(row_m.iloc[0].get("Miasto", z_sel)).strip()
+                        miasto_zal_val = get_cmr_city_format(z_sel, z_man, df_miejsca)
                         
                         base_cmr = 24122250
                         if tryb_pracy == "Edycja Istniejącego Zlecenia":
@@ -881,7 +920,6 @@ def render(sh):
                                 st.cache_data.clear()
                                 st.rerun()
                         
-                        # -- Jeśli dla tego wiersza kliknięto "Przygotuj Dokumenty", pokaż przyciski pobierania --
                         if st.session_state.hist_gen_row == row_idx:
                             st.success(f"Pliki dla zlecenia {st.session_state.hist_nr} są gotowe do pobrania!")
                             d1, d2 = st.columns(2)
