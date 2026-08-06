@@ -181,7 +181,7 @@ def generate_pro_pdf(dane):
             
         draw_row("RETURN LOAD / ODBIÓR PEŁNYCH:", odb_peln, border_b=False)
     else:
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # domknięcie linii
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(4)
 
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
@@ -212,7 +212,6 @@ def generate_pro_pdf(dane):
 
     return bytes(pdf.output(dest='S').encode('latin1'))
 
-# --- NOWA, CZYSTA MATEMATYCZNA FUNKCJA ZAPISU DO SCALONYCH KOMÓREK ---
 def safe_set_cell(sheet, coordinate, value):
     target_coord = coordinate
     try:
@@ -268,7 +267,6 @@ def generate_cmr_excel(dane):
     output.seek(0)
     return output.read()
 
-# --- HELPER: FORMATOWANIE MIASTA DO CMR ---
 def get_cmr_city_format(place_name, manual_addr, df):
     if place_name == "Magazyn SQM Komorniki":
         return "Komorniki, PL"
@@ -311,7 +309,6 @@ def get_cmr_city_format(place_name, manual_addr, df):
             
     return place_name
 
-# --- MODUŁ INŻYNIERII WSTECZNEJ (ODTWARZANIE DANYCH Z BAZY DO PDF/CMR) ---
 def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     nr_zlecenia = str(r.get('Numer zlecenia', ''))
     podpis = "".join([c for c in nr_zlecenia.split("/")[-1] if c.isalpha()])[:2] if "/" in nr_zlecenia else "PD"
@@ -370,7 +367,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     data_dostawa_pustych = ""
     data_odbior_pelnych = ""
     
-    # --- ODCZYT UKRYTEGO TAGU DLA ODBIORCY NA CMR ---
     odbiorca_cmr_hist = full_roz_pdf
     if "%%CMR:SQM%%" in uwagi_baza:
         odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
@@ -391,7 +387,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         else:
             cykl_part = ""
             
-        # Odtwarzanie nowych pól EMP
         if "EMP:" in cykl_part:
             try:
                 emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
@@ -402,7 +397,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
                     data_emp_in_1 = emp_raw.strip()
             except: pass
             
-        # Odtwarzanie nowych pól DEM (Demontaż rozdzielony)
         if "DEM:" in cykl_part:
             try:
                 dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
@@ -413,7 +407,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
                     data_odbior_pelnych = dem_raw.strip()
             except: pass
         elif "POWRÓT:" in cykl_part:
-            # Wsteczna kompatybilność
             try:
                 data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
             except: pass
@@ -517,7 +510,6 @@ def render(sh):
         val_waga = 1000
         val_data_zal = datetime.now().date()
         
-        # --- Zaktualizowane zmienne domyślne (obsługa 2 dat rozładunku) ---
         val_data_roz_1 = datetime.now().date()
         val_data_roz_2 = None
         
@@ -566,7 +558,6 @@ def render(sh):
                 try: val_data_zal = datetime.strptime(str(r_edit.get('Data załadunku', r_edit.iloc[6])), "%Y-%m-%d").date()
                 except: pass
                 
-                # Odzyskiwanie wielu dat rozładunku ze stringa (np. "2026-05-10, 2026-05-11")
                 roz_str = str(r_edit.get('Data rozładunku', r_edit.iloc[7])).strip()
                 if "," in roz_str:
                     parts = [p.strip() for p in roz_str.split(",")]
@@ -630,7 +621,6 @@ def render(sh):
                     else:
                         cykl_part = ""
                         
-                    # Odtwarzanie dat harmonogramu przy edycji
                     if "EMP:" in cykl_part:
                         try:
                             emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
@@ -729,7 +719,6 @@ def render(sh):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>1. Harmonogram Zlecenia</p>", unsafe_allow_html=True)
             waga = st.number_input("Waga ładunku (kg):", min_value=100, step=100, value=val_waga)
             
-            # --- ZMIANA: Obsługa 2 dat rozładunku w formularzu ---
             d1, d2, d3 = st.columns(3)
             data_zal = d1.date_input("Data załadunku (PL):", val_data_zal)
             data_roz_1 = d2.date_input("Rozładunek 1 (Cel):", val_data_roz_1)
@@ -798,12 +787,16 @@ def render(sh):
                 postoj = f3.number_input("Postój:", min_value=0.0, value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
                 
             t1, t2 = st.columns([1, 2])
-            termin_dni = t1.number_input("Termin płatności (dni od rozładunku):", min_value=0, max_value=120, value=val_termin_dni, step=1)
+            termin_dni = t1.number_input("Termin płatności (dni):", min_value=0, max_value=120, value=val_termin_dni, step=1)
             
-            # --- ZMIANA: Płatność wyliczana jest od ostatniej daty rozładunku ---
-            ostateczny_rozladunek = data_roz_2 if data_roz_2 else data_roz_1
-            data_platnosci = ostateczny_rozladunek + timedelta(days=termin_dni)
-            t2.info(f"📅 Wyliczona data zapłaty: **{data_platnosci.strftime('%d.%m.%Y')}**")
+            if typ_zlecenia == "Pełny event" and data_odbior_pelnych:
+                data_powrotu_komorniki = data_odbior_pelnych + timedelta(days=2)
+                data_platnosci = data_powrotu_komorniki + timedelta(days=termin_dni)
+                t2.info(f"📅 Wyliczona data zapłaty (Odbiór z targów + 2 dni drogi + {termin_dni} dni): **{data_platnosci.strftime('%d.%m.%Y')}**")
+            else:
+                ostateczny_rozladunek = data_roz_2 if data_roz_2 else data_roz_1
+                data_platnosci = ostateczny_rozladunek + timedelta(days=termin_dni)
+                t2.info(f"📅 Wyliczona data zapłaty (Rozładunek + {termin_dni} dni): **{data_platnosci.strftime('%d.%m.%Y')}**")
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>3. Logistyka Miejsc</p>", unsafe_allow_html=True)
@@ -923,7 +916,6 @@ def render(sh):
                         dem_str = f"{data_dostawa_pustych},{data_odbior_pelnych}"
                         historia_cyklu += f" | EMP: {emp_str} | DEM: {dem_str}"
                     
-                    # --- ZAPIS UKRYTEGO TAGU DO BAZY DANYCH ---
                     pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || {historia_cyklu} || {instrukcje}"
                     if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
                         pelne_uwagi_db += " %%CMR:SQM%%"
