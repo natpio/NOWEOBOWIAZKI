@@ -159,12 +159,10 @@ def generate_pro_pdf(dane):
     draw_section_header(2, "LOGISTICS TIMELINE / HARMONOGRAM LOGISTYCZNY")
     draw_row("LOADING PLACE / MIEJSCE ZAŁADUNKU:", dane['zaladunek'])
     draw_row("LOADING DATE / DATA ZAŁADUNKU:", dane['data_zal'])
+    draw_row("UNLOADING DATE / DATA ROZŁADUNKU:", dane['data_roz'])
     draw_row("UNLOADING PLACE / MIEJSCE ROZŁADUNKU:", dane['rozladunek'])
     
     if dane['typ_zlecenia'] == "Pełny event":
-        draw_row("UNLOADING DATE / DATA ROZŁADUNKU:", dane['data_roz'])
-        
-        # Odbiór pustych casów (1 lub 2 daty)
         emp1 = str(dane.get('data_emp_in_1', ''))
         emp2 = str(dane.get('data_emp_in_2', ''))
         emp_str = emp1 if (emp1 and emp1 != 'None') else ''
@@ -173,7 +171,6 @@ def generate_pro_pdf(dane):
             
         draw_row("EMPTIES IN / ODBIÓR PUSTYCH:", emp_str if emp_str else "---")
         
-        # Demontaż rozdzielony
         dost_pust = str(dane.get('data_dostawa_pustych', ''))
         if dost_pust and dost_pust != 'None' and dost_pust.strip():
             draw_row("EMPTIES DELIVERY / DOSTAWA PUSTYCH:", dost_pust)
@@ -184,7 +181,7 @@ def generate_pro_pdf(dane):
             
         draw_row("RETURN LOAD / ODBIÓR PEŁNYCH:", odb_peln, border_b=False)
     else:
-        draw_row("UNLOADING DATE / DATA ROZŁADUNKU:", dane['data_roz'], border_b=False)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y()) # domknięcie linii
     pdf.ln(4)
 
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
@@ -263,7 +260,6 @@ def generate_cmr_excel(dane):
         safe_set_cell(sheet, 'H69', dane.get('data_zal', ''))
         safe_set_cell(sheet, 'T6', dane.get('nr_cmr', '24122250'))
         
-        # --- ZAPIS KIEROWCY I AUTA DO CMR ---
         safe_set_cell(sheet, 'L14', dane.get('auto', ''))
         safe_set_cell(sheet, 'L15', dane.get('kierowca', ''))
         
@@ -417,7 +413,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
                     data_odbior_pelnych = dem_raw.strip()
             except: pass
         elif "POWRÓT:" in cykl_part:
-            # Wsteczna kompatybilność ze starymi zleceniami w bazie
+            # Wsteczna kompatybilność
             try:
                 data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
             except: pass
@@ -520,9 +516,11 @@ def render(sh):
         val_typ_zlecenia = "Tylko dostawa"
         val_waga = 1000
         val_data_zal = datetime.now().date()
-        val_data_roz = datetime.now().date()
         
-        # --- Zaktualizowane zmienne domyślne dla nowych dat harmonogramu ---
+        # --- Zaktualizowane zmienne domyślne (obsługa 2 dat rozładunku) ---
+        val_data_roz_1 = datetime.now().date()
+        val_data_roz_2 = None
+        
         val_data_emp_in_1 = datetime.now().date()
         val_data_emp_in_2 = None
         val_data_dostawa_pustych = datetime.now().date()
@@ -544,7 +542,6 @@ def render(sh):
         val_instrukcje = domyslny_tekst
         val_podpis = "PD"
         val_miejsca_rozladunku_raw = []
-        
         val_odbiorca_cmr = "Miejsce przeznaczenia (Klient)"
 
         if not df_zlecenia.empty:
@@ -568,8 +565,19 @@ def render(sh):
                 
                 try: val_data_zal = datetime.strptime(str(r_edit.get('Data załadunku', r_edit.iloc[6])), "%Y-%m-%d").date()
                 except: pass
-                try: val_data_roz = datetime.strptime(str(r_edit.get('Data rozładunku', r_edit.iloc[7])), "%Y-%m-%d").date()
-                except: pass
+                
+                # Odzyskiwanie wielu dat rozładunku ze stringa (np. "2026-05-10, 2026-05-11")
+                roz_str = str(r_edit.get('Data rozładunku', r_edit.iloc[7])).strip()
+                if "," in roz_str:
+                    parts = [p.strip() for p in roz_str.split(",")]
+                    try: val_data_roz_1 = datetime.strptime(parts[0], "%Y-%m-%d").date()
+                    except: pass
+                    if len(parts) > 1:
+                        try: val_data_roz_2 = datetime.strptime(parts[1], "%Y-%m-%d").date()
+                        except: pass
+                else:
+                    try: val_data_roz_1 = datetime.strptime(roz_str, "%Y-%m-%d").date()
+                    except: pass
                 
                 stawka_str = str(r_edit.get('Stawka', '0 EUR'))
                 if " " in stawka_str:
@@ -721,9 +729,15 @@ def render(sh):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>1. Harmonogram Zlecenia</p>", unsafe_allow_html=True)
             waga = st.number_input("Waga ładunku (kg):", min_value=100, step=100, value=val_waga)
             
-            d1, d2 = st.columns(2)
+            # --- ZMIANA: Obsługa 2 dat rozładunku w formularzu ---
+            d1, d2, d3 = st.columns(3)
             data_zal = d1.date_input("Data załadunku (PL):", val_data_zal)
-            data_roz = d2.date_input("Data rozładunku (Targi/Cel):", val_data_roz)
+            data_roz_1 = d2.date_input("Rozładunek 1 (Cel):", val_data_roz_1)
+            data_roz_2 = d3.date_input("Rozładunek 2 (Opcja):", value=val_data_roz_2)
+            
+            data_roz_combined = str(data_roz_1)
+            if data_roz_2:
+                data_roz_combined += f", {data_roz_2}"
             
             if typ_zlecenia == "Pełny event":
                 st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.1);'>", unsafe_allow_html=True)
@@ -785,7 +799,10 @@ def render(sh):
                 
             t1, t2 = st.columns([1, 2])
             termin_dni = t1.number_input("Termin płatności (dni od rozładunku):", min_value=0, max_value=120, value=val_termin_dni, step=1)
-            data_platnosci = data_roz + timedelta(days=termin_dni)
+            
+            # --- ZMIANA: Płatność wyliczana jest od ostatniej daty rozładunku ---
+            ostateczny_rozladunek = data_roz_2 if data_roz_2 else data_roz_1
+            data_platnosci = ostateczny_rozladunek + timedelta(days=termin_dni)
             t2.info(f"📅 Wyliczona data zapłaty: **{data_platnosci.strftime('%d.%m.%Y')}**")
 
         with st.container(border=True):
@@ -898,7 +915,7 @@ def render(sh):
                     
                     c_auto_combined = f"{c_auto_nr} / {c_kierowca}" if c_auto_nr and c_kierowca else f"{c_auto_nr}{c_kierowca}"
                     
-                    historia_cyklu = f"CYKL: {data_zal} -> {data_roz}"
+                    historia_cyklu = f"CYKL: {data_zal} -> {data_roz_combined}"
                     if typ_zlecenia == "Pełny event":
                         emp_str = str(data_emp_in_1)
                         if data_emp_in_2:
@@ -928,7 +945,7 @@ def render(sh):
                         "przewoznik_nazwa": nazwa_przewoznika, "przewoznik_detale": detale_przewoznika,
                         "stawka": stawka_final, "waluta": waluta, "postoj": postoj,
                         "zaladunek": full_zal_pdf, "data_zal": str(data_zal),
-                        "rozladunek": full_roz_pdf, "data_roz": str(data_roz),
+                        "rozladunek": full_roz_pdf, "data_roz": data_roz_combined,
                         "data_emp_in_1": str(data_emp_in_1), "data_emp_in_2": str(data_emp_in_2) if data_emp_in_2 else "",
                         "data_dostawa_pustych": str(data_dostawa_pustych), "data_odbior_pelnych": str(data_odbior_pelnych),
                         "waga": waga, "auto": c_auto_combined, "uwagi": uwagi_na_pdf, "opiekun": podpis,
@@ -937,7 +954,7 @@ def render(sh):
                     
                     wiersz_db = [
                         datetime.now().strftime("%Y-%m-%d %H:%M"), nr_zlecenia, "LOGISTYKA CARGO", nazwa_przewoznika,
-                        final_zal_db, final_roz_db, str(data_zal), str(data_roz), "Zabudowa Targowa PRO",
+                        final_zal_db, final_roz_db, str(data_zal), data_roz_combined, "Zabudowa Targowa PRO",
                         str(data_platnosci), "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}"
                     ]
                     
@@ -948,7 +965,7 @@ def render(sh):
                         if operacja_sukces and kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
                             wiersz_poboczne = [
                                 nr_zlecenia, nazwa_przewoznika, f"PROJEKT: {projekt} | {instrukcje}",  
-                                str(data_zal), str(data_roz), str(termin_dni),                       
+                                str(data_zal), data_roz_combined, str(termin_dni),                       
                                 data_platnosci.strftime('%d.%m.%Y'), "PLANOWANIE", "NIE", "NIE", "NIE"                                  
                             ]
                             db.append_data("Zlecenia Poboczne", wiersz_poboczne)
