@@ -86,16 +86,28 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
     licznik_elementow = {}
     if nazwa_kolumny_id not in df.columns:
         df[nazwa_kolumny_id] = ""
+        
     for idx, row in df.iterrows():
         wartosc1 = str(row.get(kolumna_glowna, '')).strip().upper()
         wartosc2 = str(row.get(kolumna_dodatkowa, '')).strip().upper()
+        
+        # Zliczamy wystąpienia Głównej Wartości, by nadać kolejny poprawny numer (01, 02, 03)
+        if wartosc1:
+            if wartosc1 not in licznik_elementow: 
+                licznik_elementow[wartosc1] = 1
+            else: 
+                licznik_elementow[wartosc1] += 1
+                
         if not wartosc1 and not wartosc2: continue
-        if wartosc1 not in licznik_elementow: licznik_elementow[wartosc1] = 1
-        else: licznik_elementow[wartosc1] += 1
-        czesc1 = re.sub(r'[^A-Z0-9]', '', wartosc1)[:4] if wartosc1 else "BRAK"
-        czesc2 = re.sub(r'[^A-Z0-9]', '', wartosc2)[:4] if wartosc2 else "BRAK"
-        numer = str(licznik_elementow[wartosc1]).zfill(2)
-        df.at[idx, nazwa_kolumny_id] = f"{czesc1}-{czesc2}-{numer}"
+        
+        # ZABEZPIECZENIE: Generujemy automat TYLKO, gdy pole ID jest puste!
+        current_id = str(row.get(nazwa_kolumny_id, "")).strip()
+        if not current_id:
+            czesc1 = re.sub(r'[^A-Z0-9]', '', wartosc1)[:4] if wartosc1 else "BRAK"
+            czesc2 = re.sub(r'[^A-Z0-9]', '', wartosc2)[:4] if wartosc2 else "BRAK"
+            numer = str(licznik_elementow.get(wartosc1, 1)).zfill(2)
+            df.at[idx, nazwa_kolumny_id] = f"{czesc1}-{czesc2}-{numer}"
+            
     return df
 
 # ==========================================
