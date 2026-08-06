@@ -2,11 +2,11 @@ from datetime import datetime, timedelta
 import hashlib
 import io
 import os
+import re
 import tempfile
 from fpdf import FPDF
 import openpyxl
 from openpyxl.styles import PatternFill
-from openpyxl.utils import coordinate_from_string, column_index_from_string
 import pandas as pd
 import qrcode
 import streamlit as st
@@ -196,18 +196,22 @@ def generate_pro_pdf(dane):
 
     return bytes(pdf.output(dest='S').encode('latin1'))
 
-# --- NOWA, KULOODPORNA FUNKCJA ZAPISU DO SCALONYCH KOMÓREK EXCELA ---
+# --- NOWA, CZYSTA MATEMATYCZNA FUNKCJA ZAPISU DO SCALONYCH KOMÓREK ---
 def safe_set_cell(sheet, coordinate, value):
     target_coord = coordinate
     try:
-        xy = coordinate_from_string(coordinate)
-        col = column_index_from_string(xy[0])
-        row = xy[1]
-        
-        for cr in sheet.merged_cells.ranges:
-            if cr.min_row <= row <= cr.max_row and cr.min_col <= col <= cr.max_col:
-                target_coord = str(cr).split(':')[0]
-                break
+        match = re.match(r"([A-Z]+)([0-9]+)", coordinate)
+        if match:
+            col_str, row_str = match.groups()
+            row = int(row_str)
+            col = 0
+            for char in col_str:
+                col = col * 26 + (ord(char) - ord('A') + 1)
+                
+            for cr in sheet.merged_cells.ranges:
+                if cr.min_row <= row <= cr.max_row and cr.min_col <= col <= cr.max_col:
+                    target_coord = str(cr).split(':')[0]
+                    break
     except Exception:
         pass
         
