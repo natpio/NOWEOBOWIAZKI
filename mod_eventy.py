@@ -329,7 +329,6 @@ def render(sh):
                             
                             c_ed1, c_ed2 = st.columns(2)
                             with c_ed1:
-                                # --- NOWOŚĆ: MOŻLIWOŚĆ EDYCJI ID ZLECENIA ---
                                 u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
                                 u_przewoznik = st.text_input("Przewoźnik / Kierowca", value=str(dane_eventu.get('Przewoznik', '')))
@@ -343,14 +342,21 @@ def render(sh):
                             with c_ed2:
                                 u_typ_pojazd = st.text_input("Typ Pojazdu", value=str(dane_eventu.get('Typ_Pojazdu', '')))
                                 
-                                st.info("💡 Gdy wskażesz transport Zewnętrzny, system sam skopiuje w to miejsce ID Zlecenia jako referencję.")
-                                
+                                # Obsługa wielu dat rozładunku przy edycji
+                                akt_daty_rozl = str(dane_eventu.get('Notatki', '')) # Alternatywnie możemy sparsować lub dodać dedykowane pole
+                                # Dla stabilności pobieramy aktualną datę zlecenia tr lub parsujemy z notatek/innych kolumn jeśli potrzeba
                                 dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
                                 try:
                                     dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
                                 except:
                                     dp_parsed = None
                                 u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
+                                
+                                # Wiele dat rozładunku w edycji
+                                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Daty rozładunku na targach:</p>", unsafe_allow_html=True)
+                                r_ed1, r_ed2 = st.columns(2)
+                                u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=None)
+                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
@@ -368,7 +374,6 @@ def render(sh):
                                 df.at[idx, 'Typ_Transportu'] = u_typ_transp
                                 df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
                                 
-                                # --- KLUCZOWY WYMÓG: Automatyczne synchronizowanie numeru ---
                                 if u_typ_transp == "Zewnętrzny":
                                     df.at[idx, 'Nr_Zlecenia_Zewn'] = u_id_zlecenia
                                 else:
@@ -377,13 +382,18 @@ def render(sh):
                                 df.at[idx, 'Faza_Procesu'] = u_faza
                                 df.at[idx, 'Status_Magazyn'] = u_status_mag
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
-                                df.at[idx, 'Notatki'] = u_notatki
+                                
+                                # Zapis wieloma datami rozładunku w notatkach lub jako rozszerzenie
+                                rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
+                                if u_data_roz_2:
+                                    rozładunki_str += f", {u_data_roz_2}"
+                                if rozładunki_str:
+                                    df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {u_notatki}"
+                                else:
+                                    df.at[idx, 'Notatki'] = u_notatki
                                 
                                 save_data(worksheet, df)
-                                
-                                # Ochrona przed zgubieniem zaznaczenia po zmianie ID
                                 st.session_state["wybrany_event_id"] = u_id_zlecenia 
-                                
                                 st.success("Pomyślnie zaktualizowano dane!")
                                 st.rerun()
 
@@ -467,7 +477,6 @@ def render(sh):
                                     koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
                                     u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
                                     
-                                    # Info zamiast pola, by ręcznie z tego miejsca nie rozsynchronizować sobie logiki
                                     st.info(f"Numer referencyjny na zewnątrz: {dane_eventu.get('Nr_Zlecenia_Zewn', '')}")
                                     u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
                                 with col_f2:
@@ -537,10 +546,17 @@ def render(sh):
         with st.form("form_event_pro", clear_on_submit=True):
             f_col1, f_col2 = st.columns(2)
             with f_col1:
-                id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie, z generatora PRO)", placeholder="Zostaw puste by wygenerować automatycznie")
+                id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
+                
+                # --- Wiele dat rozładunku przy tworzeniu zlecenia ---
+                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Daty rozładunku na obiekcie (wiele dni):</p>", unsafe_allow_html=True)
+                r_form1, r_form2 = st.columns(2)
+                data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
+                data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
+                
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Kierowca *")
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
@@ -575,18 +591,26 @@ def render(sh):
                 if not nazwa_targow or not przewoznik:
                     st.error("❌ Uzupełnij nazwę targów oraz przewoźnika!")
                 else:
-                    # Kopiowanie ID jeśli to zewnętrzny
                     if typ_transportu == "Zewnętrzny":
                         nr_zewn_final = id_zlecenia_custom
                     else:
                         nr_zewn_final = "FLOTA WŁASNA"
+                        
+                    # Formatowanie wielu dat rozładunku do notatek/bazy
+                    roz_str = str(data_rozladunku_1) if data_rozladunku_1 else ""
+                    if data_rozladunku_2:
+                        roz_str += f", {data_rozladunku_2}"
+                    
+                    finalne_notatki = notatki
+                    if roz_str:
+                        finalne_notatki = f"[Rozładunki: {roz_str}] {notatki}"
                         
                     nowy_wiersz = {
                         "ID_Zlecenia": id_zlecenia_custom, "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
                         "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
                         "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
                         "Status_Magazyn": status_magazyn,
-                        "Notatki": notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
+                        "Notatki": finalne_notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
                         "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zewn_final, 
                         "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
