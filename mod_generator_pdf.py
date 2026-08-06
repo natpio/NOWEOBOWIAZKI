@@ -352,6 +352,12 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     data_emp_in = ""
     data_emp_out = ""
     
+    # --- ODCZYT UKRYTEGO TAGU DLA ODBIORCY NA CMR ---
+    odbiorca_cmr_hist = full_roz_pdf
+    if "%%CMR:SQM%%" in uwagi_baza:
+        odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+        uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
+    
     if "AUTO: " in uwagi_baza:
         try: c_auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
         except: pass
@@ -403,7 +409,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     numer_cmr_final = str(base_cmr + idx_pd)
 
     dane_cmr = {
-        "odbiorca": full_roz_pdf,
+        "odbiorca": odbiorca_cmr_hist,
         "miejsce_przeznaczenia": full_roz_pdf,
         "data_zal": data_zal,
         "miasto_zal": miasto_zal_val,
@@ -484,15 +490,15 @@ def render(sh):
         val_projekt = "Brak"
         val_z_sel = "Magazyn SQM Komorniki"
         val_z_man = ""
-        
-        # --- Zmiana w zmiennych domyślnych dla Auta i Kierowcy ---
         val_c_auto_nr = ""
         val_c_kierowca = ""
-        
         val_wartosc_towaru = 100000
         val_instrukcje = domyslny_tekst
         val_podpis = "PD"
         val_miejsca_rozladunku_raw = []
+        
+        # --- Zmienna dla trybu edycji ---
+        val_odbiorca_cmr = "Miejsce przeznaczenia (Klient)"
 
         if not df_zlecenia.empty:
             if 'Dział' in df_zlecenia.columns:
@@ -537,7 +543,11 @@ def render(sh):
                 
                 uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', ''))
                 
-                # --- Rozdzielanie wczytanego starego tekstu na rejestrację i kierowcę ---
+                # --- ODCZYT UKRYTEGO TAGU DLA ODBIORCY NA CMR W TRYBIE EDYCJI ---
+                if "%%CMR:SQM%%" in uwagi_baza:
+                    val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
+                    uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
+                
                 if "AUTO: " in uwagi_baza:
                     try: 
                         auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
@@ -737,11 +747,19 @@ def render(sh):
                     r_s = st.selectbox("Miejsce celu (Targi):", opcje_lokalizacji, index=idx_r)
                     r_m = st.text_input("Adres celu (ręcznie):", value=init_r_man) if r_s == "INNE (wpisz ręcznie)" else ""
                     miejsca_rozladunku.append((r_s, r_m))
+                    
+            st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.2);'>", unsafe_allow_html=True)
+            odbiorca_cmr_idx = 1 if val_odbiorca_cmr == "SQM (Wysyłka na własne stoisko/event)" else 0
+            odbiorca_cmr_ui = st.radio(
+                "Kto jest formalnym Odbiorcą na dokumencie CMR (Box 2)?:",
+                ["Miejsce przeznaczenia (Klient)", "SQM (Wysyłka na własne stoisko/event)"],
+                index=odbiorca_cmr_idx,
+                horizontal=True
+            )
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>4. Realizacja i Dodatkowe Uwagi</p>", unsafe_allow_html=True)
             
-            # --- ZMIANA: ROZDZIELENIE POLA NA 3 OSOBNE KOLUMNY ---
             col_auto, col_kier, col_wart = st.columns([1.5, 1.5, 1])
             c_auto_nr = col_auto.text_input("Nr rejestracyjny (Auto):", value=val_c_auto_nr, placeholder="np. PO 12345")
             c_kierowca = col_kier.text_input("Kierowca (Imię i Nazwisko):", value=val_c_kierowca, placeholder="np. Jan Kowalski")
@@ -788,11 +806,15 @@ def render(sh):
                     else:
                         full_roz_pdf = lista_roz_pdf[0]
                     
-                    # --- BUDOWANIE CIĄGU ZNAKÓW AUTO/KIEROWCA DO BAZY I PDF ---
                     c_auto_combined = f"{c_auto_nr} / {c_kierowca}" if c_auto_nr and c_kierowca else f"{c_auto_nr}{c_kierowca}"
                     
                     historia_cyklu = f"CYKL: {data_zal} -> {data_roz}" + (f" | EMP: {data_emp_in} | POWRÓT: {data_emp_out}" if typ_zlecenia == "Pełny event" else "")
+                    
+                    # --- ZAPIS UKRYTEGO TAGU DO BAZY DANYCH ---
                     pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || {historia_cyklu} || {instrukcje}"
+                    if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
+                        pelne_uwagi_db += " %%CMR:SQM%%"
+                        
                     uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_combined}\n{instrukcje}"
                     
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
@@ -844,17 +866,23 @@ def render(sh):
                             numer_cmr_final = str(base_cmr + int(idx_pd))
                         else:
                             numer_cmr_final = str(base_cmr + len(df_zlecenia))
+                            
+                        # --- WARUNKOWE WSTAWIANIE ODBIORCY DO CMR ---
+                        if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
+                            odbiorca_cmr_text = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+                        else:
+                            odbiorca_cmr_text = full_roz_pdf
                         
                         dane_cmr = {
-                            "odbiorca": full_roz_pdf,
+                            "odbiorca": odbiorca_cmr_text,
                             "miejsce_przeznaczenia": full_roz_pdf,
                             "data_zal": str(data_zal),
                             "miasto_zal": miasto_zal_val,
                             "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
                             "waga": waga,
                             "nr_cmr": numer_cmr_final,
-                            "auto": c_auto_nr,       # CZYSTY KOD AUTA DO CMR
-                            "kierowca": c_kierowca   # CZYSTE IMIE KIEROWCY DO CMR
+                            "auto": c_auto_nr,       
+                            "kierowca": c_kierowca   
                         }
                         
                         cmr_bytes = generate_cmr_excel(dane_cmr)
