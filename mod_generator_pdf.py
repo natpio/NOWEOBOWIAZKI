@@ -6,6 +6,7 @@ import tempfile
 from fpdf import FPDF
 import openpyxl
 from openpyxl.styles import PatternFill
+from openpyxl.utils import coordinate_from_string, column_index_from_string
 import pandas as pd
 import qrcode
 import streamlit as st
@@ -195,15 +196,22 @@ def generate_pro_pdf(dane):
 
     return bytes(pdf.output(dest='S').encode('latin1'))
 
+# --- NOWA, KULOODPORNA FUNKCJA ZAPISU DO SCALONYCH KOMÓREK EXCELA ---
 def safe_set_cell(sheet, coordinate, value):
+    target_coord = coordinate
     try:
-        sheet[coordinate] = value
-    except AttributeError:
+        xy = coordinate_from_string(coordinate)
+        col = column_index_from_string(xy[0])
+        row = xy[1]
+        
         for cr in sheet.merged_cells.ranges:
-            if coordinate in cr:
-                top_left = str(cr).split(':')[0]
-                sheet[top_left] = value
+            if cr.min_row <= row <= cr.max_row and cr.min_col <= col <= cr.max_col:
+                target_coord = str(cr).split(':')[0]
                 break
+    except Exception:
+        pass
+        
+    sheet[target_coord] = value
 
 def generate_cmr_excel(dane):
     szablon_path = "Szablon_CMR.xlsx"
@@ -231,6 +239,8 @@ def generate_cmr_excel(dane):
         safe_set_cell(sheet, 'E69', dane.get('miasto_zal', ''))
         safe_set_cell(sheet, 'H69', dane.get('data_zal', ''))
         safe_set_cell(sheet, 'T6', dane.get('nr_cmr', '24122250'))
+        
+        # --- ZAPIS KIEROWCY I AUTA DO CMR ---
         safe_set_cell(sheet, 'L14', dane.get('auto', ''))
         safe_set_cell(sheet, 'L15', dane.get('kierowca', ''))
         
