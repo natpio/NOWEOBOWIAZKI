@@ -69,7 +69,7 @@ def render(sh):
             
             wyszukiwarka = st.text_input(
                 "Wyszukiwarka", 
-                placeholder="🔍 Wpisz nazwę targów, przewoźnika, ID zlecenia, fakturę...",
+                placeholder="🔍 Wpisz nazwę targów, przewoźnika, ID zlecenia, fakturę (rozdzielaj przecinkiem)...",
                 label_visibility="collapsed"
             )
             st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
@@ -142,9 +142,15 @@ def render(sh):
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
+            # ==========================================
+            # ZMODYFIKOWANA WYSZUKIWARKA (wielokrotne frazy)
+            # ==========================================
             if wyszukiwarka and not df_widok.empty:
-                maska = df_widok.astype(str).apply(lambda row: row.str.contains(wyszukiwarka, case=False, na=False).any(), axis=1)
-                df_widok = df_widok[maska]
+                frazy = [f.strip() for f in wyszukiwarka.split(",") if f.strip()]
+                for fraza in frazy:
+                    if not df_widok.empty:
+                        maska = df_widok.astype(str).apply(lambda row: row.str.contains(fraza, case=False, na=False).any(), axis=1)
+                        df_widok = df_widok[maska]
 
             if not df_widok.empty and 'Data_Zlecenia_Tr' in df_widok.columns:
                 df_widok['_temp_date'] = pd.to_datetime(df_widok['Data_Zlecenia_Tr'], errors='coerce')
@@ -190,9 +196,20 @@ def render(sh):
                         else:
                             tags_div = ""
 
+                        # ==========================================
+                        # ZMODYFIKOWANY KAFELEK (dodana data rozładunku z notatek)
+                        # ==========================================
                         data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
                         if data_zal_lista in ['', 'None', 'nan', 'NaT']:
                             data_zal_lista = 'no info'
+                            
+                        notatki_str = str(row.get('Notatki', ''))
+                        data_roz_lista = "-"
+                        if "[Rozładunki:" in notatki_str:
+                            try:
+                                data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
+                            except:
+                                pass
 
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
@@ -204,12 +221,12 @@ def render(sh):
             <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
             <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
         </div>
-        <div class="cr-col" style="width: 25%;">
+        <div class="cr-col" style="width: 20%;">
             <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
             <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
         </div>
-        <div class="cr-col" style="width: 35%; align-items: flex-end;">
-            <span class="cr-text" style="margin-bottom: 5px; font-size: 13px;">📅 Załadunek: <b style="color: #C5A880;">{data_zal_lista}</b></span>
+        <div class="cr-col" style="width: 40%; align-items: flex-end;">
+            <span class="cr-text" style="margin-bottom: 5px; font-size: 12px;">📅 Zał: <b style="color: #C5A880;">{data_zal_lista}</b> | 🏁 Rozł: <b style="color: #83A5DB;">{data_roz_lista}</b></span>
             <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
         </div>
     </div>
