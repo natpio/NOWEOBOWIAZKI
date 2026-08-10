@@ -143,13 +143,14 @@ def render(sh):
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
             # ==========================================
-            # ZMODYFIKOWANA WYSZUKIWARKA (wielokrotne frazy)
+            # ZMODYFIKOWANA WYSZUKIWARKA (wielokrotne frazy - kuloodporna)
             # ==========================================
             if wyszukiwarka and not df_widok.empty:
-                frazy = [f.strip() for f in wyszukiwarka.split(",") if f.strip()]
+                frazy = [f.strip().lower() for f in wyszukiwarka.split(",") if f.strip()]
                 for fraza in frazy:
                     if not df_widok.empty:
-                        maska = df_widok.astype(str).apply(lambda row: row.str.contains(fraza, case=False, na=False).any(), axis=1)
+                        # Łączymy wszystkie dane ze zlecenia w jeden długi string i sprawdzamy czy zawiera frazę (Logika AND)
+                        maska = df_widok.astype(str).apply(lambda x: ' '.join(x).lower(), axis=1).str.contains(fraza, regex=False)
                         df_widok = df_widok[maska]
 
             if not df_widok.empty and 'Data_Zlecenia_Tr' in df_widok.columns:
@@ -197,14 +198,14 @@ def render(sh):
                             tags_div = ""
 
                         # ==========================================
-                        # ZMODYFIKOWANY KAFELEK (dodana data rozładunku z notatek)
+                        # ZMODYFIKOWANY KAFELEK (dodane daty rozładunku)
                         # ==========================================
                         data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
                         if data_zal_lista in ['', 'None', 'nan', 'NaT']:
-                            data_zal_lista = 'no info'
+                            data_zal_lista = 'Brak danych'
                             
                         notatki_str = str(row.get('Notatki', ''))
-                        data_roz_lista = "-"
+                        data_roz_lista = "Brak danych"
                         if "[Rozładunki:" in notatki_str:
                             try:
                                 data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
@@ -221,12 +222,13 @@ def render(sh):
             <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
             <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
         </div>
-        <div class="cr-col" style="width: 20%;">
+        <div class="cr-col" style="width: 25%;">
             <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
             <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
         </div>
-        <div class="cr-col" style="width: 40%; align-items: flex-end;">
-            <span class="cr-text" style="margin-bottom: 5px; font-size: 12px;">📅 Zał: <b style="color: #C5A880;">{data_zal_lista}</b> | 🏁 Rozł: <b style="color: #83A5DB;">{data_roz_lista}</b></span>
+        <div class="cr-col" style="width: 35%; align-items: flex-end;">
+            <span class="cr-text" style="margin-bottom: 2px; font-size: 12px;">📅 Załadunek: <b style="color: #C5A880;">{data_zal_lista}</b></span>
+            <span class="cr-text" style="margin-bottom: 6px; font-size: 12px;">🏁 Rozładunek: <b style="color: #83A5DB;">{data_roz_lista}</b></span>
             <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
         </div>
     </div>
