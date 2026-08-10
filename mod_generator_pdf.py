@@ -45,27 +45,27 @@ class PRO_TransportOrder(FPDF):
     def header(self):
         try:
             if os.path.exists("logosqm.png"):
-                self.image("logosqm.png", 10, 8, 57.5)
+                self.image("logosqm.png", 10, 6, 57.5)
             elif os.path.exists("logosqm.jpg"):
-                self.image("logosqm.jpg", 10, 8, 57.5)
+                self.image("logosqm.jpg", 10, 6, 57.5)
         except:
             pass
         
+        # Bardziej skompresowany nagłówek
         self.set_font("Arial", 'B', 18)
         self.set_text_color(*self.dark_text)
-        self.set_xy(65, 12)
+        self.set_xy(65, 10)
         self.cell(105, 8, pdf_sanitize("TRANSPORT ORDER"), ln=True, align='R')
         
         self.set_font("Arial", 'B', 11)
         self.set_text_color(*self.light_text)
-        self.set_xy(65, 20)
+        self.set_xy(65, 18)
         self.cell(105, 5, pdf_sanitize("ZLECENIE TRANSPORTOWE"), ln=True, align='R')
         
         self.set_font("Arial", '', 8)
         self.set_text_color(*self.light_text)
-        self.set_xy(65, 26)
+        self.set_xy(65, 23)
         self.cell(105, 5, pdf_sanitize("SQM Prosta Spółka Akcyjna | Logistics Department"), ln=True, align='R')
-        self.ln(15)
 
     def footer(self):
         self.set_y(-30)
@@ -89,6 +89,10 @@ class PRO_TransportOrder(FPDF):
 def generate_pro_pdf(dane):
     pdf = PRO_TransportOrder(opiekun=dane.get('opiekun', 'PD'))
     pdf.alias_nb_pages()
+    
+    # 1. KLUCZOWA ZMIANA: Twardy margines dolny na 33mm. Zabezpiecza przed nakładaniem się tekstu na stopkę!
+    pdf.set_auto_page_break(auto=True, margin=33) 
+    
     pdf.add_page()
     pdf.add_watermark()
 
@@ -104,10 +108,13 @@ def generate_pro_pdf(dane):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         img_qr.save(tmp, format="PNG")
         qr_path = tmp.name
-    pdf.image(qr_path, 175, 10, 25)
+        
+    # Mniejszy QR kod, podniesiony wyżej
+    pdf.image(qr_path, 175, 8, 22)
     if os.path.exists(qr_path): os.remove(qr_path)
 
-    pdf.set_xy(10, 40)
+    # 2. KOMPRESJA ZAGĘSZCZENIA GÓRY (zaczynamy od 32mm zamiast 40mm)
+    pdf.set_xy(10, 32)
     pdf.set_font("Arial", 'B', 9)
     pdf.set_fill_color(25, 118, 210) 
     pdf.set_text_color(255, 255, 255)
@@ -122,39 +129,41 @@ def generate_pro_pdf(dane):
     pdf.set_fill_color(245, 245, 245)
     pdf.set_text_color(40, 40, 40)
     pdf.cell(60, 8, pdf_sanitize(f" {datetime.now().strftime('%d.%m.%Y')}"), border=0, fill=True)
-    pdf.ln(12)
+    
+    # Krótszy skok sekcji (6 zamiast 12)
+    pdf.ln(6)
 
     def draw_section_header(num, title):
         pdf.set_fill_color(25, 118, 210)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Arial", 'B', 12)
-        pdf.cell(10, 10, pdf_sanitize(str(num).zfill(2)), fill=True, align='C')
+        pdf.set_font("Arial", 'B', 11) # Mniejsza czcionka o 1pt
+        pdf.cell(8, 8, pdf_sanitize(str(num).zfill(2)), fill=True, align='C')
         pdf.set_text_color(40, 40, 40)
-        pdf.cell(5, 10, "", border=0)
-        pdf.cell(0, 10, pdf_sanitize(title), ln=True)
-        pdf.ln(2)
+        pdf.cell(3, 8, "", border=0)
+        pdf.cell(0, 8, pdf_sanitize(title), ln=True)
+        pdf.ln(1)
 
     def draw_row(label, val, border_b=True):
         x_start = pdf.get_x()
         y_start = pdf.get_y()
-        pdf.set_font("Arial", 'B', 8)
+        pdf.set_font("Arial", 'B', 7.5) # Zmniejszone etykiety
         pdf.set_text_color(100, 100, 100)
-        pdf.cell(65, 6, pdf_sanitize(label), border=0)
-        pdf.set_font("Arial", 'B', 10)
+        pdf.cell(60, 5, pdf_sanitize(label), border=0)
+        pdf.set_font("Arial", 'B', 9) # Zmniejszony tekst główny z 10 na 9
         pdf.set_text_color(40, 40, 40)
-        pdf.set_xy(x_start + 65, y_start + 0.5)
-        pdf.multi_cell(125, 5, pdf_sanitize(val), border=0)
-        y_end = pdf.get_y() + 1.5
+        pdf.set_xy(x_start + 60, y_start + 0.5)
+        pdf.multi_cell(130, 4.5, pdf_sanitize(val), border=0)
+        y_end = pdf.get_y() + 0.5 # Mniejsze światło wiersza
         if border_b:
             pdf.set_draw_color(230, 230, 230)
             pdf.line(10, y_end, 200, y_end)
-        pdf.set_xy(10, y_end + 2)
+        pdf.set_xy(10, y_end + 1.5)
 
     draw_section_header(1, "PARTIES & ASSETS / STRONY I POJAZD")
     draw_row("CONTRACTOR / PRZEWOŹNIK:", dane['przewoznik_detale'])
     draw_row("VEHICLE & DRIVER / AUTO I KIEROWCA:", dane['auto'] if dane['auto'] else "TBA / Do podania")
     draw_row("VALUATION MODEL / TRYB WYCENY:", dane['typ_zlecenia'], border_b=False)
-    pdf.ln(4)
+    pdf.ln(2)
 
     draw_section_header(2, "LOGISTICS TIMELINE / HARMONOGRAM LOGISTYCZNY")
     draw_row("LOADING PLACE / MIEJSCE ZAŁADUNKU:", dane['zaladunek'])
@@ -182,33 +191,36 @@ def generate_pro_pdf(dane):
         draw_row("RETURN LOAD / ODBIÓR PEŁNYCH:", odb_peln, border_b=False)
     else:
         pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(4)
+    pdf.ln(2)
 
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
     sy = pdf.get_y()
     
-    pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 25, 25, 'F') 
-    pdf.set_xy(145, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(145, sy, 55, 25, 'F')
-    pdf.set_xy(145, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
-    pdf.cell(50, 5, pdf_sanitize("TOTAL NET RATE / KWOTA NETTO"), ln=True)
-    pdf.set_xy(145, sy + 10); pdf.set_font("Arial", 'B', 20)
-    pdf.cell(50, 10, pdf_sanitize(f"{dane['stawka']} {dane['waluta']}"), ln=True)
+    # 3. Zmniejszony boks z ceną o 3mm
+    pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 22, 22, 'F') 
+    pdf.set_xy(142, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(142, sy, 58, 22, 'F')
+    pdf.set_xy(142, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
+    pdf.cell(55, 4, pdf_sanitize("TOTAL NET RATE / KWOTA NETTO"), ln=True)
+    pdf.set_xy(142, sy + 9); pdf.set_font("Arial", 'B', 18)
+    pdf.cell(55, 9, pdf_sanitize(f"{dane['stawka']} {dane['waluta']}"), ln=True)
     
     pdf.set_xy(10, sy)
-    pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("CARGO TYPE / RODZAJ TOWARU:"), border=0)
-    pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, sy); pdf.multi_cell(50, 5, pdf_sanitize("Exhibition Structures / AV Equipment"))
+    pdf.set_font("Arial", 'B', 7.5); pdf.set_text_color(100, 100, 100); pdf.cell(55, 4.5, pdf_sanitize("CARGO TYPE / RODZAJ TOWARU:"), border=0)
+    pdf.set_font("Arial", 'B', 9); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, sy); pdf.multi_cell(50, 4.5, pdf_sanitize("Exhibition Structures / AV Equipment"))
     
     pdf.set_xy(10, pdf.get_y() + 1)
-    pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("GROSS WEIGHT / WAGA BRUTTO:"), border=0)
-    pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 5, pdf_sanitize(f"{dane['waga']} kg"))
+    pdf.set_font("Arial", 'B', 7.5); pdf.set_text_color(100, 100, 100); pdf.cell(55, 4.5, pdf_sanitize("GROSS WEIGHT / WAGA BRUTTO:"), border=0)
+    pdf.set_font("Arial", 'B', 9); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 4.5, pdf_sanitize(f"{dane['waga']} kg"))
 
-    pdf.set_xy(10, pdf.get_y() + 6)
-    pdf.set_font("Arial", 'B', 8); pdf.set_text_color(100, 100, 100); pdf.cell(55, 5, pdf_sanitize("PAYMENT / PŁATNOŚĆ:"), border=0)
-    pdf.set_font("Arial", 'B', 10); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 5, pdf_sanitize(f"{dane['termin_dni']} dni / days ({dane['data_platnosci']})"))
+    pdf.set_xy(10, pdf.get_y() + 5)
+    pdf.set_font("Arial", 'B', 7.5); pdf.set_text_color(100, 100, 100); pdf.cell(55, 4.5, pdf_sanitize("PAYMENT / PŁATNOŚĆ:"), border=0)
+    pdf.set_font("Arial", 'B', 9); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 4.5, pdf_sanitize(f"{dane['termin_dni']} dni / days ({dane['data_platnosci']})"))
     
-    pdf.set_xy(10, sy + 35)
+    # 4. Dynamiczny skok bezpieczny dla rozładunków (zamiast sztywnego +35 do dołu)
+    pdf.set_xy(10, max(pdf.get_y() + 5, sy + 25))
     draw_section_header(4, "SPECIAL PROVISIONS / UWAGI SPECJALNE")
-    pdf.set_font("Arial", 'I', 10); pdf.multi_cell(0, 6, pdf_sanitize(dane['uwagi']))
+    pdf.set_font("Arial", 'I', 9)
+    pdf.multi_cell(0, 4.5, pdf_sanitize(dane['uwagi']))
 
     return bytes(pdf.output(dest='S').encode('latin1'))
 
@@ -310,7 +322,6 @@ def get_cmr_city_format(place_name, manual_addr, df):
     return place_name
 
 def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
-    # Bezpieczne pobieranie wartości z kolumn za pomocą kluczy lub indeksów
     nr_zlecenia = str(r.get('Numer zlecenia', r.iloc[1] if len(r) > 1 else ''))
     podpis = "".join([c for c in nr_zlecenia.split("/")[-1] if c.isalpha()])[:2] if "/" in nr_zlecenia else "PD"
 
@@ -359,7 +370,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     else:
         full_roz_pdf = lista_roz_pdf[0] if lista_roz_pdf else ""
         
-    # --- ROZBUDOWANY PARSER UWAG (Brakujące dane: waga, postój) ---
     uwagi_baza = str(r.get('Uwagi / Instrukcje', r.iloc[13] if len(r) > 13 else ''))
     
     c_auto_full = ""
@@ -401,7 +411,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
                 cykl_part = p
                 
     else:
-        # Fallback dla bardzo starych zleceń zrobionych przed aktualizacją struktury
         if "%%CMR:SQM%%" in uwagi_baza:
             odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
             uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
@@ -409,7 +418,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
             try: c_auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
             except: pass
 
-    # Rozkodowanie harmonogramu
     if "EMP:" in cykl_part:
         try:
             emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
@@ -437,7 +445,6 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', r.iloc[16] if len(r)>16 else '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
     uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_full}\n{val_instrukcje}"
     
-    # --- Wyliczanie terminów (Termin płatności) z dat z bazy, aby usunąć sztywne "30" dni ---
     termin_dni = 30
     try:
         dz_roz_ost = data_roz.split(",")[-1].strip()
@@ -620,7 +627,6 @@ def render(sh):
                 m_roz_baza = str(r_edit.get('Miejsce Rozladunku', ''))
                 val_miejsca_rozladunku_raw = m_roz_baza.split(" | ")
                 
-                # --- Rozbudowany Parser na etapie Edycji (Wczytywanie wagi i postoju z powrotem do UI) ---
                 uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', r_edit.iloc[13] if len(r_edit)>13 else ''))
                 
                 if " || " in uwagi_baza:
@@ -677,7 +683,6 @@ def render(sh):
                                     if powrot_raw.strip(): val_data_odbior_pelnych = datetime.strptime(powrot_raw.strip(), "%Y-%m-%d").date()
                                 except: pass
                 else:
-                    # Fallback
                     if "%%CMR:SQM%%" in uwagi_baza:
                         val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
                         uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
@@ -694,7 +699,6 @@ def render(sh):
                         try: val_wartosc_towaru = int(uwagi_baza.split("WART: ")[1].split(" PLN")[0])
                         except: pass
 
-                # Wyliczanie terminu dla UI w edycji
                 try:
                     dz_roz_ost = val_data_roz_2 if val_data_roz_2 else val_data_roz_1
                     dt_plat_str = str(r_edit.get('Data płatności (szacowana)', r_edit.iloc[9] if len(r_edit)>9 else ''))
@@ -969,7 +973,6 @@ def render(sh):
                         dem_str = f"{data_dostawa_pustych},{data_odbior_pelnych}"
                         historia_cyklu += f" | EMP: {emp_str} | DEM: {dem_str}"
                     
-                    # --- Kluczowa linia: Zapis do bazy wagi i postoju do późniejszego odtworzenia ---
                     pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || WAGA: {waga} || POSTOJ: {postoj} || {historia_cyklu} || {instrukcje}"
                     if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
                         pelne_uwagi_db += " %%CMR:SQM%%"
