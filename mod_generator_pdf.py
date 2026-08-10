@@ -310,14 +310,15 @@ def get_cmr_city_format(place_name, manual_addr, df):
     return place_name
 
 def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
-    nr_zlecenia = str(r.get('Numer zlecenia', ''))
+    # Bezpieczne pobieranie wartości z kolumn za pomocą kluczy lub indeksów
+    nr_zlecenia = str(r.get('Numer zlecenia', r.iloc[1] if len(r) > 1 else ''))
     podpis = "".join([c for c in nr_zlecenia.split("/")[-1] if c.isalpha()])[:2] if "/" in nr_zlecenia else "PD"
 
-    data_zal = str(r.get('Data załadunku', ''))
-    data_roz = str(r.get('Data rozładunku', ''))
-    data_platnosci = str(r.get('Data płatności (szacowana)', ''))
+    data_zal = str(r.get('Data załadunku', r.iloc[6] if len(r) > 6 else ''))
+    data_roz = str(r.get('Data rozładunku', r.iloc[7] if len(r) > 7 else ''))
+    data_platnosci = str(r.get('Data płatności (szacowana)', r.get('Data_Platnosci', r.iloc[9] if len(r) > 9 else '')))
     
-    stawka_str = str(r.get('Stawka', '0 EUR'))
+    stawka_str = str(r.get('Stawka', r.iloc[17] if len(r) > 17 else '0 EUR'))
     stawka_final = 0.0
     waluta = "EUR"
     if " " in stawka_str:
@@ -329,7 +330,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         try: stawka_final = float(stawka_str)
         except: pass
         
-    nazwa_przewoznika = str(r.get('Zleceniobiorca', ''))
+    nazwa_przewoznika = str(r.get('Zleceniobiorca', r.iloc[3] if len(r) > 3 else ''))
     detale_przewoznika = nazwa_przewoznika
     if not df_przewoznicy.empty and 'Skrócona Nazwa' in df_przewoznicy.columns:
         r_p = df_przewoznicy[df_przewoznicy['Skrócona Nazwa'] == nazwa_przewoznika]
@@ -337,7 +338,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
             rp_row = r_p.iloc[0]
             detale_przewoznika = f"{str(rp_row.get('Pełna Nazwa', ''))}\n{str(rp_row.get('Ulica i numer', ''))}\n{str(rp_row.get('Kod pocztowy i Miasto', ''))}, {str(rp_row.get('Kraj', 'Polska'))}\nNIP: {str(rp_row.get('NIP', ''))}".strip()
             
-    z_sel = str(r.get('Miejsce Zaladunku', ''))
+    z_sel = str(r.get('Miejsce Zaladunku', r.iloc[4] if len(r) > 4 else ''))
     def build_full_address(place_name, df):
         if place_name == "Magazyn SQM Komorniki":
             return "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
@@ -350,7 +351,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
 
     full_zal_pdf = build_full_address(z_sel, df_miejsca)
     
-    m_roz_baza = str(r.get('Miejsce Rozladunku', ''))
+    m_roz_baza = str(r.get('Miejsce Rozladunku', r.iloc[5] if len(r) > 5 else ''))
     roz_list = m_roz_baza.split(" | ")
     lista_roz_pdf = [build_full_address(x, df_miejsca) for x in roz_list]
     if len(lista_roz_pdf) > 1:
@@ -358,73 +359,105 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
     else:
         full_roz_pdf = lista_roz_pdf[0] if lista_roz_pdf else ""
         
-    uwagi_baza = str(r.get('Uwagi / Instrukcje', ''))
+    # --- ROZBUDOWANY PARSER UWAG (Brakujące dane: waga, postój) ---
+    uwagi_baza = str(r.get('Uwagi / Instrukcje', r.iloc[13] if len(r) > 13 else ''))
+    
     c_auto_full = ""
     val_instrukcje = uwagi_baza
+    waga_val = 1000
+    postoj_val = 0.0
+    wartosc_towaru = 100000
     
     data_emp_in_1 = ""
     data_emp_in_2 = ""
     data_dostawa_pustych = ""
     data_odbior_pelnych = ""
+    cykl_part = ""
     
     odbiorca_cmr_hist = full_roz_pdf
-    if "%%CMR:SQM%%" in uwagi_baza:
-        odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
-        uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
     
-    if "AUTO: " in uwagi_baza:
-        try: c_auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
-        except: pass
-        
     if " || " in uwagi_baza:
         parts = uwagi_baza.split(" || ")
-        if len(parts) >= 4:
-            val_instrukcje = parts[3]
-            cykl_part = parts[2]
-        elif len(parts) == 3:
-            val_instrukcje = parts[2]
-            cykl_part = parts[1] if "CYKL:" in parts[1] else ""
-        else:
-            cykl_part = ""
+        val_instrukcje = parts[-1]
+        
+        if "%%CMR:SQM%%" in val_instrukcje:
+            odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+            val_instrukcje = val_instrukcje.replace(" %%CMR:SQM%%", "").replace("%%CMR:SQM%%", "")
             
-        if "EMP:" in cykl_part:
-            try:
-                emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
-                if "," in emp_raw:
-                    data_emp_in_1 = emp_raw.split(",")[0].strip()
-                    data_emp_in_2 = emp_raw.split(",")[1].strip()
-                else:
-                    data_emp_in_1 = emp_raw.strip()
-            except: pass
-            
-        if "DEM:" in cykl_part:
-            try:
-                dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
-                if "," in dem_raw:
-                    data_dostawa_pustych = dem_raw.split(",")[0].strip()
-                    data_odbior_pelnych = dem_raw.split(",")[1].strip()
-                else:
-                    data_odbior_pelnych = dem_raw.strip()
-            except: pass
-        elif "POWRÓT:" in cykl_part:
-            try:
-                data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
+        for p in parts:
+            p = p.strip()
+            if p.startswith("AUTO:"):
+                c_auto_full = p.replace("AUTO:", "").strip()
+            elif p.startswith("WART:"):
+                try: wartosc_towaru = int(re.sub(r'[^0-9]', '', p))
+                except: pass
+            elif p.startswith("WAGA:"):
+                try: waga_val = int(re.sub(r'[^0-9]', '', p))
+                except: pass
+            elif p.startswith("POSTOJ:"):
+                try: postoj_val = float(re.sub(r'[^0-9.]', '', p))
+                except: pass
+            elif p.startswith("CYKL:"):
+                cykl_part = p
+                
+    else:
+        # Fallback dla bardzo starych zleceń zrobionych przed aktualizacją struktury
+        if "%%CMR:SQM%%" in uwagi_baza:
+            odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+            uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
+        if "AUTO: " in uwagi_baza:
+            try: c_auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
             except: pass
 
-    typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
+    # Rozkodowanie harmonogramu
+    if "EMP:" in cykl_part:
+        try:
+            emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
+            if "," in emp_raw:
+                data_emp_in_1 = emp_raw.split(",")[0].strip()
+                data_emp_in_2 = emp_raw.split(",")[1].strip()
+            else:
+                data_emp_in_1 = emp_raw.strip()
+        except: pass
+        
+    if "DEM:" in cykl_part:
+        try:
+            dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
+            if "," in dem_raw:
+                data_dostawa_pustych = dem_raw.split(",")[0].strip()
+                data_odbior_pelnych = dem_raw.split(",")[1].strip()
+            else:
+                data_odbior_pelnych = dem_raw.strip()
+        except: pass
+    elif "POWRÓT:" in cykl_part:
+        try:
+            data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
+        except: pass
+
+    typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', r.iloc[16] if len(r)>16 else '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
     uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_full}\n{val_instrukcje}"
+    
+    # --- Wyliczanie terminów (Termin płatności) z dat z bazy, aby usunąć sztywne "30" dni ---
+    termin_dni = 30
+    try:
+        dz_roz_ost = data_roz.split(",")[-1].strip()
+        dt_roz = datetime.strptime(dz_roz_ost, "%Y-%m-%d")
+        dt_plat = datetime.strptime(data_platnosci, "%Y-%m-%d")
+        termin_dni = (dt_plat - dt_roz).days
+    except:
+        pass
     
     paczka_pdf = {
         "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia,
         "przewoznik_nazwa": nazwa_przewoznika, "przewoznik_detale": detale_przewoznika,
-        "stawka": stawka_final, "waluta": waluta, "postoj": 0.0,
+        "stawka": stawka_final, "waluta": waluta, "postoj": postoj_val,
         "zaladunek": full_zal_pdf, "data_zal": data_zal,
         "rozladunek": full_roz_pdf, "data_roz": data_roz,
         "data_emp_in_1": data_emp_in_1, "data_emp_in_2": data_emp_in_2, 
         "data_dostawa_pustych": data_dostawa_pustych, "data_odbior_pelnych": data_odbior_pelnych,
-        "waga": 1000, 
+        "waga": waga_val, 
         "auto": c_auto_full, "uwagi": uwagi_na_pdf, "opiekun": podpis,
-        "termin_dni": 30,
+        "termin_dni": termin_dni,
         "data_platnosci": data_platnosci
     }
     
@@ -446,7 +479,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         "data_zal": data_zal,
         "miasto_zal": miasto_zal_val,
         "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-        "waga": 1000,
+        "waga": waga_val,
         "nr_cmr": numer_cmr_final,
         "auto": auto_val,
         "kierowca": kierowca_val
@@ -508,6 +541,7 @@ def render(sh):
 
         val_typ_zlecenia = "Tylko dostawa"
         val_waga = 1000
+        val_postoj = 0.0
         val_data_zal = datetime.now().date()
         
         val_data_roz_1 = datetime.now().date()
@@ -524,7 +558,6 @@ def render(sh):
         val_detale_przewoznika = ""
         val_stawka_final = 0.0
         val_waluta = "EUR"
-        val_postoj = 0.0
         val_projekt = "Brak"
         val_z_sel = "Magazyn SQM Komorniki"
         val_z_man = ""
@@ -587,69 +620,89 @@ def render(sh):
                 m_roz_baza = str(r_edit.get('Miejsce Rozladunku', ''))
                 val_miejsca_rozladunku_raw = m_roz_baza.split(" | ")
                 
-                uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', ''))
+                # --- Rozbudowany Parser na etapie Edycji (Wczytywanie wagi i postoju z powrotem do UI) ---
+                uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', r_edit.iloc[13] if len(r_edit)>13 else ''))
                 
-                if "%%CMR:SQM%%" in uwagi_baza:
-                    val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
-                    uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
-                
-                if "AUTO: " in uwagi_baza:
-                    try: 
-                        auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
-                        if "/" in auto_full:
-                            val_c_auto_nr = auto_full.split("/", 1)[0].strip()
-                            val_c_kierowca = auto_full.split("/", 1)[1].strip()
-                        else:
-                            val_c_auto_nr = auto_full.strip()
-                    except: pass
-                    
-                if "WART: " in uwagi_baza:
-                    try: val_wartosc_towaru = int(uwagi_baza.split("WART: ")[1].split(" PLN")[0])
-                    except: pass
-                    
                 if " || " in uwagi_baza:
                     parts = uwagi_baza.split(" || ")
-                    if len(parts) >= 4:
-                        val_instrukcje = parts[3]
-                        cykl_part = parts[2]
-                    elif len(parts) == 3 and "CYKL:" not in parts[2]:
-                        val_instrukcje = parts[2]
-                        cykl_part = ""
-                    elif len(parts) == 3 and "CYKL:" in parts[2]:
-                        val_instrukcje = ""
-                        cykl_part = parts[2]
-                    else:
-                        cykl_part = ""
+                    val_instrukcje = parts[-1]
+                    if "%%CMR:SQM%%" in val_instrukcje:
+                        val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
+                        val_instrukcje = val_instrukcje.replace(" %%CMR:SQM%%", "").replace("%%CMR:SQM%%", "")
                         
-                    if "EMP:" in cykl_part:
-                        try:
-                            emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
-                            if "," in emp_raw:
-                                e1 = emp_raw.split(",")[0].strip()
-                                e2 = emp_raw.split(",")[1].strip()
-                                if e1: val_data_emp_in_1 = datetime.strptime(e1, "%Y-%m-%d").date()
-                                if e2: val_data_emp_in_2 = datetime.strptime(e2, "%Y-%m-%d").date()
+                    for p in parts:
+                        p = p.strip()
+                        if p.startswith("AUTO:"):
+                            auto_full = p.replace("AUTO:", "").strip()
+                            if "/" in auto_full:
+                                val_c_auto_nr = auto_full.split("/", 1)[0].strip()
+                                val_c_kierowca = auto_full.split("/", 1)[1].strip()
                             else:
-                                if emp_raw.strip(): val_data_emp_in_1 = datetime.strptime(emp_raw.strip(), "%Y-%m-%d").date()
-                        except: pass
-                        
-                    if "DEM:" in cykl_part:
-                        try:
-                            dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
-                            if "," in dem_raw:
-                                dp = dem_raw.split(",")[0].strip()
-                                op = dem_raw.split(",")[1].strip()
-                                if dp: val_data_dostawa_pustych = datetime.strptime(dp, "%Y-%m-%d").date()
-                                if op: val_data_odbior_pelnych = datetime.strptime(op, "%Y-%m-%d").date()
+                                val_c_auto_nr = auto_full
+                        elif p.startswith("WART:"):
+                            try: val_wartosc_towaru = int(re.sub(r'[^0-9]', '', p))
+                            except: pass
+                        elif p.startswith("WAGA:"):
+                            try: val_waga = int(re.sub(r'[^0-9]', '', p))
+                            except: pass
+                        elif p.startswith("POSTOJ:"):
+                            try: val_postoj = float(re.sub(r'[^0-9.]', '', p))
+                            except: pass
+                        elif p.startswith("CYKL:"):
+                            if "EMP:" in p:
+                                try:
+                                    emp_raw = p.split("EMP: ")[1].split(" | ")[0]
+                                    if "," in emp_raw:
+                                        e1 = emp_raw.split(",")[0].strip()
+                                        e2 = emp_raw.split(",")[1].strip()
+                                        if e1: val_data_emp_in_1 = datetime.strptime(e1, "%Y-%m-%d").date()
+                                        if e2: val_data_emp_in_2 = datetime.strptime(e2, "%Y-%m-%d").date()
+                                    else:
+                                        if emp_raw.strip(): val_data_emp_in_1 = datetime.strptime(emp_raw.strip(), "%Y-%m-%d").date()
+                                except: pass
+                            if "DEM:" in p:
+                                try:
+                                    dem_raw = p.split("DEM: ")[1].split(" | ")[0]
+                                    if "," in dem_raw:
+                                        dp = dem_raw.split(",")[0].strip()
+                                        op = dem_raw.split(",")[1].strip()
+                                        if dp: val_data_dostawa_pustych = datetime.strptime(dp, "%Y-%m-%d").date()
+                                        if op: val_data_odbior_pelnych = datetime.strptime(op, "%Y-%m-%d").date()
+                                    else:
+                                        if dem_raw.strip(): val_data_odbior_pelnych = datetime.strptime(dem_raw.strip(), "%Y-%m-%d").date()
+                                except: pass
+                            elif "POWRÓT:" in p:
+                                try:
+                                    powrot_raw = p.split("POWRÓT: ")[1].split(" | ")[0]
+                                    if powrot_raw.strip(): val_data_odbior_pelnych = datetime.strptime(powrot_raw.strip(), "%Y-%m-%d").date()
+                                except: pass
+                else:
+                    # Fallback
+                    if "%%CMR:SQM%%" in uwagi_baza:
+                        val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
+                        uwagi_baza = uwagi_baza.replace(" %%CMR:SQM%%", "")
+                    if "AUTO: " in uwagi_baza:
+                        try: 
+                            auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
+                            if "/" in auto_full:
+                                val_c_auto_nr = auto_full.split("/", 1)[0].strip()
+                                val_c_kierowca = auto_full.split("/", 1)[1].strip()
                             else:
-                                if dem_raw.strip(): val_data_odbior_pelnych = datetime.strptime(dem_raw.strip(), "%Y-%m-%d").date()
+                                val_c_auto_nr = auto_full.strip()
                         except: pass
-                    elif "POWRÓT:" in cykl_part:
-                        try:
-                            powrot_raw = cykl_part.split("POWRÓT: ")[1].split(" | ")[0]
-                            if powrot_raw.strip(): val_data_odbior_pelnych = datetime.strptime(powrot_raw.strip(), "%Y-%m-%d").date()
+                    if "WART: " in uwagi_baza:
+                        try: val_wartosc_towaru = int(uwagi_baza.split("WART: ")[1].split(" PLN")[0])
                         except: pass
-                        
+
+                # Wyliczanie terminu dla UI w edycji
+                try:
+                    dz_roz_ost = val_data_roz_2 if val_data_roz_2 else val_data_roz_1
+                    dt_plat_str = str(r_edit.get('Data płatności (szacowana)', r_edit.iloc[9] if len(r_edit)>9 else ''))
+                    dt_plat = datetime.strptime(dt_plat_str, "%Y-%m-%d").date()
+                    val_termin_dni = (dt_plat - dz_roz_ost).days
+                except:
+                    val_termin_dni = 30
+                    
                 if "/" in wybrane_zlecenie_nr:
                     try:
                         last_part = wybrane_zlecenie_nr.split("/")[-1]
@@ -717,7 +770,7 @@ def render(sh):
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>1. Harmonogram Zlecenia</p>", unsafe_allow_html=True)
-            waga = st.number_input("Waga ładunku (kg):", min_value=100, step=100, value=val_waga)
+            waga = st.number_input("Waga ładunku (kg):", min_value=100, step=100, value=int(val_waga))
             
             d1, d2, d3 = st.columns(3)
             data_zal = d1.date_input("Data załadunku (PL):", val_data_zal)
@@ -787,7 +840,7 @@ def render(sh):
                 postoj = f3.number_input("Postój:", min_value=0.0, value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
                 
             t1, t2 = st.columns([1, 2])
-            termin_dni = t1.number_input("Termin płatności (dni):", min_value=0, max_value=120, value=val_termin_dni, step=1)
+            termin_dni = t1.number_input("Termin płatności (dni):", min_value=0, max_value=120, value=int(val_termin_dni), step=1)
             
             if typ_zlecenia == "Pełny event" and data_odbior_pelnych:
                 data_powrotu_komorniki = data_odbior_pelnych + timedelta(days=2)
@@ -916,7 +969,8 @@ def render(sh):
                         dem_str = f"{data_dostawa_pustych},{data_odbior_pelnych}"
                         historia_cyklu += f" | EMP: {emp_str} | DEM: {dem_str}"
                     
-                    pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || {historia_cyklu} || {instrukcje}"
+                    # --- Kluczowa linia: Zapis do bazy wagi i postoju do późniejszego odtworzenia ---
+                    pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || WAGA: {waga} || POSTOJ: {postoj} || {historia_cyklu} || {instrukcje}"
                     if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
                         pelne_uwagi_db += " %%CMR:SQM%%"
                         
@@ -947,7 +1001,7 @@ def render(sh):
                     wiersz_db = [
                         datetime.now().strftime("%Y-%m-%d %H:%M"), nr_zlecenia, "LOGISTYKA CARGO", nazwa_przewoznika,
                         final_zal_db, final_roz_db, str(data_zal), data_roz_combined, "Zabudowa Targowa PRO",
-                        str(data_platnosci), "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}"
+                        str(data_platnosci.strftime('%d.%m.%Y')), "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}"
                     ]
                     
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
