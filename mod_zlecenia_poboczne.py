@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+import db
 
 def parse_date(d_str):
     """
@@ -25,30 +26,17 @@ def render(sh):
     ''', unsafe_allow_html=True)
 
     # Nawigacja - Zakładki
-    tab1, tab2, tab3 = st.tabs(["📂 Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum Historyczne"])
+    tab1, tab2, tab3 = st.tabs(["📂 Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
 
-    # Pobieranie danych z Google Sheets
-    try:
-        worksheet = sh.worksheet("Zlecenia Poboczne")
-        data = worksheet.get_all_values()
-        
-        # Jeśli arkusz jest całkowicie pusty, inicjujemy nowe, poszerzone nagłówki
-        if not data:
-            headers = ["Nr Zlecenia", "Przewoźnik", "Opis Ładunku / Trasy", "Data Załadunku", "Data Rozładunku", "Termin Dni", "Data Płatności", "Status", "CMR", "POD", "Faktura"]
-            worksheet.append_row(headers)
-            data = [headers]
-            
-        headers = data[0]
-        if len(data) > 1:
-            df = pd.DataFrame(data[1:], columns=headers)
-            df['sheet_row'] = df.index + 2
-        else:
-            df = pd.DataFrame(columns=headers)
-            df['sheet_row'] = []
-            
-    except Exception as e:
-        st.error(f"Błąd komunikacji z Google Sheets: {e}. Upewnij się, że zakładka 'Zlecenia Poboczne' istnieje.")
-        return
+    # Pobieranie TYLKO aktywnych zleceń (lekki arkusz) przez zoptymalizowane API
+    worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
+    
+    # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
+    if df.empty and not worksheet.row_values(1):
+        headers = ["Nr Zlecenia", "Przewoźnik", "Opis Ładunku / Trasy", "Data Załadunku", "Data Rozładunku", "Termin Dni", "Data Płatności", "Status", "CMR", "POD", "Faktura"]
+        worksheet.append_row(headers)
+        st.cache_data.clear()
+        worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
 
     # ==========================================
     # KARTA 1: AKTYWNE ZLECENIA
@@ -57,8 +45,8 @@ def render(sh):
         st.markdown("<div style='font-size: 10px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px;'>⚡ WYSZUKAJ I FILTRUJ ZLECENIA:</div>", unsafe_allow_html=True)
         search_query = st.text_input("", placeholder="🔍 Wpisz nazwę przewoźnika, opis, numer...", label_visibility="collapsed")
 
-        # Filtrowanie tylko aktywnych zleceń
-        active_df = df[df['Status'] != 'ARCHIWUM'] if not df.empty else df
+        # Odfiltrowanie ewentualnych "resztek", które nie zostały jeszcze fizycznie przeniesione
+        active_df = df[df.get('Status', pd.Series()) != 'ARCHIWUM'] if not df.empty else df
 
         # Obliczenia metryk dla kart KPI
         brak_cmr = len(active_df[(active_df.get("CMR") == "NIE")]) if not active_df.empty and "CMR" in active_df.columns else 0
@@ -87,9 +75,8 @@ def render(sh):
                 <div class="kpi-value">{brak_fv}</div>
             </div>
         </div>
+        <br>
         """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
 
         if not active_df.empty:
             for index, row in active_df.iterrows():
@@ -97,15 +84,15 @@ def render(sh):
                 if search_query.lower() not in str(row.values).lower() and search_query != "":
                     continue
 
-                tag_cmr = '<span class="tag-zen-orange">Brak CMR</span>' if row.get("CMR") == "NIE" else ('<span class="tag-zen-blue">CMR: Nie Dotyczy</span>' if row.get("CMR") == "NIE POTRZEBA" else '')
+                tag_cmr = '<span class="tag-zen-orange">Brak CMR</span>' if row.get("CMR") == "NIE" else ('<span class="tag-zen-blue">CMR: N/A</span>' if row.get("CMR") == "NIE POTRZEBA" else '')
                 tag_pod = '<span class="tag-zen-red">Brak POD</span>' if row.get("POD") == "NIE" else ''
-                tag_fv = '<span class="tag-zen-orange">FAKTURA DO OPŁACENIA</span>' if row.get("Faktura") == "NIE" else ''
+                tag_fv = '<span class="tag-zen-orange">DO OPŁACENIA</span>' if row.get("Faktura") == "NIE" else ''
                 tags_html = f'<div class="cr-col" style="flex: 2; flex-direction: row; gap: 8px;">{tag_cmr}{tag_pod}{tag_fv}</div>'
 
                 status_val = str(row.get('Status', 'PLANOWANIE')).lower()
                 nr_zlecenia_wyswietl = row.get('Nr Zlecenia', 'Brak nr')
                 
-                # KLUCZOWE: Konwersja indeksu z Numpy na standardowy int Pythona!
+                # Kluczowe: pobranie fizycznego indeksu wiersza z arkusza
                 row_idx = int(row['sheet_row']) 
                 
                 # Renderowanie kafelka (Japandi)
@@ -113,13 +100,13 @@ def render(sh):
                 <div class="custom-row">
                     <div class="cr-col" style="flex: 2.5;">
                         <div class="cr-title">{nr_zlecenia_wyswietl}</div>
-                        <div class="cr-text">🚛 Przewoźnik: {row.get('Przewoźnik', 'Brak danych')}</div>
+                        <div class="cr-text">🚛 Przewoźnik: {row.get('Przewoźnik', 'Brak')}</div>
                         <div class="cr-text" style="color: #C5A880; font-style: italic;">📝 {row.get('Opis Ładunku / Trasy', '---')}</div>
                     </div>
                     <div class="cr-col" style="flex: 1.5;">
                         <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
                         <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
-                        <div class="cr-text" style="color: #8C8477;">💳 Zapłata: <strong>{row.get('Data Płatności', '---')}</strong></div>
+                        <div class="cr-text" style="color: #8C8477;">💳 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div>
                         <div class="cr-badge {status_val}" style="width: max-content; margin-top: 4px;">{row.get('Status', 'PLANOWANIE')}</div>
                     </div>
                     {tags_html}
@@ -133,22 +120,20 @@ def render(sh):
                         
                         with ecol1:
                             e_nr = st.text_input("Numer zlecenia", value=nr_zlecenia_wyswietl)
-                            e_przew = st.text_input("Przewoźnik", value=row.get('Przewoźnik', ''))
-                            e_opis = st.text_area("Opis Ładunku / Trasy", value=row.get('Opis Ładunku / Trasy', ''), height=115)
+                            e_przew = st.text_input("Przewoźnik", value=str(row.get('Przewoźnik', '')))
+                            e_opis = st.text_area("Opis Ładunku / Trasy", value=str(row.get('Opis Ładunku / Trasy', '')), height=115)
                             
                         with ecol2:
                             val_dz = parse_date(row.get('Data Załadunku', ''))
                             val_dr = parse_date(row.get('Data Rozładunku', ''))
                             val_dp = parse_date(row.get('Data Płatności', ''))
-                            try:
-                                val_term = int(row.get('Termin Dni', 30))
-                            except ValueError:
-                                val_term = 30
+                            try: val_term = int(row.get('Termin Dni', 30))
+                            except ValueError: val_term = 30
                                 
                             e_data_zal = st.date_input("Data załadunku", value=val_dz)
                             e_data_roz = st.date_input("Data rozładunku", value=val_dr)
                             e_termin = st.number_input("Termin (dni)", min_value=0, max_value=120, value=val_term, step=1)
-                            e_data_plat = st.date_input("Termin płatności faktury", value=val_dp)
+                            e_data_plat = st.date_input("Termin płatności", value=val_dp)
                             
                         with ecol3:
                             statusy = ["INICJACJA", "PLANOWANIE", "ZAŁADUNEK", "TRASA", "ZAMKNIĘTE", "ARCHIWUM"]
@@ -164,29 +149,28 @@ def render(sh):
                         save_btn = st.form_submit_button("💾 Zapisz zmiany", type="primary")
                         
                         if save_btn:
-                            zakres = f"A{row_idx}:K{row_idx}"
-                            nowe_wartosci = [[
+                            nowe_wartosci = [
                                 e_nr, e_przew, e_opis, 
                                 str(e_data_zal), str(e_data_roz), str(e_termin), str(e_data_plat.strftime('%d.%m.%Y')), 
                                 e_status, e_cmr, e_pod, e_fv
-                            ]]
-                            try:
-                                worksheet.update(values=nowe_wartosci, range_name=zakres)
-                                st.success("Zmiany zostały zapisane! Odświeżam...")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Błąd podczas aktualizacji: {e}")
+                            ]
+                            
+                            # ================== MECHANIKA ARCHIWIZACJI ==================
+                            if e_status == "ARCHIWUM":
+                                if db.archive_row_safe("Zlecenia Poboczne", "Zlecenia Poboczne ARCHIWUM", row_idx, nowe_wartosci):
+                                    st.success("Zlecenie przeniesione do fizycznego archiwum Cold Storage!")
+                                    st.rerun()
+                            else:
+                                if db.update_row("Zlecenia Poboczne", row_idx, nowe_wartosci):
+                                    st.success("Zaktualizowano zlecenie punktowo!")
+                                    st.rerun()
                                 
-                    # NOWOŚĆ: Przycisk trwałego usunięcia pod formularzem (używa delete_row zamiast delete_rows)
-                    if st.button("🗑️ Usuń trwale to zlecenie z bazy", key=f"del_{row_idx}"):
-                        try:
-                            worksheet.delete_row(row_idx) 
-                            st.success(f"Zlecenie usunięte pomyślnie. Odświeżam...")
+                    if st.button("🗑️ Usuń trwale to zlecenie", key=f"del_{row_idx}"):
+                        if db.delete_row("Zlecenia Poboczne", row_idx):
+                            st.success(f"Zlecenie usunięte pomyślnie.")
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Błąd podczas usuwania: {e}")
         else:
-            st.info("Brak aktywnych zleceń pobocznych spełniających kryteria.")
+            st.info("Brak aktywnych zleceń pobocznych.")
 
     # ==========================================
     # KARTA 2: UTWÓRZ NOWE ZLECENIE
@@ -201,12 +185,9 @@ def render(sh):
                 opis_ladunku = st.text_area("Opis Ładunku / Trasy (Co, dokąd, szczegóły)", height=115)
                 
                 d1, d2, d3 = st.columns(3)
-                with d1: 
-                    data_zal = st.date_input("Data załadunku", datetime.today())
-                with d2: 
-                    data_roz = st.date_input("Data rozładunku", datetime.today())
-                with d3: 
-                    termin_dni = st.number_input("Termin (dni)", min_value=0, max_value=120, value=30)
+                with d1: data_zal = st.date_input("Data załadunku", datetime.today())
+                with d2: data_roz = st.date_input("Data rozładunku", datetime.today())
+                with d3: termin_dni = st.number_input("Termin (dni)", min_value=0, max_value=120, value=30)
                 
                 data_platnosci = data_roz + timedelta(days=termin_dni)
                 st.info(f"📅 Termin płatności faktury: **{data_platnosci.strftime('%d.%m.%Y')}**")
@@ -223,63 +204,40 @@ def render(sh):
                 if not nr_zlecenia or not przewoznik:
                     st.error("Numer zlecenia i Przewoźnik są wymagane!")
                 else:
-                    try:
-                        worksheet.append_row([
-                            nr_zlecenia, przewoznik, opis_ladunku, 
-                            str(data_zal), str(data_roz), str(termin_dni), str(data_platnosci.strftime('%d.%m.%Y')), 
-                            status, cmr, pod, faktura
-                        ])
-                        st.success(f"Pomyślnie dodano zlecenie {nr_zlecenia} do bazy Google Sheets!")
+                    nowy_wiersz = [
+                        nr_zlecenia, przewoznik, opis_ladunku, 
+                        str(data_zal), str(data_roz), str(termin_dni), str(data_platnosci.strftime('%d.%m.%Y')), 
+                        status, cmr, pod, faktura
+                    ]
+                    if db.append_data("Zlecenia Poboczne", nowy_wiersz):
+                        st.success(f"Dodano zlecenie {nr_zlecenia} na dół arkusza!")
                         st.rerun()
-                    except Exception as e:
-                        st.error(f"Błąd podczas zapisu do bazy: {e}")
 
     # ==========================================
-    # KARTA 3: ARCHIWUM
+    # KARTA 3: ARCHIWUM (LAZY LOADING)
     # ==========================================
     with tab3:
-        st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne</h3>", unsafe_allow_html=True)
-        archive_df = df[df['Status'] == 'ARCHIWUM'] if not df.empty else df[0:0]
+        st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
+        st.info("🗄️ Zakończone zlecenia są wyizolowane do osobnej zakładki w chmurze, aby nie spowalniać pracy systemu. Załaduj je tylko w razie potrzeby.")
         
-        if not archive_df.empty:
-            for index, row in archive_df.iterrows():
-                nr_zlecenia_arch = row.get('Nr Zlecenia', 'Brak nr')
-                row_idx_arch = int(row['sheet_row']) # Bezpieczna konwersja
+        # Pamięć w sesji, żeby tabela nie znikała przy byle przeładowaniu, jeśli już ją pobrano
+        if "arch_loaded_poboczne" not in st.session_state:
+            st.session_state["arch_loaded_poboczne"] = False
+
+        if not st.session_state["arch_loaded_poboczne"]:
+            if st.button("📥 Połącz i wczytaj bazę archiwalną", use_container_width=True):
+                st.session_state["arch_loaded_poboczne"] = True
+                st.rerun()
                 
-                st.markdown(f"""
-                <div class="custom-row" style="opacity: 0.6; background: rgba(20, 18, 16, 0.5);">
-                    <div class="cr-col" style="flex: 2.5;">
-                        <div class="cr-title" style="text-decoration: line-through;">{nr_zlecenia_arch}</div>
-                        <div class="cr-text">🚛 Przewoźnik: {row.get('Przewoźnik', '')}</div>
-                        <div class="cr-text">📝 {row.get('Opis Ładunku / Trasy', '')}</div>
-                    </div>
-                    <div class="cr-col" style="flex: 1.5;">
-                        <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
-                        <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
-                        <div class="cr-badge domyslny" style="width: max-content; margin-top: 4px;">ARCHIWIZOWANO</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+        if st.session_state["arch_loaded_poboczne"]:
+            if st.button("❌ Ukryj archiwum (Zwolnij pamięć)", use_container_width=True, type="secondary"):
+                st.session_state["arch_loaded_poboczne"] = False
+                st.rerun()
                 
-                with st.expander(f"⚙️ Zarządzaj archiwalnym {nr_zlecenia_arch}"):
-                    a1, a2 = st.columns(2)
-                    
-                    with a1:
-                        if st.button("🔄 Przywróć status", key=f"restore_{row_idx_arch}", use_container_width=True):
-                            try:
-                                worksheet.update_cell(row_idx_arch, 8, "ZAMKNIĘTE") 
-                                st.success("Zlecenie przywrócone! Odświeżam...")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Błąd: {e}")
-                    
-                    with a2:
-                        if st.button("🗑️ Trwale usuń", key=f"del_arch_{row_idx_arch}", use_container_width=True):
-                            try:
-                                worksheet.delete_row(row_idx_arch)
-                                st.success("Zlecenie całkowicie usunięte! Odświeżam...")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Błąd podczas usuwania: {e}")
-        else:
-            st.info("Archiwum jest obecnie puste.")
+            with st.spinner("Pobieranie ciężkich danych archiwalnych z Google Sheets..."):
+                df_arch = db.fetch_data("Zlecenia Poboczne ARCHIWUM")
+            
+            if not df_arch.empty:
+                st.dataframe(df_arch, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Archiwum jest puste lub zakładka 'Zlecenia Poboczne ARCHIWUM' jeszcze nie powstała (zrobi się sama przy pierwszej archiwizacji).")
