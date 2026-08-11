@@ -42,7 +42,9 @@ def load_data(_sh, sheet_name):
             "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
             "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
             "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
-            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
+            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
+            # KOLUMNY DODANE DO GENERATORA CMR W MODULE EVENTY
+            "Miejsce_Przeznaczenia": "", "Waga": 0, "Nr_Rejestracyjny": "", "Kierowca": ""
         }
         for kol, val in domyslne_kolumny.items():
             if kol not in df.columns: df[kol] = val
@@ -106,7 +108,7 @@ def fetch_data(sheet_name):
         return pd.DataFrame()
 
 # ==========================================
-# FUNKCJE BEZPIECZNEGO ZAPISU (ELIMINACJA RACE CONDITIONS)
+# FUNKCJE BEZPIECZNEGO ZAPISU I ARCHIWIZACJI
 # ==========================================
 
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
