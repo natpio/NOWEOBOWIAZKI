@@ -6,16 +6,18 @@ import re
 
 @st.cache_resource
 def init_connection():
-    # Poprawione połączenie - otwiera Twój właściwy arkusz po nazwie
+    # Połączenie z Google Sheets zoptymalizowane pod kątem zasobów
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
     sh = gc.open("NOWY PODZIAŁ OBOWIĄZKÓW") 
     return sh
 
-def load_data(sh, sheet_name):
+# Zoptymalizowana funkcja load_data z keszowaniem na 60 sekund
+@st.cache_data(ttl=60, show_spinner=False)
+def load_data(_sh, sheet_name):
     try:
-        worksheet = sh.worksheet(sheet_name)
+        worksheet = _sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=25)
+        worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=25)
 
     data = worksheet.get_all_records()
     df = pd.DataFrame(data)
@@ -25,7 +27,7 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # NOWOŚĆ: Śledzenie fizycznego wiersza (indeks pandas to 0, arkusz ma nagłówek, więc +2)
+    # Śledzenie fizycznego wiersza w Google Sheets
     if not df.empty:
         df['sheet_row'] = df.index + 2
     else:
@@ -70,7 +72,6 @@ def load_data(sh, sheet_name):
         for kol in domyslne_yestech.keys():
             if kol not in df.columns: df[kol] = domyslne_yestech[kol]
             
-        # Zabezpieczenie: zachowujemy sheet_row przy nadpisywaniu kolejności kolumn
         kolumny_do_zostawienia = list(domyslne_yestech.keys())
         if 'sheet_row' in df.columns:
             kolumny_do_zostawienia.append('sheet_row')
@@ -91,37 +92,31 @@ def load_data(sh, sheet_name):
                 
     return worksheet, df
 
-def save_data(worksheet, edited_df):
-    # UWAGA: Pozostawione dla kompatybilności. Należy stopniowo podmieniać w kodzie 
-    # wywołania tej funkcji na nową funkcję 'update_single_row_safe'.
-    
-    df_to_save = edited_df.copy()
-    if 'sheet_row' in df_to_save.columns:
-        df_to_save = df_to_save.drop(columns=['sheet_row'])
-        
-    with st.spinner('Synchronizacja z chmurą Google... ☁️'):
-        worksheet.clear()
-        worksheet.update(values=[df_to_save.columns.values.tolist()] + df_to_save.values.tolist(), range_name='A1')
-    st.toast("Zmiany zapisane pomyślnie!", icon="✅")
+# Pobieranie danych z pamięci podręcznej (RAM) dla szybkich odczytów
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_data(sheet_name):
+    """Pobiera dane arkusza jako DataFrame wykorzystując pamięć podręczną (TTL = 60s)."""
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        data = ws.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
+        return pd.DataFrame()
 
-
-# ==========================================
-# NOWA FUNKCJA DO BEZPIECZNEGO ZAPISU (ELIMINACJA RACE CONDITIONS)
-# ==========================================
-
+# Funkcja aktualizacji pojedynczego wiersza z automatycznym czyszczeniem keszu
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
-    """Bezpieczna aktualizacja pojedynczego wiersza bez czyszczenia całego arkusza."""
+    """Bezpieczna zmiana jednego wiersza z natychmiastową inwalidacją pamięci podręcznej."""
     sh = init_connection()
     ws = sh.worksheet(sheet_name)
     
-    # Kopiujemy dane i usuwamy techniczną kolumnę 'sheet_row', żeby nie wrzucić jej do Google Sheets
     dane_do_zapisu = row_series.copy()
     if 'sheet_row' in dane_do_zapisu:
         dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
         
     row_list = dane_do_zapisu.tolist()
     
-    # Przeliczanie długości listy na literę kolumny (np. 20 kolumn -> T)
     def get_col_letter(col_idx):
         string = ""
         while col_idx > 0:
@@ -133,9 +128,54 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
     zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
     
     ws.update(values=[row_list], range_name=zakres)
+    st.cache_data.clear()  # Wymuszenie pobrania świeżych danych przy następnym odczycie
     return True
 
-# ==========================================
+def save_data(worksheet, edited_df):
+    df_to_save = edited_df.copy()
+    if 'sheet_row' in df_to_save.columns:
+        df_to_save = df_to_save.drop(columns=['sheet_row'])
+        
+    with st.spinner('Synchronizacja z chmurą Google... ☁️'):
+        worksheet.clear()
+        worksheet.update(values=[df_to_save.columns.values.tolist()] + df_to_save.values.tolist(), range_name='A1')
+    st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po zapisie
+    st.toast("Zmiany zapisane pomyślnie!", icon="✅")
+
+def append_data(sheet_name, row_data):
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        ws.append_row(row_data)
+        st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po dodaniu
+        return True
+    except Exception as e:
+        st.error(f"Błąd zapisu w {sheet_name}: {e}")
+        return False
+
+def update_row(sheet_name, row_index, row_data):
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        ostatnia_kolumna = chr(65 + len(row_data) - 1) 
+        zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
+        ws.update(values=[row_data], range_name=zakres)
+        st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po edycji
+        return True
+    except Exception as e:
+        st.error(f"Błąd aktualizacji wiersza {row_index} w {sheet_name}: {e}")
+        return False
+
+def delete_row(sheet_name, row_index):
+    sh = init_connection()
+    try:
+        ws = sh.worksheet(sheet_name)
+        ws.delete_rows(row_index)
+        st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po usunięciu
+        return True
+    except Exception as e:
+        st.error(f"Błąd usuwania wiersza {row_index} w {sheet_name}: {e}")
+        return False
 
 def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID_Zlecenia"):
     licznik_elementow = {}
@@ -146,7 +186,6 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
         wartosc1 = str(row.get(kolumna_glowna, '')).strip().upper()
         wartosc2 = str(row.get(kolumna_dodatkowa, '')).strip().upper()
         
-        # Zliczamy wystąpienia Głównej Wartości, by nadać kolejny poprawny numer (01, 02, 03)
         if wartosc1:
             if wartosc1 not in licznik_elementow: 
                 licznik_elementow[wartosc1] = 1
@@ -155,7 +194,6 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
                 
         if not wartosc1 and not wartosc2: continue
         
-        # ZABEZPIECZENIE: Generujemy automat TYLKO, gdy pole ID jest puste!
         current_id = str(row.get(nazwa_kolumny_id, "")).strip()
         if not current_id:
             czesc1 = re.sub(r'[^A-Z0-9]', '', wartosc1)[:4] if wartosc1 else "BRAK"
@@ -165,62 +203,9 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
             
     return df
 
-# ==========================================
-# FUNKCJE CRUD (DODANE Z CORE.PY)
-# ==========================================
-
-def fetch_data(sheet_name):
-    """Szybkie pobieranie danych jako DataFrame bez tworzenia brakujących kolumn."""
-    sh = init_connection()
-    try:
-        ws = sh.worksheet(sheet_name)
-        data = ws.get_all_records()
-        return pd.DataFrame(data)
-    except Exception as e:
-        st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
-        return pd.DataFrame()
-
-def append_data(sheet_name, row_data):
-    """Dodawanie nowego wiersza na sam dół arkusza."""
-    sh = init_connection()
-    try:
-        ws = sh.worksheet(sheet_name)
-        ws.append_row(row_data)
-        return True
-    except Exception as e:
-        st.error(f"Błąd zapisu w {sheet_name}: {e}")
-        return False
-
-def update_row(sheet_name, row_index, row_data):
-    """Nadpisywanie konkretnego wiersza (np. podczas edycji przewoźnika/zlecenia)."""
-    sh = init_connection()
-    try:
-        ws = sh.worksheet(sheet_name)
-        # Obliczamy zakres od kolumny A do litery odpowiadającej długości danych
-        ostatnia_kolumna = chr(65 + len(row_data) - 1) 
-        zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
-        ws.update(values=[row_data], range_name=zakres)
-        return True
-    except Exception as e:
-        st.error(f"Błąd aktualizacji wiersza {row_index} w {sheet_name}: {e}")
-        return False
-
-def delete_row(sheet_name, row_index):
-    """Trwałe usuwanie wiersza z bazy danych."""
-    sh = init_connection()
-    try:
-        ws = sh.worksheet(sheet_name)
-        ws.delete_rows(row_index)
-        return True
-    except Exception as e:
-        st.error(f"Błąd usuwania wiersza {row_index} w {sheet_name}: {e}")
-        return False
-
 def get_next_daily_number(date_str):
-    """Generowanie unikalnego numeru dziennego dla nowych zleceń PRO."""
     df = fetch_data("Zlecenia")
     if df.empty or 'Data/Czas Operacji' not in df.columns:
         return 1
-    # Zliczamy zlecenia, które w kolumnie systemowej daty (np. 2026-08-04) zaczynają się od tej frazy
     dzisiejsze_zlecenia = sum(df['Data/Czas Operacji'].astype(str).str.startswith(date_str))
     return dzisiejsze_zlecenia + 1
