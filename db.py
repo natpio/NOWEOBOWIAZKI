@@ -27,7 +27,7 @@ def load_data(_sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
-    # Śledzenie fizycznego wiersza w Google Sheets
+    # Śledzenie fizycznego wiersza w Google Sheets (zabezpieczenie przed usuwaniem)
     if not df.empty:
         df['sheet_row'] = df.index + 2
     else:
@@ -105,7 +105,10 @@ def fetch_data(sheet_name):
         st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
         return pd.DataFrame()
 
-# Funkcja aktualizacji pojedynczego wiersza z automatycznym czyszczeniem keszu
+# ==========================================
+# FUNKCJE BEZPIECZNEGO ZAPISU (ELIMINACJA RACE CONDITIONS)
+# ==========================================
+
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
     """Bezpieczna zmiana jednego wiersza z natychmiastową inwalidacją pamięci podręcznej."""
     sh = init_connection()
@@ -131,7 +134,39 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
     st.cache_data.clear()  # Wymuszenie pobrania świeżych danych przy następnym odczycie
     return True
 
+def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
+    """Fizyczne przeniesienie wiersza między zakładkami w Google Sheets (Cold Storage)."""
+    sh = init_connection()
+    try:
+        # 1. Pobierz lub utwórz arkusz docelowy (Archiwum)
+        try:
+            ws_arch = sh.worksheet(archive_sheet)
+        except gspread.exceptions.WorksheetNotFound:
+            # Jeśli archiwum nie istnieje, utwórz je i sklonuj nagłówki z oryginału
+            ws_source = sh.worksheet(source_sheet)
+            headers = ws_source.row_values(1)
+            ws_arch = sh.add_worksheet(title=archive_sheet, rows=1000, cols=len(headers))
+            ws_arch.append_row(headers)
+        
+        # 2. Dopisz dane na dół archiwum
+        ws_arch.append_row(row_data_list)
+        
+        # 3. Usuń fizycznie z aktywnego arkusza
+        ws_source = sh.worksheet(source_sheet)
+        ws_source.delete_rows(row_index)
+        
+        st.cache_data.clear() # Wymuszenie odświeżenia keszu po archiwizacji
+        return True
+    except Exception as e:
+        st.error(f"Błąd fizycznej archiwizacji: {e}")
+        return False
+
+# ==========================================
+# POZOSTAŁE FUNKCJE CRUD I POMOCNICZE
+# ==========================================
+
 def save_data(worksheet, edited_df):
+    """Przestarzałe - nadpisuje cały arkusz. Zachowane dla wstecznej kompatybilności."""
     df_to_save = edited_df.copy()
     if 'sheet_row' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['sheet_row'])
