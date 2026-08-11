@@ -25,6 +25,12 @@ def load_data(sh, sheet_name):
         if headers:
             df = pd.DataFrame(columns=headers)
             
+    # NOWOŚĆ: Śledzenie fizycznego wiersza (indeks pandas to 0, arkusz ma nagłówek, więc +2)
+    if not df.empty:
+        df['sheet_row'] = df.index + 2
+    else:
+        df['sheet_row'] = []
+            
     if sheet_name == "DB_Eventy":
         wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
         for kol in wymagane:
@@ -63,7 +69,12 @@ def load_data(sh, sheet_name):
         }
         for kol in domyslne_yestech.keys():
             if kol not in df.columns: df[kol] = domyslne_yestech[kol]
-        df = df[list(domyslne_yestech.keys())]
+            
+        # Zabezpieczenie: zachowujemy sheet_row przy nadpisywaniu kolejności kolumn
+        kolumny_do_zostawienia = list(domyslne_yestech.keys())
+        if 'sheet_row' in df.columns:
+            kolumny_do_zostawienia.append('sheet_row')
+        df = df[kolumny_do_zostawienia]
 
     elif sheet_name == "DB_Sloty":
         domyslne_sloty = {
@@ -72,15 +83,59 @@ def load_data(sh, sheet_name):
         }
         for kol, val in domyslne_sloty.items():
             if kol not in df.columns: df[kol] = val
-        df = df[list(domyslne_sloty.keys())]
+            
+        kolumny_do_zostawienia = list(domyslne_sloty.keys())
+        if 'sheet_row' in df.columns:
+            kolumny_do_zostawienia.append('sheet_row')
+        df = df[kolumny_do_zostawienia]
                 
     return worksheet, df
 
 def save_data(worksheet, edited_df):
+    # UWAGA: Pozostawione dla kompatybilności. Należy stopniowo podmieniać w kodzie 
+    # wywołania tej funkcji na nową funkcję 'update_single_row_safe'.
+    
+    df_to_save = edited_df.copy()
+    if 'sheet_row' in df_to_save.columns:
+        df_to_save = df_to_save.drop(columns=['sheet_row'])
+        
     with st.spinner('Synchronizacja z chmurą Google... ☁️'):
         worksheet.clear()
-        worksheet.update(values=[edited_df.columns.values.tolist()] + edited_df.values.tolist(), range_name='A1')
+        worksheet.update(values=[df_to_save.columns.values.tolist()] + df_to_save.values.tolist(), range_name='A1')
     st.toast("Zmiany zapisane pomyślnie!", icon="✅")
+
+
+# ==========================================
+# NOWA FUNKCJA DO BEZPIECZNEGO ZAPISU (ELIMINACJA RACE CONDITIONS)
+# ==========================================
+
+def update_single_row_safe(sheet_name, gs_row_index, row_series):
+    """Bezpieczna aktualizacja pojedynczego wiersza bez czyszczenia całego arkusza."""
+    sh = init_connection()
+    ws = sh.worksheet(sheet_name)
+    
+    # Kopiujemy dane i usuwamy techniczną kolumnę 'sheet_row', żeby nie wrzucić jej do Google Sheets
+    dane_do_zapisu = row_series.copy()
+    if 'sheet_row' in dane_do_zapisu:
+        dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
+        
+    row_list = dane_do_zapisu.tolist()
+    
+    # Przeliczanie długości listy na literę kolumny (np. 20 kolumn -> T)
+    def get_col_letter(col_idx):
+        string = ""
+        while col_idx > 0:
+            col_idx, remainder = divmod(col_idx - 1, 26)
+            string = chr(65 + remainder) + string
+        return string
+        
+    ostatnia_kolumna = get_col_letter(len(row_list))
+    zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
+    
+    ws.update(values=[row_list], range_name=zakres)
+    return True
+
+# ==========================================
 
 def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID_Zlecenia"):
     licznik_elementow = {}
@@ -111,7 +166,7 @@ def generuj_smart_id(df, kolumna_glowna, kolumna_dodatkowa, nazwa_kolumny_id="ID
     return df
 
 # ==========================================
-# NOWE FUNKCJE CRUD (DODANE Z CORE.PY)
+# FUNKCJE CRUD (DODANE Z CORE.PY)
 # ==========================================
 
 def fetch_data(sheet_name):
