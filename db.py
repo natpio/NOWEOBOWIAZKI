@@ -44,7 +44,8 @@ def load_data(_sh, sheet_name):
             "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
             "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
             # KOLUMNY DODANE DO GENERATORA CMR W MODULE EVENTY
-            "Miejsce_Przeznaczenia": "", "Waga": 0, "Nr_Rejestracyjny": "", "Kierowca": ""
+            "Miejsce_Przeznaczenia": "", "Waga": 0, "Nr_Rejestracyjny": "", "Kierowca": "",
+            "Nr_CMR": "" # Globalny numer CMR
         }
         for kol, val in domyslne_kolumny.items():
             if kol not in df.columns: df[kol] = val
@@ -106,6 +107,29 @@ def fetch_data(sheet_name):
     except Exception as e:
         st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
         return pd.DataFrame()
+
+# ==========================================
+# GŁÓWNY REJESTR NUMERACJI CMR
+# ==========================================
+def get_next_cmr_number():
+    """Pobiera i bezpiecznie inkrementuje globalny numer CMR z arkusza systemowego."""
+    sh = init_connection()
+    try:
+        ws = sh.worksheet("System_Ustawienia")
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title="System_Ustawienia", rows=5, cols=2)
+        # Ustawiamy start o jeden mniejszy niż docelowy (24122253 -> wygeneruje 24122254)
+        ws.update(values=[['Klucz', 'Wartosc'], ['Ostatni_CMR', '24122253']], range_name='A1:B2')
+        ws = sh.worksheet("System_Ustawienia")
+        
+    val = ws.acell('B2').value
+    if not val or not str(val).isdigit():
+        ws.update_acell('B2', '24122253')
+        val = '24122253'
+        
+    next_cmr = int(val) + 1
+    ws.update_acell('B2', str(next_cmr))
+    return str(next_cmr)
 
 # ==========================================
 # FUNKCJE BEZPIECZNEGO ZAPISU I ARCHIWIZACJI
