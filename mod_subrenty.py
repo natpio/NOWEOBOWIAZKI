@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import datetime
-from db import load_data, save_data, generuj_smart_id
+import db
+from db import load_data, generuj_smart_id
 
 def render(sh):
     # 1. NAGŁÓWEK MODUŁU (STYL ZEN)
@@ -15,7 +16,7 @@ def render(sh):
     worksheet_firmy, df_firmy = load_data(sh, "DB_Katalog_Firm")
     
     katalog_firm = df_firmy["Nazwa_Firmy"].dropna().unique().tolist() if not df_firmy.empty else []
-    df_aktywne_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) != "TAK"] if not df_sub.empty else df_sub
+    df_aktywne_sub = df_sub[df_sub.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df_sub.empty else df_sub.copy()
     
     # 3. OBLICZANIE KPI
     na_stanie = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "3. Na stanie SQM (Pracuje)"]) if not df_aktywne_sub.empty else 0
@@ -52,16 +53,26 @@ def render(sh):
 
     with tab_podglad:
         if not df_aktywne_sub.empty: 
-            st.info("💡 Edytuj dane bezpośrednio w tabeli. Kliknij 'Zapisz zmiany', aby wysłać do chmury Google.")
+            st.info("💡 Edytuj dane bezpośrednio w tabeli. Kliknij 'Zapisz zmiany', aby bezpiecznie wysłać je do chmury Google.")
             
             # Tabela edytowalna
             edited_df_sub = st.data_editor(df_aktywne_sub, use_container_width=True, hide_index=True, key="edit_subrenty")
             
             if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
-                df_sub.update(edited_df_sub)
-                save_data(worksheet_sub, df_sub)
-                st.success("Pomyślnie zaktualizowano bazę danych Subrentów!")
-                st.rerun()
+                # ================== NOWY, BEZPIECZNY ZAPIS Z TABELI (KROK 3) ==================
+                roznice = df_aktywne_sub.ne(edited_df_sub).any(axis=1)
+                zmienione_indeksy = df_aktywne_sub[roznice].index
+                
+                if len(zmienione_indeksy) > 0:
+                    with st.spinner("Zapisywanie punktowych zmian..."):
+                        for idx in zmienione_indeksy:
+                            gs_row = int(edited_df_sub.loc[idx, 'sheet_row'])
+                            db.update_single_row_safe("DB_Subrenty", gs_row, edited_df_sub.loc[idx])
+                            
+                    st.success(f"Pomyślnie zaktualizowano {len(zmienione_indeksy)} rekord(ów) w bazie danych Subrentów!")
+                    st.rerun()
+                else:
+                    st.warning("Nie wykryto żadnych zmian w tabeli.")
         else:
             st.info("Brak aktywnych wypożyczeń sprzętu.")
 
@@ -95,10 +106,13 @@ def render(sh):
                 if not co_jedzie or not firma_docelowa:
                     st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać dostawcę!")
                 else:
-                    # Dodanie nowej firmy do bazy, jeśli jej tam nie ma
+                    # ================== BEZPIECZNE DODAWANIE DO BAZY ==================
+                    # 1. Zapis nowej firmy (jeśli dotyczy)
                     if firma_docelowa not in katalog_firm:
-                        df_firmy = pd.concat([df_firmy, pd.DataFrame([{"Nazwa_Firmy": firma_docelowa}])], ignore_index=True)
-                        save_data(worksheet_firmy, df_firmy)
+                        kolumny_firm = [k for k in df_firmy.columns if k != 'sheet_row']
+                        nowa_firma_dict = {"Nazwa_Firmy": firma_docelowa}
+                        wiersz_firmy = [nowa_firma_dict.get(k, "") for k in kolumny_firm]
+                        db.append_data("DB_Katalog_Firm", wiersz_firmy)
                         
                     nowy_wiersz = {
                         "ID_Subrentu": "", "Rodzaj_Zlecenia": rodzaj_zlecenia, "Dostawca": firma_docelowa, "Co_Jedzie": co_jedzie,
@@ -108,10 +122,17 @@ def render(sh):
                         "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
                         "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
                     }
-                    df_sub = pd.concat([df_sub, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                    df_sub = generuj_smart_id(df_sub, "Dostawca", "Co_Jedzie", "ID_Subrentu")
-                    save_data(worksheet_sub, df_sub)
-                    st.success(f"🎉 Zainicjowano wypożyczenie!")
+                    
+                    df_temp = pd.concat([df_sub, pd.DataFrame([nowy_wiersz])], ignore_index=True)
+                    df_temp = generuj_smart_id(df_temp, "Dostawca", "Co_Jedzie", "ID_Subrentu")
+                    nowy_wiersz_z_id = df_temp.iloc[-1]
+                    
+                    kolumny_sub = [k for k in df_sub.columns if k != 'sheet_row']
+                    wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny_sub]
+                    
+                    db.append_data("DB_Subrenty", wiersz_lista)
+                    
+                    st.success(f"🎉 Zainicjowano wypożyczenie (Bezpieczny zapis)!")
                     st.rerun()
 
     with tab_zwrot:
@@ -159,8 +180,11 @@ def render(sh):
                     if nowy_status == "6. Zakończone i Rozliczone":
                         df_sub.at[idx, 'Zakonczone_Arch'] = "TAK"
                         
-                    save_data(worksheet_sub, df_sub)
-                    st.success("Aktualizacja zapisana!")
+                    # ================== NOWY, BEZPIECZNY ZAPIS ==================
+                    gs_row = int(df_sub.at[idx, 'sheet_row'])
+                    db.update_single_row_safe("DB_Subrenty", gs_row, df_sub.loc[idx])
+                    
+                    st.success("Aktualizacja zapisana punktowo!")
                     st.rerun()
         else:
             st.info("Brak aktywnych rekordów do edycji.")
