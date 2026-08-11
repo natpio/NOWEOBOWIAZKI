@@ -7,6 +7,19 @@ import db
 from db import load_data, generuj_smart_id
 from mod_generator_pdf import generate_cmr_excel
 
+def get_full_address(place_name, df_miejsca):
+    """Funkcja pomocnicza do pobierania pełnego adresu z bazy na potrzeby CMR."""
+    if place_name == "INNE (wpisz ręcznie)": 
+        return ""
+    if place_name == "Magazyn SQM Komorniki":
+        return "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+    if df_miejsca is not None and not df_miejsca.empty:
+        row = df_miejsca[df_miejsca['Nazwa do listy'] == place_name]
+        if not row.empty:
+            r = row.iloc[0]
+            return f"{r.get('Nazwa pełna / Firma', place_name)}\n{r.get('Ulica i numer', '')}\n{r.get('Kod pocztowy', '')} {r.get('Miasto', '')}, {r.get('Kraj', '')}"
+    return place_name
+
 def render(sh):
     # 1. NAGŁÓWEK MODUŁU (STYL ZEN)
     st.markdown("""
@@ -15,13 +28,17 @@ def render(sh):
     """, unsafe_allow_html=True)
     
     worksheet, df = load_data(sh, "DB_Eventy")
+    df_miejsca = db.fetch_data("Miejsca")
+    
+    lista_miejsc_baza = df_miejsca['Nazwa do listy'].dropna().tolist() if not df_miejsca.empty else []
+    opcje_lokalizacji = ["Magazyn SQM Komorniki"] + lista_miejsc_baza + ["INNE (wpisz ręcznie)"]
     
     # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
     if df.empty and not worksheet.row_values(1):
         headers = ["Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik", 
                    "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn", 
                    "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Miejsce_Przeznaczenia", "Waga", 
-                   "Nr_Rejestracyjny", "Kierowca", "CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", 
+                   "Nr_Rejestracyjny", "Kierowca", "Nr_CMR", "CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", 
                    "PP_Otrzymane", "Zakonczone_Arch"]
         worksheet.append_row(headers)
         st.cache_data.clear()
@@ -264,31 +281,49 @@ def render(sh):
                         st.caption(f"🆔 {dane_eventu['ID_Zlecenia']}<br>👤 {dane_eventu['Przewoznik']}", unsafe_allow_html=True)
                         
                     with c_cmr:
-                        try:
+                        if is_sqm:
                             waga_val = str(dane_eventu.get("Waga", "0"))
                             waga_int = int(float(waga_val)) if waga_val.replace('.','',1).isdigit() else 0
                             
-                            dane_cmr = {
-                                "odbiorca": str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])),
-                                "miejsce_przeznaczenia": str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])),
-                                "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
-                                "miasto_zal": "Komorniki, PL",
-                                "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-                                "waga": waga_int,
-                                "nr_cmr": str(dane_eventu.get("ID_Zlecenia", "")),
-                                "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
-                                "kierowca": str(dane_eventu.get("Kierowca", ""))
-                            }
-                            cmr_bytes = generate_cmr_excel(dane_cmr)
-                            st.download_button(
-                                label="📝 Pobierz CMR",
-                                data=cmr_bytes,
-                                file_name=f"CMR_{dane_eventu['ID_Zlecenia']}.xlsx",
-                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                use_container_width=True
-                            )
-                        except Exception as e:
-                            st.error("Szablon CMR niedostępny.")
+                            nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
+                            
+                            if not nr_cmr_zapisany or nr_cmr_zapisany.strip() in ["", "nan", "None"]:
+                                if st.button("📝 Wygeneruj Nr CMR", use_container_width=True):
+                                    with st.spinner("Pobieranie numeru CMR z puli..."):
+                                        nowy_nr = db.get_next_cmr_number()
+                                        idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
+                                        
+                                        df_do_zapisu = df.copy()
+                                        df_do_zapisu.at[idx, 'Nr_CMR'] = nowy_nr
+                                        gs_row = int(df_do_zapisu.at[idx, 'sheet_row'])
+                                        db.update_single_row_safe("DB_Eventy", gs_row, df_do_zapisu.loc[idx])
+                                        st.rerun()
+                            else:
+                                try:
+                                    resolved_dest = get_full_address(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow']), df_miejsca)
+                                    dane_cmr = {
+                                        "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
+                                        "miejsce_przeznaczenia": resolved_dest,
+                                        "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
+                                        "miasto_zal": "Komorniki, PL",
+                                        "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                                        "waga": waga_int,
+                                        "nr_cmr": nr_cmr_zapisany,
+                                        "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                        "kierowca": str(dane_eventu.get("Kierowca", ""))
+                                    }
+                                    cmr_bytes = generate_cmr_excel(dane_cmr)
+                                    st.download_button(
+                                        label=f"📥 Pobierz CMR ({nr_cmr_zapisany})",
+                                        data=cmr_bytes,
+                                        file_name=f"CMR_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx",
+                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                        use_container_width=True
+                                    )
+                                except Exception as e:
+                                    st.error("Szablon CMR niedostępny.")
+                        else:
+                            st.info("💡 Zewnętrzny transport. Wygeneruj CMR w Module PRO.")
 
                     with c_dup:
                         if st.button("📋 Klonuj", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
@@ -297,6 +332,7 @@ def render(sh):
                             nowy_wiersz['Faza_Procesu'] = "Inicjacja"
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
                             nowy_wiersz['CMR_Gotowe'] = "NIE"
+                            nowy_wiersz['Nr_CMR'] = "" 
                             
                             is_sqm_clone = (nowy_wiersz['Typ_Transportu'] == "Własny SQM")
                             nowy_wiersz['CMR_Podpisane_POD'] = "N/A" if is_sqm_clone else "NIE"
@@ -386,7 +422,19 @@ def render(sh):
                             with c_ed1:
                                 u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
-                                u_miejsce = st.text_area("Adres Docelowy (do CMR)", value=str(dane_eventu.get('Miejsce_Przeznaczenia', '')))
+                                
+                                akt_miejsce = str(dane_eventu.get('Miejsce_Przeznaczenia', ''))
+                                if akt_miejsce in opcje_lokalizacji:
+                                    idx_m = opcje_lokalizacji.index(akt_miejsce)
+                                    init_m_man = ""
+                                else:
+                                    idx_m = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
+                                    init_m_man = akt_miejsce
+                                    
+                                u_miejsce_sel = st.selectbox("Miejsce docelowe (do CMR)", opcje_lokalizacji, index=idx_m)
+                                u_miejsce_man = st.text_area("Adres docelowy (ręcznie)", value=init_m_man) if u_miejsce_sel == "INNE (wpisz ręcznie)" else ""
+                                final_miejsce_edit = u_miejsce_man if u_miejsce_sel == "INNE (wpisz ręcznie)" else u_miejsce_sel
+
                                 u_przewoznik = st.text_input("Przewoźnik / Firma Transportowa", value=str(dane_eventu.get('Przewoznik', '')))
                                 u_typ_transp = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"], index=0 if str(dane_eventu.get('Typ_Transportu', '')) == "Zewnętrzny" else 1)
                                 
@@ -425,7 +473,7 @@ def render(sh):
                                 
                                 df.at[idx, 'ID_Zlecenia'] = u_id_zlecenia
                                 df.at[idx, 'Nazwa_Targow'] = u_nazwa
-                                df.at[idx, 'Miejsce_Przeznaczenia'] = u_miejsce
+                                df.at[idx, 'Miejsce_Przeznaczenia'] = final_miejsce_edit
                                 df.at[idx, 'Przewoznik'] = u_przewoznik
                                 df.at[idx, 'Typ_Transportu'] = u_typ_transp
                                 df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
@@ -606,6 +654,36 @@ def render(sh):
             st.info("Brak aktywnych transportów w bazie danych.")
 
     with tab_formularz:
+        with st.expander("➕ Brak miejsca na liście? Dodaj nową lokalizację do Słownika"):
+            with st.form("form_nowe_miejsce_evt", clear_on_submit=True):
+                nowa_nazwa_lista = st.text_input("Nazwa skrócona (do listy wyboru):*", placeholder="np. BERLIN, DE - Messe Berlin")
+                nowa_firma = st.text_input("Pełna nazwa / Firma:")
+                nowa_ulica = st.text_input("Ulica i numer:")
+                nowy_kod = st.text_input("Kod pocztowy:")
+                nowe_miasto = st.text_input("Miasto:")
+                
+                k1, k2 = st.columns(2)
+                nowy_kraj = k1.text_input("Kraj:", value="Polska")
+                nowy_skrot = k2.text_input("Skrót Kraju (do CMR):", value="PL")
+                
+                if st.form_submit_button("💾 Zapisz lokalizację w bazie"):
+                    if nowa_nazwa_lista.strip():
+                        kolumny_miejsca = df_miejsca.columns.tolist() if not df_miejsca.empty else ["Nazwa do listy", "Nazwa pełna / Firma", "Ulica i numer", "Kod pocztowy", "Miasto", "Kraj", "Skrót Kraju"]
+                        slownik_nowego = {
+                            "Nazwa do listy": nowa_nazwa_lista.strip(), 
+                            "Nazwa pełna / Firma": nowa_firma.strip(), 
+                            "Ulica i numer": nowa_ulica.strip(), 
+                            "Kod pocztowy": nowy_kod.strip(), 
+                            "Miasto": nowe_miasto.strip(), 
+                            "Kraj": nowy_kraj.strip(),
+                            "Skrót Kraju": nowy_skrot.strip()
+                        }
+                        nowy_wiersz = [slownik_nowego.get(kol, "") for kol in kolumny_miejsca]
+                        if db.append_data("Miejsca", nowy_wiersz):
+                            st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
+                            st.cache_data.clear()
+                            st.rerun()
+
         st.markdown("<h4 style='color: #C5A880; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
         
         typ_transportu = st.radio("Rodzaj transportu:", ["Zewnętrzny", "Własny SQM"], horizontal=True)
@@ -615,7 +693,10 @@ def render(sh):
             with f_col1:
                 id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
-                miejsce_przeznaczenia = st.text_area("Adres Docelowy (Odbiorca na CMR)")
+                
+                u_miejsce_sel_c = st.selectbox("Miejsce docelowe (Odbiorca na CMR)", opcje_lokalizacji)
+                u_miejsce_man_c = st.text_area("Adres Docelowy (ręcznie)") if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else ""
+                
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
                 
@@ -675,6 +756,8 @@ def render(sh):
                     if roz_str:
                         finalne_notatki = f"[Rozładunki: {roz_str}] {notatki}"
                         
+                    finalne_miejsce_przeznaczenia = u_miejsce_man_c if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else u_miejsce_sel_c
+                        
                     nowy_wiersz = {
                         "ID_Zlecenia": id_zlecenia_custom, "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
                         "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
@@ -684,7 +767,8 @@ def render(sh):
                         "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zewn_final, 
                         "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE",
-                        "Miejsce_Przeznaczenia": miejsce_przeznaczenia, "Waga": waga, "Nr_Rejestracyjny": nr_rejestracyjny, "Kierowca": kierowca
+                        "Miejsce_Przeznaczenia": finalne_miejsce_przeznaczenia, "Waga": waga, "Nr_Rejestracyjny": nr_rejestracyjny, 
+                        "Kierowca": kierowca, "Nr_CMR": ""
                     }
 
                     df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
