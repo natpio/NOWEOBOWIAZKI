@@ -11,7 +11,7 @@ def init_connection():
     sh = gc.open("NOWY PODZIAŁ OBOWIĄZKÓW") 
     return sh
 
-# Zoptymalizowana funkcja load_data z keszowaniem na 60 sekund
+# Zoptymalizowana i KULOODPORNA funkcja load_data z keszowaniem na 60 sekund
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(_sh, sheet_name):
     try:
@@ -19,13 +19,24 @@ def load_data(_sh, sheet_name):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=25)
 
-    data = worksheet.get_all_records()
-    df = pd.DataFrame(data)
-    
-    if df.empty:
-        headers = worksheet.row_values(1)
-        if headers:
-            df = pd.DataFrame(columns=headers)
+    # BARDZO BEZPIECZNE POBIERANIE DANYCH (odporne na błędy pustych/podwójnych nagłówków)
+    raw_data = worksheet.get_all_values()
+    if raw_data and len(raw_data) > 0:
+        headers = raw_data[0]
+        # Zabezpieczenie przed pustymi nagłówkami w arkuszu (np. dodano kolumnę, ale nie wpisano nazwy)
+        headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
+        
+        # Zabezpieczenie przed duplikatami nagłówków
+        seen = set()
+        for i, h in enumerate(headers):
+            if h in seen:
+                headers[i] = f"{h}_duplikat_{i}"
+            seen.add(headers[i])
+            
+        data = raw_data[1:]
+        df = pd.DataFrame(data, columns=headers)
+    else:
+        df = pd.DataFrame()
             
     # Śledzenie fizycznego wiersza w Google Sheets (zabezpieczenie przed usuwaniem)
     if not df.empty:
@@ -95,15 +106,25 @@ def load_data(_sh, sheet_name):
                 
     return worksheet, df
 
-# Pobieranie danych z pamięci podręcznej (RAM) dla szybkich odczytów
+# Pobieranie danych z pamięci podręcznej (RAM) - również odporne na puste nagłówki
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_data(sheet_name):
     """Pobiera dane arkusza jako DataFrame wykorzystując pamięć podręczną (TTL = 60s)."""
     sh = init_connection()
     try:
         ws = sh.worksheet(sheet_name)
-        data = ws.get_all_records()
-        return pd.DataFrame(data)
+        raw_data = ws.get_all_values()
+        if raw_data and len(raw_data) > 0:
+            headers = raw_data[0]
+            headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
+            seen = set()
+            for i, h in enumerate(headers):
+                if h in seen:
+                    headers[i] = f"{h}_duplikat_{i}"
+                seen.add(headers[i])
+            df = pd.DataFrame(raw_data[1:], columns=headers)
+            return df
+        return pd.DataFrame()
     except Exception as e:
         st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
         return pd.DataFrame()
