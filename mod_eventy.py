@@ -5,6 +5,7 @@ import os
 import base64
 import db
 from db import load_data, generuj_smart_id
+from mod_generator_pdf import generate_cmr_excel
 
 def render(sh):
     # 1. NAGŁÓWEK MODUŁU (STYL ZEN)
@@ -14,6 +15,17 @@ def render(sh):
     """, unsafe_allow_html=True)
     
     worksheet, df = load_data(sh, "DB_Eventy")
+    
+    # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
+    if df.empty and not worksheet.row_values(1):
+        headers = ["Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik", 
+                   "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn", 
+                   "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Miejsce_Przeznaczenia", "Waga", 
+                   "Nr_Rejestracyjny", "Kierowca", "CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", 
+                   "PP_Otrzymane", "Zakonczone_Arch"]
+        worksheet.append_row(headers)
+        st.cache_data.clear()
+        worksheet, df = load_data(sh, "DB_Eventy")
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df.empty else df.copy()
     
@@ -55,7 +67,7 @@ def render(sh):
     """, unsafe_allow_html=True)
 
     tab_podglad, tab_formularz, tab_archiwum = st.tabs([
-        "🗂️ Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum Historyczne"
+        "🗂️ Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"
     ])
 
     with tab_podglad:
@@ -75,9 +87,7 @@ def render(sh):
             )
             st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
 
-            # Stylizowane przyciski filtrowania w konwencji kart KPI Zen
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            
             active_filter = st.session_state["filtr_eventow"]
             
             def get_filter_style(is_active):
@@ -143,7 +153,6 @@ def render(sh):
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
-            # WYSZUKIWARKA
             if wyszukiwarka and not df_widok.empty:
                 frazy = [f.strip().lower() for f in wyszukiwarka.split(",") if f.strip()]
                 for fraza in frazy:
@@ -202,10 +211,8 @@ def render(sh):
                         notatki_str = str(row.get('Notatki', ''))
                         data_roz_lista = "Brak danych"
                         if "[Rozładunki:" in notatki_str:
-                            try:
-                                data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
-                            except:
-                                pass
+                            try: data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
+                            except: pass
 
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                         
@@ -252,13 +259,40 @@ def render(sh):
                     
                     st.markdown(f"<h3 style='color: #E2DCD3; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     
-                    c_id, c_dup = st.columns([6, 4])
+                    c_id, c_cmr, c_dup = st.columns([4, 3, 3])
                     with c_id:
-                        st.caption(f"🆔 {dane_eventu['ID_Zlecenia']} | 👤 {dane_eventu['Przewoznik']}")
+                        st.caption(f"🆔 {dane_eventu['ID_Zlecenia']}<br>👤 {dane_eventu['Przewoznik']}", unsafe_allow_html=True)
+                        
+                    with c_cmr:
+                        try:
+                            waga_val = str(dane_eventu.get("Waga", "0"))
+                            waga_int = int(float(waga_val)) if waga_val.replace('.','',1).isdigit() else 0
+                            
+                            dane_cmr = {
+                                "odbiorca": str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])),
+                                "miejsce_przeznaczenia": str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])),
+                                "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
+                                "miasto_zal": "Komorniki, PL",
+                                "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                                "waga": waga_int,
+                                "nr_cmr": str(dane_eventu.get("ID_Zlecenia", "")),
+                                "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                "kierowca": str(dane_eventu.get("Kierowca", ""))
+                            }
+                            cmr_bytes = generate_cmr_excel(dane_cmr)
+                            st.download_button(
+                                label="📝 Pobierz CMR",
+                                data=cmr_bytes,
+                                file_name=f"CMR_{dane_eventu['ID_Zlecenia']}.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                use_container_width=True
+                            )
+                        except Exception as e:
+                            st.error("Szablon CMR niedostępny.")
+
                     with c_dup:
                         if st.button("📋 Klonuj", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
                             nowy_wiersz = dane_eventu.copy().to_dict()
-                            
                             nowy_wiersz['ID_Zlecenia'] = "" 
                             nowy_wiersz['Faza_Procesu'] = "Inicjacja"
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
@@ -273,20 +307,17 @@ def render(sh):
                             nowy_wiersz['Zakonczone_Arch'] = "NIE"
                             nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
                             
-                            # ================== NOWY, BEZPIECZNY ZAPIS (APPEND) ==================
                             if 'sheet_row' in nowy_wiersz:
-                                del nowy_wiersz['sheet_row'] # Usunięcie technicznego indeksu do klonowania
+                                del nowy_wiersz['sheet_row']
                                 
                             df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                             df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                             nowy_wiersz_z_id = df_temp.iloc[-1]
                             
-                            # Pobieramy same kolumny biznesowe by wysłać czystą listę danych na dół arkusza
                             kolumny = [k for k in df.columns if k != 'sheet_row']
                             wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny]
                             
                             db.append_data("DB_Eventy", wiersz_lista)
-                            
                             st.session_state["wybrany_event_id"] = None 
                             st.success("✅ Skopiowano zlecenie (Bezpieczny zapis)!")
                             st.rerun()
@@ -355,7 +386,8 @@ def render(sh):
                             with c_ed1:
                                 u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
-                                u_przewoznik = st.text_input("Przewoźnik / Kierowca", value=str(dane_eventu.get('Przewoznik', '')))
+                                u_miejsce = st.text_area("Adres Docelowy (do CMR)", value=str(dane_eventu.get('Miejsce_Przeznaczenia', '')))
+                                u_przewoznik = st.text_input("Przewoźnik / Firma Transportowa", value=str(dane_eventu.get('Przewoznik', '')))
                                 u_typ_transp = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"], index=0 if str(dane_eventu.get('Typ_Transportu', '')) == "Zewnętrzny" else 1)
                                 
                                 fazy_lista = ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"]
@@ -365,12 +397,15 @@ def render(sh):
                                 
                             with c_ed2:
                                 u_typ_pojazd = st.text_input("Typ Pojazdu", value=str(dane_eventu.get('Typ_Pojazdu', '')))
+                                u_nr_rejestracyjny = st.text_input("Nr Rejestracyjny (do CMR)", value=str(dane_eventu.get('Nr_Rejestracyjny', '')))
+                                u_kierowca = st.text_input("Imię Kierowcy (do CMR)", value=str(dane_eventu.get('Kierowca', '')))
+                                
+                                waga_akt = str(dane_eventu.get('Waga', '0'))
+                                u_waga = st.number_input("Waga (kg)", min_value=0, value=int(float(waga_akt)) if waga_akt.replace('.', '', 1).isdigit() else 0, step=100)
                                 
                                 dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
-                                try:
-                                    dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
-                                except:
-                                    dp_parsed = None
+                                try: dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
+                                except: dp_parsed = None
                                 u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
                                 
                                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Daty rozładunku na targach:</p>", unsafe_allow_html=True)
@@ -390,9 +425,13 @@ def render(sh):
                                 
                                 df.at[idx, 'ID_Zlecenia'] = u_id_zlecenia
                                 df.at[idx, 'Nazwa_Targow'] = u_nazwa
+                                df.at[idx, 'Miejsce_Przeznaczenia'] = u_miejsce
                                 df.at[idx, 'Przewoznik'] = u_przewoznik
                                 df.at[idx, 'Typ_Transportu'] = u_typ_transp
                                 df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
+                                df.at[idx, 'Nr_Rejestracyjny'] = u_nr_rejestracyjny
+                                df.at[idx, 'Kierowca'] = u_kierowca
+                                df.at[idx, 'Waga'] = u_waga
                                 
                                 if u_typ_transp == "Zewnętrzny":
                                     df.at[idx, 'Nr_Zlecenia_Zewn'] = u_id_zlecenia
@@ -411,7 +450,6 @@ def render(sh):
                                 else:
                                     df.at[idx, 'Notatki'] = u_notatki
                                 
-                                # ================== NOWY, BEZPIECZNY ZAPIS ==================
                                 gs_row = int(df.at[idx, 'sheet_row'])
                                 db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
                                 
@@ -462,7 +500,6 @@ def render(sh):
                             s_notatki = st.text_input("Dodatkowe Notatki")
                             
                             if st.form_submit_button("💾 Zapisz Slot"):
-                                # ================== NOWY, BEZPIECZNY ZAPIS ==================
                                 nowy_slot = [
                                     dane_eventu['ID_Zlecenia'],
                                     s_typ,
@@ -523,7 +560,6 @@ def render(sh):
                                     df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
                                     df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
                                     
-                                # ================== NOWY, BEZPIECZNY ZAPIS ==================
                                 gs_row = int(df.at[idx, 'sheet_row'])
                                 db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
                                 
@@ -531,7 +567,7 @@ def render(sh):
                                 st.rerun()
 
                     with det_arch:
-                        st.info("Zarchiwizowanie transportu usunie go z widoku aktywnych operacji.")
+                        st.info("Zarchiwizowanie transportu usunie go z widoku aktywnych operacji i przeniesie do Cold Storage.")
                         if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ", type="primary", use_container_width=True):
                             idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                             
@@ -547,12 +583,15 @@ def render(sh):
                             df.at[idx, 'Faza_Procesu'] = "Zamknięte"
                             df.at[idx, 'Zakonczone_Arch'] = "TAK"
                             
-                            # ================== NOWY, BEZPIECZNY ZAPIS ==================
-                            gs_row = int(df.at[idx, 'sheet_row'])
-                            db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
+                            wiersz_do_archiwum = df.loc[idx].copy()
+                            gs_row = int(wiersz_do_archiwum['sheet_row'])
+                            if 'sheet_row' in wiersz_do_archiwum:
+                                wiersz_do_archiwum = wiersz_do_archiwum.drop('sheet_row')
+                                
+                            db.archive_row_safe("DB_Eventy", "DB_Eventy ARCHIWUM", gs_row, wiersz_do_archiwum.tolist())
                             
                             st.session_state["wybrany_event_id"] = None
-                            st.success(f"Zlecenie zamknięte i zarchiwizowane!")
+                            st.success(f"Zlecenie zamknięte i przeniesione do fizycznego archiwum Cold Storage!")
                             st.rerun()
                             
                     st.markdown('</div>', unsafe_allow_html=True)
@@ -576,6 +615,7 @@ def render(sh):
             with f_col1:
                 id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
+                miejsce_przeznaczenia = st.text_area("Adres Docelowy (Odbiorca na CMR)")
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
                 
@@ -585,7 +625,11 @@ def render(sh):
                 data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
                 
             with f_col2:
-                przewoznik = st.text_input("Przewoźnik / Kierowca *")
+                przewoznik = st.text_input("Przewoźnik / Firma Transportowa *")
+                kierowca = st.text_input("Imię i Nazwisko Kierowcy (do CMR)")
+                nr_rejestracyjny = st.text_input("Nr Rejestracyjny Pojazdu (do CMR)")
+                waga = st.number_input("Waga (kg)", min_value=0, step=100)
+                
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
@@ -639,10 +683,10 @@ def render(sh):
                         "Notatki": finalne_notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
                         "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zewn_final, 
                         "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
-                        "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
+                        "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE",
+                        "Miejsce_Przeznaczenia": miejsce_przeznaczenia, "Waga": waga, "Nr_Rejestracyjny": nr_rejestracyjny, "Kierowca": kierowca
                     }
 
-                    # ================== NOWY, BEZPIECZNY ZAPIS ==================
                     df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                     nowy_wiersz_z_id = df_temp.iloc[-1]
@@ -656,8 +700,26 @@ def render(sh):
                     st.rerun()
 
     with tab_archiwum:
-        df_arch = df[df.get("Zakonczone_Arch", pd.Series()) == "TAK"] if not df.empty else pd.DataFrame()
-        if not df_arch.empty: 
-            st.dataframe(df_arch, use_container_width=True, hide_index=True)
-        else:
-            st.info("Brak zarchiwizowanych transportów.")
+        st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
+        st.info("🗄️ Zakończone zlecenia są wyizolowane do osobnej zakładki w chmurze, aby nie spowalniać pracy systemu. Załaduj je tylko w razie potrzeby.")
+        
+        if "arch_loaded_eventy" not in st.session_state:
+            st.session_state["arch_loaded_eventy"] = False
+
+        if not st.session_state["arch_loaded_eventy"]:
+            if st.button("📥 Połącz i wczytaj bazę archiwalną", use_container_width=True):
+                st.session_state["arch_loaded_eventy"] = True
+                st.rerun()
+                
+        if st.session_state["arch_loaded_eventy"]:
+            if st.button("❌ Ukryj archiwum (Zwolnij pamięć)", use_container_width=True, type="secondary"):
+                st.session_state["arch_loaded_eventy"] = False
+                st.rerun()
+                
+            with st.spinner("Pobieranie ciężkich danych archiwalnych z Google Sheets..."):
+                df_arch = db.fetch_data("DB_Eventy ARCHIWUM")
+            
+            if not df_arch.empty:
+                st.dataframe(df_arch, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Archiwum jest puste lub zakładka 'DB_Eventy ARCHIWUM' jeszcze nie powstała (zrobi się sama przy pierwszej archiwizacji).")
