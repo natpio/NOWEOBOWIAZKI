@@ -13,7 +13,7 @@ import mod_subrenty
 import mod_yestech
 import mod_finanse
 import mod_bazy_danych
-import mod_generator_pdf  # NOWY IMPORT
+import mod_generator_pdf 
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
@@ -117,7 +117,7 @@ def main():
         # Wymuszamy NATYCHMIASTOWĄ zamianę stanu w pamięci na wielkie litery
         st.session_state["menu_option"] = str(st.session_state["menu_option"]).upper()
         
-        # Zabezpieczenie przed błędnymi nazwami (gdyby pojawiła się jakaś inna zła nazwa)
+        # Zabezpieczenie przed błędnymi nazwami
         if st.session_state["menu_option"] not in opcje_menu:
             if "PRO" in st.session_state["menu_option"]:
                 st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
@@ -126,7 +126,6 @@ def main():
             else:
                 st.session_state["menu_option"] = "COMMAND CENTER"
 
-        # Teraz możemy bezpiecznie szukać indeksu, bo wartości są zawsze z wielkich liter
         aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
         
         wybrany_modul = option_menu(
@@ -156,7 +155,6 @@ def main():
             }
         )
         
-        # Aktualizacja stanu w przypadku ręcznego kliknięcia w menu boczne
         st.session_state["menu_option"] = wybrany_modul
         
         st.markdown('''
@@ -169,6 +167,11 @@ def main():
             </div>
         ''', unsafe_allow_html=True)
         
+        # Przycisk ręcznego odświeżania keszu
+        if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True, type="primary"):
+            st.cache_data.clear()
+            st.rerun()
+
         if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True, type="secondary"):
             st.session_state["zalogowany"] = False
             st.rerun()
