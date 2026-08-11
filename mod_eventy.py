@@ -3,7 +3,8 @@ import pandas as pd
 import datetime
 import os
 import base64
-from db import load_data, save_data, generuj_smart_id
+import db
+from db import load_data, generuj_smart_id
 
 def render(sh):
     # 1. NAGŁÓWEK MODUŁU (STYL ZEN)
@@ -142,14 +143,11 @@ def render(sh):
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
                 df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
-            # ==========================================
-            # ZMODYFIKOWANA WYSZUKIWARKA (wielokrotne frazy - kuloodporna)
-            # ==========================================
+            # WYSZUKIWARKA
             if wyszukiwarka and not df_widok.empty:
                 frazy = [f.strip().lower() for f in wyszukiwarka.split(",") if f.strip()]
                 for fraza in frazy:
                     if not df_widok.empty:
-                        # Łączymy wszystkie dane ze zlecenia w jeden długi string i sprawdzamy czy zawiera frazę (Logika AND)
                         maska = df_widok.astype(str).apply(lambda x: ' '.join(x).lower(), axis=1).str.contains(fraza, regex=False)
                         df_widok = df_widok[maska]
 
@@ -197,9 +195,6 @@ def render(sh):
                         else:
                             tags_div = ""
 
-                        # ==========================================
-                        # ZMODYFIKOWANY KAFELEK (dodane daty rozładunku)
-                        # ==========================================
                         data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
                         if data_zal_lista in ['', 'None', 'nan', 'NaT']:
                             data_zal_lista = 'Brak danych'
@@ -278,12 +273,22 @@ def render(sh):
                             nowy_wiersz['Zakonczone_Arch'] = "NIE"
                             nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
                             
-                            df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                            df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
-                            save_data(worksheet, df)
+                            # ================== NOWY, BEZPIECZNY ZAPIS (APPEND) ==================
+                            if 'sheet_row' in nowy_wiersz:
+                                del nowy_wiersz['sheet_row'] # Usunięcie technicznego indeksu do klonowania
+                                
+                            df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
+                            df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
+                            nowy_wiersz_z_id = df_temp.iloc[-1]
+                            
+                            # Pobieramy same kolumny biznesowe by wysłać czystą listę danych na dół arkusza
+                            kolumny = [k for k in df.columns if k != 'sheet_row']
+                            wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny]
+                            
+                            db.append_data("DB_Eventy", wiersz_lista)
                             
                             st.session_state["wybrany_event_id"] = None 
-                            st.success("✅ Skopiowano zlecenie!")
+                            st.success("✅ Skopiowano zlecenie (Bezpieczny zapis)!")
                             st.rerun()
 
                     typ_pojazdu_lower = str(dane_eventu['Typ_Pojazdu']).lower()
@@ -361,9 +366,6 @@ def render(sh):
                             with c_ed2:
                                 u_typ_pojazd = st.text_input("Typ Pojazdu", value=str(dane_eventu.get('Typ_Pojazdu', '')))
                                 
-                                # Obsługa wielu dat rozładunku przy edycji
-                                akt_daty_rozl = str(dane_eventu.get('Notatki', '')) # Alternatywnie możemy sparsować lub dodać dedykowane pole
-                                # Dla stabilności pobieramy aktualną datę zlecenia tr lub parsujemy z notatek/innych kolumn jeśli potrzeba
                                 dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
                                 try:
                                     dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
@@ -371,7 +373,6 @@ def render(sh):
                                     dp_parsed = None
                                 u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
                                 
-                                # Wiele dat rozładunku w edycji
                                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Daty rozładunku na targach:</p>", unsafe_allow_html=True)
                                 r_ed1, r_ed2 = st.columns(2)
                                 u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=None)
@@ -402,7 +403,6 @@ def render(sh):
                                 df.at[idx, 'Status_Magazyn'] = u_status_mag
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 
-                                # Zapis wieloma datami rozładunku w notatkach lub jako rozszerzenie
                                 rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
                                 if u_data_roz_2:
                                     rozładunki_str += f", {u_data_roz_2}"
@@ -411,7 +411,10 @@ def render(sh):
                                 else:
                                     df.at[idx, 'Notatki'] = u_notatki
                                 
-                                save_data(worksheet, df)
+                                # ================== NOWY, BEZPIECZNY ZAPIS ==================
+                                gs_row = int(df.at[idx, 'sheet_row'])
+                                db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
+                                
                                 st.session_state["wybrany_event_id"] = u_id_zlecenia 
                                 st.success("Pomyślnie zaktualizowano dane!")
                                 st.rerun()
@@ -459,17 +462,17 @@ def render(sh):
                             s_notatki = st.text_input("Dodatkowe Notatki")
                             
                             if st.form_submit_button("💾 Zapisz Slot"):
-                                nowy_slot = {
-                                    "ID_Zlecenia": dane_eventu['ID_Zlecenia'],
-                                    "Typ_Operacji": s_typ,
-                                    "Data_Slota": str(s_data) if s_data else "",
-                                    "Godzina_Od": s_od.strftime("%H:%M") if s_od else "",
-                                    "Godzina_Do": s_do.strftime("%H:%M") if s_do else "",
-                                    "Brama_Rampa": s_brama,
-                                    "Notatki": s_notatki
-                                }
-                                df_sloty = pd.concat([df_sloty, pd.DataFrame([nowy_slot])], ignore_index=True)
-                                save_data(worksheet_sloty, df_sloty)
+                                # ================== NOWY, BEZPIECZNY ZAPIS ==================
+                                nowy_slot = [
+                                    dane_eventu['ID_Zlecenia'],
+                                    s_typ,
+                                    str(s_data) if s_data else "",
+                                    s_od.strftime("%H:%M") if s_od else "",
+                                    s_do.strftime("%H:%M") if s_do else "",
+                                    s_brama,
+                                    s_notatki
+                                ]
+                                db.append_data("DB_Sloty", nowy_slot)
                                 st.success("Dodano nowy slot!")
                                 st.rerun()
                         
@@ -520,7 +523,10 @@ def render(sh):
                                     df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
                                     df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
                                     
-                                save_data(worksheet, df)
+                                # ================== NOWY, BEZPIECZNY ZAPIS ==================
+                                gs_row = int(df.at[idx, 'sheet_row'])
+                                db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
+                                
                                 st.success("Zaktualizowano finanse!")
                                 st.rerun()
 
@@ -541,7 +547,10 @@ def render(sh):
                             df.at[idx, 'Faza_Procesu'] = "Zamknięte"
                             df.at[idx, 'Zakonczone_Arch'] = "TAK"
                             
-                            save_data(worksheet, df)
+                            # ================== NOWY, BEZPIECZNY ZAPIS ==================
+                            gs_row = int(df.at[idx, 'sheet_row'])
+                            db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
+                            
                             st.session_state["wybrany_event_id"] = None
                             st.success(f"Zlecenie zamknięte i zarchiwizowane!")
                             st.rerun()
@@ -570,7 +579,6 @@ def render(sh):
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
                 
-                # --- Wiele dat rozładunku przy tworzeniu zlecenia ---
                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Daty rozładunku na obiekcie (wiele dni):</p>", unsafe_allow_html=True)
                 r_form1, r_form2 = st.columns(2)
                 data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
@@ -615,7 +623,6 @@ def render(sh):
                     else:
                         nr_zewn_final = "FLOTA WŁASNA"
                         
-                    # Formatowanie wielu dat rozładunku do notatek/bazy
                     roz_str = str(data_rozladunku_1) if data_rozladunku_1 else ""
                     if data_rozladunku_2:
                         roz_str += f", {data_rozladunku_2}"
@@ -635,10 +642,17 @@ def render(sh):
                         "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE"
                     }
 
-                    df = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
-                    df = generuj_smart_id(df, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
-                    save_data(worksheet, df)
-                    st.success("🎉 Zlecenie zapisane w bazie chmurowej!")
+                    # ================== NOWY, BEZPIECZNY ZAPIS ==================
+                    df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
+                    df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
+                    nowy_wiersz_z_id = df_temp.iloc[-1]
+                    
+                    kolumny = [k for k in df.columns if k != 'sheet_row']
+                    wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny]
+                    
+                    db.append_data("DB_Eventy", wiersz_lista)
+                    
+                    st.success("🎉 Zlecenie zapisane w bazie chmurowej (Bezpieczny zapis)!")
                     st.rerun()
 
     with tab_archiwum:
