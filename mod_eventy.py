@@ -21,19 +21,18 @@ def get_full_address(place_name, df_miejsca):
     return place_name
 
 def render(sh):
-    # 1. NAGŁÓWEK MODUŁU (STYL ZEN)
     st.markdown("""
         <h2 style='color: #E2DCD3; margin-bottom: 0px; font-weight: 400; font-size: 24px;'>Moduł Operacyjny: Eventy & Flota</h2>
         <div style='color: #8C8477; font-size: 11px; letter-spacing: 2px; margin-bottom: 25px;'>オペレーションモジュール: イベント & フリート</div>
     """, unsafe_allow_html=True)
     
     worksheet, df = load_data(sh, "DB_Eventy")
-    df_miejsca = db.fetch_data("Miejsca")
     
+    # POBRANIE SŁOWNIKA MIEJSC
+    df_miejsca = db.fetch_data("Miejsca")
     lista_miejsc_baza = df_miejsca['Nazwa do listy'].dropna().tolist() if not df_miejsca.empty else []
     opcje_lokalizacji = ["Magazyn SQM Komorniki"] + lista_miejsc_baza + ["INNE (wpisz ręcznie)"]
     
-    # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
     if df.empty and not worksheet.row_values(1):
         headers = ["Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik", 
                    "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn", 
@@ -59,7 +58,6 @@ def render(sh):
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    # Karty KPI w stylu Zen
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card">
@@ -323,7 +321,7 @@ def render(sh):
                                 except Exception as e:
                                     st.error("Szablon CMR niedostępny.")
                         else:
-                            st.info("💡 Zewnętrzny transport. Wygeneruj CMR w Module PRO.")
+                            st.info("💡 Zewn. transport. Wygeneruj CMR w Module PRO.")
 
                     with c_dup:
                         if st.button("📋 Klonuj", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
@@ -332,7 +330,7 @@ def render(sh):
                             nowy_wiersz['Faza_Procesu'] = "Inicjacja"
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
                             nowy_wiersz['CMR_Gotowe'] = "NIE"
-                            nowy_wiersz['Nr_CMR'] = "" 
+                            nowy_wiersz['Nr_CMR'] = "" # Klon nie kopiuje numeru CMR
                             
                             is_sqm_clone = (nowy_wiersz['Typ_Transportu'] == "Własny SQM")
                             nowy_wiersz['CMR_Podpisane_POD'] = "N/A" if is_sqm_clone else "NIE"
@@ -423,6 +421,7 @@ def render(sh):
                                 u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
                                 
+                                # ---- ZMIANA: ADRES DOCELOWY (EDIT) Z LISTY ROZWIJANEJ ----
                                 akt_miejsce = str(dane_eventu.get('Miejsce_Przeznaczenia', ''))
                                 if akt_miejsce in opcje_lokalizacji:
                                     idx_m = opcje_lokalizacji.index(akt_miejsce)
@@ -694,6 +693,7 @@ def render(sh):
                 id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 
+                # ---- ZMIANA: ADRES DOCELOWY (NOWE ZLECENIE) Z LISTY ROZWIJANEJ ----
                 u_miejsce_sel_c = st.selectbox("Miejsce docelowe (Odbiorca na CMR)", opcje_lokalizacji)
                 u_miejsce_man_c = st.text_area("Adres Docelowy (ręcznie)") if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else ""
                 
