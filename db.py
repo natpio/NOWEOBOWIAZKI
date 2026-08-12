@@ -6,20 +6,17 @@ import re
 
 @st.cache_resource
 def init_connection():
-    # Połączenie z Google Sheets zoptymalizowane pod kątem zasobów
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
     sh = gc.open("NOWY PODZIAŁ OBOWIĄZKÓW") 
     return sh
 
 def get_col_letter(col_idx):
-    """Pomocnicza funkcja zamieniająca indeks kolumny (np. 1) na literę Excela (np. A)"""
     string = ""
     while col_idx > 0:
         col_idx, remainder = divmod(col_idx - 1, 26)
         string = chr(65 + remainder) + string
     return string
 
-# Zoptymalizowana i KULOODPORNA funkcja load_data z keszowaniem
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(_sh, sheet_name):
     try:
@@ -27,35 +24,12 @@ def load_data(_sh, sheet_name):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
-    # =======================================================
-    # AUTO-HEALING: Twarda synchronizacja nagłówków Eventów
-    # =======================================================
-    if sheet_name == "DB_Eventy":
-        expected_headers = [
-            "Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik",
-            "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn",
-            "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "CMR_Gotowe", "CMR_Podpisane_POD", 
-            "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch", 
-            "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"
-        ]
-        try:
-            current_headers = worksheet.row_values(1)
-        except:
-            current_headers = []
-            
-        # Jeśli arkusz ma rozjechane, brakujące lub źle wpisane kolumny - wymuszamy ich nadpisanie poprawnymi
-        if current_headers[:len(expected_headers)] != expected_headers:
-            letter = get_col_letter(len(expected_headers))
-            worksheet.update(values=[expected_headers], range_name=f"A1:{letter}1")
-
-    # BARDZO BEZPIECZNE POBIERANIE DANYCH (odporne na błędy pustych/podwójnych nagłówków)
+    # BARDZO BEZPIECZNE POBIERANIE DANYCH 
     raw_data = worksheet.get_all_values()
     if raw_data and len(raw_data) > 0:
         headers = raw_data[0]
-        # Zabezpieczenie przed pustymi nagłówkami w arkuszu (np. dodano kolumnę, ale nie wpisano nazwy)
         headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
         
-        # Zabezpieczenie przed duplikatami nagłówków
         seen = set()
         for i, h in enumerate(headers):
             if h in seen:
@@ -67,14 +41,28 @@ def load_data(_sh, sheet_name):
     else:
         df = pd.DataFrame()
             
-    # Śledzenie fizycznego wiersza w Google Sheets
     if not df.empty:
         df['sheet_row'] = df.index + 2
     else:
         df['sheet_row'] = []
 
-    # Fallback dla innych arkuszy
-    if sheet_name == "DB_Subrenty":
+    if sheet_name == "DB_Eventy":
+        wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+        for kol in wymagane:
+            if kol not in df.columns: df[kol] = ""
+        domyslne_kolumny = {
+            "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
+            "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
+            "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
+            "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
+            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
+            "Miejsce_Przeznaczenia": "", "Waga": 0, "Nr_Rejestracyjny": "", "Kierowca": "",
+            "Nr_CMR": ""
+        }
+        for kol, val in domyslne_kolumny.items():
+            if kol not in df.columns: df[kol] = val
+
+    elif sheet_name == "DB_Subrenty":
         domyslne_subrenty = {
             "ID_Subrentu": "", "Rodzaj_Zlecenia": "Dry Hire", "Dostawca": "", "Co_Jedzie": "",
             "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()),
@@ -119,7 +107,6 @@ def load_data(_sh, sheet_name):
                 
     return worksheet, df
 
-# Pobieranie danych z pamięci podręcznej (RAM) - również odporne na puste nagłówki
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_data(sheet_name):
     sh = init_connection()
@@ -141,9 +128,6 @@ def fetch_data(sheet_name):
         st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
         return pd.DataFrame()
 
-# ==========================================
-# GŁÓWNY REJESTR NUMERACJI CMR
-# ==========================================
 def get_next_cmr_number():
     sh = init_connection()
     try:
@@ -162,9 +146,6 @@ def get_next_cmr_number():
     ws.update_acell('B2', str(next_cmr))
     return str(next_cmr)
 
-# ==========================================
-# FUNKCJE BEZPIECZNEGO ZAPISU I ARCHIWIZACJI
-# ==========================================
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
     sh = init_connection()
     ws = sh.worksheet(sheet_name)
@@ -202,9 +183,6 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         st.error(f"Błąd fizycznej archiwizacji: {e}")
         return False
 
-# ==========================================
-# POZOSTAŁE FUNKCJE CRUD I POMOCNICZE
-# ==========================================
 def save_data(worksheet, edited_df):
     df_to_save = edited_df.copy()
     if 'sheet_row' in df_to_save.columns:
