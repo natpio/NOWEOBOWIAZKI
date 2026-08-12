@@ -5,7 +5,7 @@ import os
 import base64
 import db
 from db import load_data, generuj_smart_id
-from mod_generator_pdf import generate_cmr_excel
+from mod_generator_pdf import generate_cmr_excel, get_cmr_city_format
 
 def get_full_address(place_name, df_miejsca):
     """Funkcja pomocnicza do pobierania pełnego adresu z bazy na potrzeby CMR."""
@@ -298,7 +298,7 @@ def render(sh):
                                         st.rerun()
                             else:
                                 try:
-                                    resolved_dest = get_full_address(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow']), df_miejsca)
+                                    resolved_dest = get_full_address(str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])), df_miejsca)
                                     dane_cmr = {
                                         "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
                                         "miejsce_przeznaczenia": resolved_dest,
@@ -306,7 +306,7 @@ def render(sh):
                                         "miasto_zal": "Komorniki, PL",
                                         "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
                                         "waga": waga_int,
-                                        "nr_cmr": nr_cmr_zapisany,
+                                        "nr_cmr": str(nr_cmr_zapisany),
                                         "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
                                         "kierowca": str(dane_eventu.get("Kierowca", "")),
                                         "przewoznik": str(dane_eventu.get("Przewoznik", ""))
@@ -321,6 +321,38 @@ def render(sh):
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                                         use_container_width=True
                                     )
+                                    
+                                    # ==========================================
+                                    # LOGIKA ZWROTNEGO CMR W MODULE EVENTÓW
+                                    # ==========================================
+                                    st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
+                                    st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🔙 Dokument na drogę powrotną</p>", unsafe_allow_html=True)
+                                    data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{dane_eventu['ID_Zlecenia']}")
+                                    
+                                    if data_powrotu_cmr:
+                                        target_place_name = str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow']))
+                                        miasto_zal_powrot = get_cmr_city_format(target_place_name, target_place_name, df_miejsca)
+                                        
+                                        dane_cmr_powrot = {
+                                            "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
+                                            "miejsce_przeznaczenia": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
+                                            "data_zal": str(data_powrotu_cmr),
+                                            "miasto_zal": miasto_zal_powrot,
+                                            "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                                            "waga": waga_int,
+                                            "nr_cmr": nr_cmr_zapisany,
+                                            "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                            "kierowca": str(dane_eventu.get("Kierowca", "")),
+                                            "przewoznik": str(dane_eventu.get("Przewoznik", ""))
+                                        }
+                                        cmr_powrot_bytes = generate_cmr_excel(dane_cmr_powrot)
+                                        st.download_button(
+                                            label=f"🔙 Pobierz CMR POWROTNY",
+                                            data=cmr_powrot_bytes,
+                                            file_name=f"CMR_POWROT_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx",
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            use_container_width=True
+                                        )
                                 except Exception as e:
                                     st.error("Szablon CMR niedostępny.")
                         else:
@@ -570,7 +602,7 @@ def render(sh):
                             if is_sqm:
                                 u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
                                 st.info("🚚 Pojazd własnej floty SQM. Pola finansowe są automatycznie ustawione na N/A.")
-                                u_pod, u_pp, u_koszt, u_nr_fak, u_faktura_opl, u_data_platnosci = "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+                                u_pod, u_pp, u_koszt, u_nr_fak, u_faktura_opl, u_data_platnosci = "N/A", "N/A", "0", "N/A", "N/A", "N/A"
                             else:
                                 col_d1, col_d2, col_d3 = st.columns(3)
                                 with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
