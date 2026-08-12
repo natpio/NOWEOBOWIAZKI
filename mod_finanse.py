@@ -10,9 +10,12 @@ def render(sh):
     with col_currency: st.selectbox("Waluta", ["Waluta: EUR €"], label_visibility="collapsed")
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Pobieranie danych z arkuszy
     _, df_ev = load_data(sh, "DB_Eventy")
     _, df_yt = load_data(sh, "DB_Yestech")
     _, df_sub = load_data(sh, "DB_Subrenty")
+    _, df_poboczne = load_data(sh, "Zlecenia Poboczne")
+    
     dzisiaj = pd.Timestamp.today().normalize()
     
     spoznione_ev, spoznione_yt = pd.DataFrame(), pd.DataFrame()
@@ -30,11 +33,13 @@ def render(sh):
         braki_ev = df_ev[(df_ev['Zakonczone_Arch'] == 'TAK') & ((df_ev['CMR_Podpisane_POD'] == 'NIE') | (df_ev['Nr_Faktury'] == ''))]
     braki_count = len(braki_ev)
 
-    # NOWA ZAKŁADKA: Raport dla Księgowości na drugim miejscu
     tab_alerty, tab_ksiegowosc, tab_koszty, tab_rentownosc = st.tabs([
         "🚨 Alerty i Braki", "🧾 Raport dla Księgowości", "💶 Wydatki per Partner", "📈 Rentowność YESTECH"
     ])
 
+    # ==========================================
+    # KARTA 1: ALERTY
+    # ==========================================
     with tab_alerty:
         t_spozn = "Brak przeterminowanych płatności!" if spoznione_count == 0 else f"Wykryto {spoznione_count} spóźnień!"
         c_spozn = "text-green" if spoznione_count == 0 else "text-red"
@@ -48,14 +53,12 @@ def render(sh):
                 <div class="kpi-header">Przeterminowane płatności</div>
                 <div class="kpi-value">{spoznione_count}</div>
                 <div class="kpi-subtext {c_spozn}">{t_spozn}</div>
-                <div class="kpi-btn">Pokaż szczegóły</div>
                 <div class="kpi-icon-bg">💰</div>
             </div>
             <div class="kpi-card kpi-yellow">
                 <div class="kpi-header">Blokady Rozliczeń (Brak POD/Faktury)</div>
                 <div class="kpi-value">{braki_count}</div>
                 <div class="kpi-subtext {c_braki}">{t_braki}</div>
-                <div class="kpi-btn">Pokaż szczegóły</div>
                 <div class="kpi-icon-bg">📄</div>
             </div>
         </div>
@@ -99,109 +102,128 @@ def render(sh):
             if not braki_ev.empty: st.dataframe(braki_ev[['ID_Zlecenia', 'Przewoznik', 'CMR_Podpisane_POD', 'Nr_Faktury']], use_container_width=True)
 
     # ==========================================
-    # NOWA ZAKŁADKA: RAPORT DLA KSIĘGOWOŚCI
+    # KARTA 2: RAPORT DLA KSIĘGOWOŚCI
     # ==========================================
     with tab_ksiegowosc:
         st.markdown("""
             <div style="background: rgba(197, 168, 128, 0.05); border: 1px solid rgba(197, 168, 128, 0.3); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                <h4 style="color: #C5A880; margin: 0 0 5px 0;">🧾 Inteligentny Raport Zobowiązań</h4>
-                <p style="color: #A39B8F; font-size: 13px; margin: 0;">Poniższa tabela automatycznie agreguje <b>wszystkie nieopłacone pozycje</b> kosztowe z modułów Eventów, Subrentów oraz Yestechu. Sortuje je od najpilniejszych terminów.</p>
+                <h4 style="color: #C5A880; margin: 0 0 5px 0;">🧾 Inteligentny Raport Księgowy</h4>
+                <p style="color: #A39B8F; font-size: 13px; margin: 0;">Zestawienie wszystkich nadchodzących lub zaległych płatności z modułów operacyjnych.</p>
             </div>
         """, unsafe_allow_html=True)
         
         lista_zobowiazan = []
         
-        def dodaj_do_raportu(df_source, dzial, col_id, col_kontrahent, col_koszt):
-            if not df_source.empty:
-                # Filtr na pozycje nieopłacone
-                df_unpaid = df_source[df_source.get('Faktura_Oplacona', pd.Series()) != "TAK"].copy()
+        # 1. Agregacja z DB_Eventy
+        if not df_ev.empty:
+            df_unpaid_ev = df_ev[df_ev.get('Faktura_Oplacona', pd.Series()) != "TAK"]
+            for _, row in df_unpaid_ev.iterrows():
+                try: koszt = float(str(row.get("Koszt_Transportu_EUR", "0")).replace(',', '.').replace(' ', ''))
+                except: koszt = 0.0
                 
-                for _, row in df_unpaid.iterrows():
-                    # Bezpieczna konwersja kosztu
-                    try:
-                        koszt_str = str(row.get(col_koszt, "0")).replace(',', '.').replace(' ', '')
-                        if koszt_str in ["", "nan", "None", "N/A"]: koszt_val = 0.0
-                        else: koszt_val = float(koszt_str)
-                    except:
-                        koszt_val = 0.0
-                        
-                    # Agregujemy tylko jeśli jest jakikolwiek koszt
-                    if koszt_val > 0:
-                        data_plat = str(row.get("Data_Platnosci", ""))
-                        nr_fak = str(row.get("Nr_Faktury", "")).strip()
-                        if nr_fak in ["", "nan", "None", "N/A"]: nr_fak = "⚠️ BRAK FAKTURY"
-                        
-                        lista_zobowiazan.append({
-                            "Termin Płatności": data_plat,
-                            "Kwota (EUR)": koszt_val,
-                            "Kontrahent": row.get(col_kontrahent, ""),
-                            "Nr Faktury": nr_fak,
-                            "Dział": dzial,
-                            "ID Operacji": row.get(col_id, "")
-                        })
+                # Tylko zlecenia zewnętrzne i takie, które mają wygenerowany koszt
+                if koszt > 0 or row.get("Typ_Transportu") == "Zewnętrzny":
+                    # Szukanie daty wykonania usługi (Rozładunku)
+                    data_wyk = str(row.get("Data_Zakonczenia_Uslugi", "")).strip()
+                    if not data_wyk or data_wyk == "nan":
+                        notatki = str(row.get("Notatki", ""))
+                        if "[Rozładunki:" in notatki:
+                            try: data_wyk = notatki.split("[Rozładunki:")[1].split("]")[0].split(",")[-1].strip()
+                            except: data_wyk = "Brak danych"
+                        else:
+                            data_wyk = "Brak danych"
+                            
+                    nr_fak = str(row.get("Nr_Faktury", "")).strip()
+                    
+                    lista_zobowiazan.append({
+                        "Typ Zlecenia": "Event PRO",
+                        "Nazwa Eventu / Zlecenia": str(row.get("Nazwa_Targow", "")),
+                        "Kontrahent": str(row.get("Przewoznik", "")),
+                        "Data Wykonania Usługi": data_wyk,
+                        "Data Płatności": str(row.get("Data_Platnosci", "")),
+                        "Kwota": f"{koszt} EUR",
+                        "Czy jest POD": str(row.get("CMR_Podpisane_POD", "")),
+                        "Nr Faktury": nr_fak if nr_fak not in ["", "nan", "None", "N/A"] else "⚠️ BRAK FAKTURY"
+                    })
 
-        # Zlewamy dane z 3 modułów
-        dodaj_do_raportu(df_ev, "Eventy / Cargo", "ID_Zlecenia", "Przewoznik", "Koszt_Transportu_EUR")
-        dodaj_do_raportu(df_sub, "Subrenty Sprzętu", "ID_Subrentu", "Dostawca", "Koszt_Calkowity_EUR")
-        dodaj_do_raportu(df_yt, "Yestech Eksport", "ID_Yestech", "Przewoznik", "Koszt_Rzeczywisty")
-        
+        # 2. Agregacja z Zleceń Pobocznych
+        if not df_poboczne.empty:
+            df_unpaid_pob = df_poboczne[df_poboczne.get('Faktura', pd.Series()) != "TAK"]
+            for _, row in df_unpaid_pob.iterrows():
+                lista_zobowiazan.append({
+                    "Typ Zlecenia": "Zlecenie Poboczne",
+                    "Nazwa Eventu / Zlecenia": str(row.get("Opis Ładunku / Trasy", "")),
+                    "Kontrahent": str(row.get("Przewoźnik", "")),
+                    "Data Wykonania Usługi": str(row.get("Data Rozładunku", "")),
+                    "Data Płatności": str(row.get("Data Płatności", "")),
+                    "Kwota": "Wg faktury (Brak wpisu)",
+                    "Czy jest POD": str(row.get("POD", "")),
+                    "Nr Faktury": "⚠️ BRAK FAKTURY"
+                })
+
+        # 3. Agregacja z Subrentów
+        if not df_sub.empty:
+            df_unpaid_sub = df_sub[df_sub.get('Faktura_Oplacona', pd.Series()) != "TAK"]
+            for _, row in df_unpaid_sub.iterrows():
+                try: koszt = float(str(row.get("Koszt_Calkowity_EUR", "0")).replace(',', '.').replace(' ', ''))
+                except: koszt = 0.0
+                
+                if koszt > 0 or row.get("Status_Subrentu") == "6. Zakończone i Rozliczone":
+                    nr_fak = str(row.get("Nr_Faktury", "")).strip()
+                    lista_zobowiazan.append({
+                        "Typ Zlecenia": "Subrent Sprzętu",
+                        "Nazwa Eventu / Zlecenia": str(row.get("Co_Jedzie", "")),
+                        "Kontrahent": str(row.get("Dostawca", "")),
+                        "Data Wykonania Usługi": str(row.get("Data_Faktycznego_Zwrotu", "")),
+                        "Data Płatności": str(row.get("Data_Platnosci", "")),
+                        "Kwota": f"{koszt} EUR",
+                        "Czy jest POD": "N/A",
+                        "Nr Faktury": nr_fak if nr_fak not in ["", "nan", "None", "N/A"] else "⚠️ BRAK FAKTURY"
+                    })
+
         df_raport = pd.DataFrame(lista_zobowiazan)
         
         if not df_raport.empty:
-            # Mechanizm sortowania i obliczania statusów z daty
-            df_raport['_Data_DT'] = pd.to_datetime(df_raport['Termin Płatności'], errors='coerce')
+            # Tworzenie kolumny Daty do obliczeń i sortowania
+            df_raport['_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], format="%d.%m.%Y", errors='coerce')
+            df_raport.loc[df_raport['_Data_DT'].isna(), '_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], errors='coerce')
+            
+            # Obliczanie dni opóźnienia
+            def oblicz_opoznienie(dt):
+                if pd.isna(dt): return "Brak daty płatności"
+                dni = (dzisiaj - dt).days
+                if dni > 0: return f"🔴 {dni} dni PO TERMINIE"
+                elif dni == 0: return "🟡 Płatność na dzisiaj"
+                else: return f"🟢 Zapas {-dni} dni"
+                
+            df_raport.insert(5, 'Opóźnienie Płatności', df_raport['_Data_DT'].apply(oblicz_opoznienie))
             df_raport = df_raport.sort_values(by='_Data_DT', ascending=True, na_position='last')
             
-            def oblicz_status(dt):
-                if pd.isna(dt): return "Nieznany termin"
-                dni = (dt - dzisiaj).days
-                if dni < 0: return f"🔴 {-dni} dni PO TERMINIE"
-                elif dni == 0: return "🟡 Na dzisiaj!"
-                else: return f"🟢 Za {dni} dni"
-                
-            # Wstrzykujemy status tuż po dacie
-            df_raport.insert(1, 'Status Płatności', df_raport['_Data_DT'].apply(oblicz_status))
-            
-            suma_calkowita = df_raport['Kwota (EUR)'].sum()
-            suma_przeterminowane = df_raport[df_raport['_Data_DT'] < dzisiaj]['Kwota (EUR)'].sum()
-            
-            # Karty podsumowujące
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown(f"""
-                <div style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 15px; border-radius: 8px; text-align: center;">
-                    <div style="color: #BA4949; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Przeterminowane zobowiązania</div>
-                    <div style="color: #E2DCD3; font-size: 24px; font-weight: 400; font-family: 'Shippori Mincho', serif;">{suma_przeterminowane:,.2f} €</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with c2:
-                st.markdown(f"""
-                <div style="background: rgba(119, 163, 133, 0.1); border: 1px solid #77A385; padding: 15px; border-radius: 8px; text-align: center;">
-                    <div style="color: #77A385; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Wszystkie nadchodzące kwoty</div>
-                    <div style="color: #E2DCD3; font-size: 24px; font-weight: 400; font-family: 'Shippori Mincho', serif;">{suma_calkowita:,.2f} €</div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            kolumny_widoczne = ["Termin Płatności", "Status Płatności", "Kwota (EUR)", "Kontrahent", "Nr Faktury", "Dział", "ID Operacji"]
-            df_widok = df_raport[kolumny_widoczne]
+            # Finalny widok
+            kolumny_docelowe = [
+                "Typ Zlecenia", "Nazwa Eventu / Zlecenia", "Kontrahent", "Data Wykonania Usługi", 
+                "Data Płatności", "Opóźnienie Płatności", "Czy jest POD", "Nr Faktury", "Kwota"
+            ]
+            df_widok = df_raport[kolumny_docelowe]
             
             st.dataframe(df_widok, use_container_width=True, hide_index=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
             csv_data = df_widok.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="📥 Pobierz zestawienie do Excela (.CSV)",
+                label="📥 Pobierz Gotowy Raport dla Księgowości (.CSV)",
                 data=csv_data,
-                file_name=f"Zobowiazania_SQM_{dzisiaj.strftime('%Y-%m-%d')}.csv",
+                file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.csv",
                 mime="text/csv",
                 type="primary",
                 use_container_width=True
             )
         else:
-            st.success("🎉 Doskonale! Brak jakichkolwiek nieopłaconych faktur i zobowiązań w systemie!")
+            st.success("🎉 Raport Księgowy jest pusty. Brak jakichkolwiek zaległych rozliczeń operacyjnych!")
 
+    # ==========================================
+    # KARTA 3: WYDATKI
+    # ==========================================
     with tab_koszty:
         st.subheader("Zestawienie kosztów u partnerów zewnętrznych")
         k_col1, k_col2 = st.columns(2)
@@ -222,6 +244,9 @@ def render(sh):
                 if not koszty_sub.empty: st.dataframe(koszty_sub, use_container_width=True, hide_index=True)
                 else: st.info("Brak zarejestrowanych kosztów w Subrentach.")
 
+    # ==========================================
+    # KARTA 4: RENTOWNOŚĆ
+    # ==========================================
     with tab_rentownosc:
         st.subheader("Wycena vs. Rzeczywistość (Eksport Basi)")
         if not df_yt.empty and "Wycena_Dla_Basi" in df_yt.columns and "Koszt_Rzeczywisty" in df_yt.columns:
