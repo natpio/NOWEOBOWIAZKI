@@ -24,7 +24,7 @@ def load_data(_sh, sheet_name):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
-    # BARDZO BEZPIECZNE POBIERANIE DANYCH (Odporne na puste nagłówki)
+    # Bezpieczne pobieranie odporne na puste nagłówki
     raw_data = worksheet.get_all_values()
     if raw_data and len(raw_data) > 0:
         headers = raw_data[0]
@@ -46,7 +46,7 @@ def load_data(_sh, sheet_name):
     else:
         df['sheet_row'] = []
 
-    # UZUPEŁNIANIE BRAKUJĄCYCH KOLUMN DLA EVENTÓW (Bez ingerencji w fizyczny arkusz)
+    # Dynamiczne uzupełnianie kolumn (dodaje na koniec, jeśli ich brakuje)
     if sheet_name == "DB_Eventy":
         wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch",
                     "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"]
@@ -147,21 +147,40 @@ def get_next_cmr_number():
     ws.update_acell('B2', str(next_cmr))
     return str(next_cmr)
 
+# ==========================================
+# KULOODPORNY MECHANIZM ZAPISU (Zabezpieczenie JSON)
+# ==========================================
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
-    sh = init_connection()
-    ws = sh.worksheet(sheet_name)
-    
-    dane_do_zapisu = row_series.copy()
-    if 'sheet_row' in dane_do_zapisu:
-        dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
+    try:
+        sh = init_connection()
+        ws = sh.worksheet(sheet_name)
         
-    row_list = dane_do_zapisu.tolist()
-    ostatnia_kolumna = get_col_letter(len(row_list))
-    zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
-    
-    ws.update(values=[row_list], range_name=zakres)
-    st.cache_data.clear()
-    return True
+        dane_do_zapisu = row_series.copy()
+        if 'sheet_row' in dane_do_zapisu:
+            dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
+            
+        # SANITYZACJA: Zamiana wszystkiego na czyste ciągi znaków (eliminuje błędy API Google)
+        row_list = []
+        for val in dane_do_zapisu.tolist():
+            if pd.isna(val) or val is None:
+                row_list.append("")
+            else:
+                row_list.append(str(val))
+                
+        ostatnia_kolumna = get_col_letter(len(row_list))
+        zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
+        
+        # Ochrona przed wersjami biblioteki GSpread
+        try:
+            ws.update(values=[row_list], range_name=zakres)
+        except TypeError:
+            ws.update(zakres, [row_list])
+            
+        st.cache_data.clear()
+        return True
+    except Exception as e:
+        st.error(f"Krytyczny błąd zapisu: {e}")
+        return False
 
 def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
     sh = init_connection()
@@ -174,7 +193,9 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
             ws_arch = sh.add_worksheet(title=archive_sheet, rows=1000, cols=len(headers))
             ws_arch.append_row(headers)
         
-        ws_arch.append_row(row_data_list)
+        safe_list = [str(x) if not pd.isna(x) else "" for x in row_data_list]
+        ws_arch.append_row(safe_list)
+        
         ws_source = sh.worksheet(source_sheet)
         ws_source.delete_rows(row_index)
         
@@ -184,6 +205,9 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         st.error(f"Błąd fizycznej archiwizacji: {e}")
         return False
 
+# ==========================================
+# POZOSTAŁE FUNKCJE CRUD I POMOCNICZE
+# ==========================================
 def save_data(worksheet, edited_df):
     df_to_save = edited_df.copy()
     if 'sheet_row' in df_to_save.columns:
@@ -191,7 +215,9 @@ def save_data(worksheet, edited_df):
         
     with st.spinner('Synchronizacja z chmurą Google... ☁️'):
         worksheet.clear()
-        worksheet.update(values=[df_to_save.columns.values.tolist()] + df_to_save.values.tolist(), range_name='A1')
+        # Sanityzacja pełnego zapisu
+        df_str = df_to_save.astype(str).replace('nan', '')
+        worksheet.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
     st.cache_data.clear()
     st.toast("Zmiany zapisane pomyślnie!", icon="✅")
 
@@ -199,7 +225,8 @@ def append_data(sheet_name, row_data):
     sh = init_connection()
     try:
         ws = sh.worksheet(sheet_name)
-        ws.append_row(row_data)
+        safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
+        ws.append_row(safe_list)
         st.cache_data.clear()
         return True
     except Exception as e:
@@ -210,9 +237,15 @@ def update_row(sheet_name, row_index, row_data):
     sh = init_connection()
     try:
         ws = sh.worksheet(sheet_name)
-        ostatnia_kolumna = chr(65 + len(row_data) - 1) 
+        safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
+        ostatnia_kolumna = chr(65 + len(safe_list) - 1) 
         zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
-        ws.update(values=[row_data], range_name=zakres)
+        
+        try:
+            ws.update(values=[safe_list], range_name=zakres)
+        except TypeError:
+            ws.update(zakres, [safe_list])
+            
         st.cache_data.clear()
         return True
     except Exception as e:
