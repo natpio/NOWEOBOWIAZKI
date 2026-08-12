@@ -51,7 +51,6 @@ class PRO_TransportOrder(FPDF):
         except:
             pass
         
-        # Bardziej skompresowany nagłówek
         self.set_font("Arial", 'B', 18)
         self.set_text_color(*self.dark_text)
         self.set_xy(65, 10)
@@ -90,7 +89,6 @@ def generate_pro_pdf(dane):
     pdf = PRO_TransportOrder(opiekun=dane.get('opiekun', 'PD'))
     pdf.alias_nb_pages()
     
-    # 1. KLUCZOWA ZMIANA: Twardy margines dolny na 33mm. Zabezpiecza przed nakładaniem się tekstu na stopkę!
     pdf.set_auto_page_break(auto=True, margin=33) 
     
     pdf.add_page()
@@ -109,11 +107,9 @@ def generate_pro_pdf(dane):
         img_qr.save(tmp, format="PNG")
         qr_path = tmp.name
         
-    # Mniejszy QR kod, podniesiony wyżej
     pdf.image(qr_path, 175, 8, 22)
     if os.path.exists(qr_path): os.remove(qr_path)
 
-    # 2. KOMPRESJA ZAGĘSZCZENIA GÓRY (zaczynamy od 32mm zamiast 40mm)
     pdf.set_xy(10, 32)
     pdf.set_font("Arial", 'B', 9)
     pdf.set_fill_color(25, 118, 210) 
@@ -130,13 +126,12 @@ def generate_pro_pdf(dane):
     pdf.set_text_color(40, 40, 40)
     pdf.cell(60, 8, pdf_sanitize(f" {datetime.now().strftime('%d.%m.%Y')}"), border=0, fill=True)
     
-    # Krótszy skok sekcji (6 zamiast 12)
     pdf.ln(6)
 
     def draw_section_header(num, title):
         pdf.set_fill_color(25, 118, 210)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Arial", 'B', 11) # Mniejsza czcionka o 1pt
+        pdf.set_font("Arial", 'B', 11) 
         pdf.cell(8, 8, pdf_sanitize(str(num).zfill(2)), fill=True, align='C')
         pdf.set_text_color(40, 40, 40)
         pdf.cell(3, 8, "", border=0)
@@ -146,14 +141,14 @@ def generate_pro_pdf(dane):
     def draw_row(label, val, border_b=True):
         x_start = pdf.get_x()
         y_start = pdf.get_y()
-        pdf.set_font("Arial", 'B', 7.5) # Zmniejszone etykiety
+        pdf.set_font("Arial", 'B', 7.5) 
         pdf.set_text_color(100, 100, 100)
         pdf.cell(60, 5, pdf_sanitize(label), border=0)
-        pdf.set_font("Arial", 'B', 9) # Zmniejszony tekst główny z 10 na 9
+        pdf.set_font("Arial", 'B', 9) 
         pdf.set_text_color(40, 40, 40)
         pdf.set_xy(x_start + 60, y_start + 0.5)
         pdf.multi_cell(130, 4.5, pdf_sanitize(val), border=0)
-        y_end = pdf.get_y() + 0.5 # Mniejsze światło wiersza
+        y_end = pdf.get_y() + 0.5 
         if border_b:
             pdf.set_draw_color(230, 230, 230)
             pdf.line(10, y_end, 200, y_end)
@@ -196,7 +191,6 @@ def generate_pro_pdf(dane):
     draw_section_header(3, "FINANCIALS & CARGO / FINANSE I ŁADUNEK")
     sy = pdf.get_y()
     
-    # 3. Zmniejszony boks z ceną o 3mm
     pdf.set_xy(120, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(120, sy, 22, 22, 'F') 
     pdf.set_xy(142, sy); pdf.set_fill_color(25, 118, 210); pdf.rect(142, sy, 58, 22, 'F')
     pdf.set_xy(142, sy + 3); pdf.set_font("Arial", 'B', 8); pdf.set_text_color(255, 255, 255)
@@ -216,7 +210,6 @@ def generate_pro_pdf(dane):
     pdf.set_font("Arial", 'B', 7.5); pdf.set_text_color(100, 100, 100); pdf.cell(55, 4.5, pdf_sanitize("PAYMENT / PŁATNOŚĆ:"), border=0)
     pdf.set_font("Arial", 'B', 9); pdf.set_text_color(40, 40, 40); pdf.set_xy(65, pdf.get_y()); pdf.cell(50, 4.5, pdf_sanitize(f"{dane['termin_dni']} dni / days ({dane['data_platnosci']})"))
     
-    # 4. Dynamiczny skok bezpieczny dla rozładunków (zamiast sztywnego +35 do dołu)
     pdf.set_xy(10, max(pdf.get_y() + 5, sy + 25))
     draw_section_header(4, "SPECIAL PROVISIONS / UWAGI SPECJALNE")
     pdf.set_font("Arial", 'I', 9)
@@ -260,6 +253,7 @@ def generate_cmr_excel(dane):
                     if color_val in ['00000000', 'FF000000', '000000']:
                         cell.fill = PatternFill(fill_type=None)
 
+        # Standardowe pola CMR z lewej strony
         safe_set_cell(sheet, 'D6', nadawca_tekst)
         safe_set_cell(sheet, 'D14', dane.get('odbiorca', ''))
         safe_set_cell(sheet, 'D20', dane.get('miejsce_przeznaczenia', ''))
@@ -269,8 +263,14 @@ def generate_cmr_excel(dane):
         safe_set_cell(sheet, 'Q38', dane.get('waga', 0))
         safe_set_cell(sheet, 'E69', dane.get('miasto_zal', ''))
         safe_set_cell(sheet, 'H69', dane.get('data_zal', ''))
-        safe_set_cell(sheet, 'T6', dane.get('nr_cmr', '24122250'))
+        safe_set_cell(sheet, 'T6', dane.get('nr_cmr', ''))
         
+        # Prawa strona - Przewoźnik i auto (Rubryka 16 i 17)
+        safe_set_cell(sheet, 'O14', dane.get('przewoznik', ''))
+        safe_set_cell(sheet, 'O17', dane.get('auto', ''))       
+        safe_set_cell(sheet, 'O24', dane.get('kierowca', ''))   
+        
+        # Kopie dodatkowe (w zależności od struktury Twojego szablonu)
         safe_set_cell(sheet, 'L14', dane.get('auto', ''))
         safe_set_cell(sheet, 'L15', dane.get('kierowca', ''))
         
@@ -321,7 +321,7 @@ def get_cmr_city_format(place_name, manual_addr, df):
             
     return place_name
 
-def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
+def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
     nr_zlecenia = str(r.get('Numer zlecenia', r.iloc[1] if len(r) > 1 else ''))
     podpis = "".join([c for c in nr_zlecenia.split("/")[-1] if c.isalpha()])[:2] if "/" in nr_zlecenia else "PD"
 
@@ -477,8 +477,24 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         
     miasto_zal_val = get_cmr_city_format(z_sel, "", df_miejsca)
 
-    base_cmr = 24122250
-    numer_cmr_final = str(base_cmr + idx_pd)
+    # ----------------------------------------------------
+    # ODCZYTYWANIE / GENEROWANIE NUMERU CMR DLA HISTORII
+    # ----------------------------------------------------
+    numer_cmr_final = str(r.get('Nr_CMR', r.iloc[18] if len(r) > 18 else ''))
+    if not numer_cmr_final.strip() or numer_cmr_final in ["nan", "None"]:
+        numer_cmr_final = db.get_next_cmr_number()
+        
+        # Zapis brakującego numeru z powrotem do chmury (aby go nie zgubić)
+        wiersz_lista = r.copy()
+        if 'sheet_row' in wiersz_lista:
+            wiersz_lista = wiersz_lista.drop('sheet_row')
+        w_list = wiersz_lista.tolist()
+        
+        if len(w_list) < 19:
+            w_list.extend([""] * (19 - len(w_list)))
+        w_list[18] = numer_cmr_final
+        
+        db.update_row("Zlecenia", row_idx, w_list)
 
     dane_cmr = {
         "odbiorca": odbiorca_cmr_hist,
@@ -489,7 +505,8 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd):
         "waga": waga_val,
         "nr_cmr": numer_cmr_final,
         "auto": auto_val,
-        "kierowca": kierowca_val
+        "kierowca": kierowca_val,
+        "przewoznik": nazwa_przewoznika
     }
     
     return paczka_pdf, dane_cmr, nr_zlecenia
@@ -516,6 +533,7 @@ def render(sh):
         st.session_state.hist_pdf_bytes = None
         st.session_state.hist_cmr_bytes = None
         st.session_state.hist_nr = ""
+        st.session_state.hist_cmr_nr = ""
 
     st.markdown('''
         <div class="module-header-container">
@@ -592,6 +610,11 @@ def render(sh):
                 idx_pd = df_zlecenia[df_zlecenia['Numer zlecenia'] == wybrane_zlecenie_nr].index[0]
                 r_edit = df_zlecenia.iloc[idx_pd]
                 gs_row_index = int(idx_pd) + 2 
+                
+                # Zabezpieczone pobranie numeru CMR z edytowanego rekordu 
+                nr_cmr_zapisany = str(r_edit.get('Nr_CMR', r_edit.iloc[18] if len(r_edit)>18 else ''))
+                if not nr_cmr_zapisany.strip() or nr_cmr_zapisany in ["nan", "None"]:
+                    nr_cmr_zapisany = db.get_next_cmr_number()
                 
                 val_typ_zlecenia = "Pełny event" if "TARGI" in str(r_edit.get('Typ', '')) or "CYKL:" in str(r_edit.get('Uwagi / Instrukcje', '')) else "Tylko dostawa"
                 
@@ -725,6 +748,9 @@ def render(sh):
             else:
                 st.warning("Baza zleceń jest pusta - brak danych do edycji.")
                 st.stop()
+        else:
+            # Dla nowego zlecenia włączamy bezpieczny generator z db.py
+            nr_cmr_zapisany = db.get_next_cmr_number()
 
         with st.expander("🔍 Przeglądaj i wyszukaj miejsca z Bazy Lokalizacji"):
             wyszukiwana_fraza = st.text_input("Wpisz szukaną frazę (nazwa, miasto, ulica, kod):", placeholder="np. Messe Berlin...")
@@ -1001,10 +1027,12 @@ def render(sh):
                         "termin_dni": termin_dni, "data_platnosci": data_platnosci.strftime('%d.%m.%Y')
                     }
                     
+                    # 19 Kolumn wg definicji DB_Zlecenia (z Nr_CMR w ostatniej kolumnie)
                     wiersz_db = [
                         datetime.now().strftime("%Y-%m-%d %H:%M"), nr_zlecenia, "LOGISTYKA CARGO", nazwa_przewoznika,
                         final_zal_db, final_roz_db, str(data_zal), data_roz_combined, "Zabudowa Targowa PRO",
-                        str(data_platnosci.strftime('%d.%m.%Y')), "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}"
+                        str(data_platnosci.strftime('%d.%m.%Y')), "", "", "", pelne_uwagi_db, "", projekt, "TARGI", f"{stawka_final} {waluta}",
+                        nr_cmr_zapisany
                     ]
                     
                     if tryb_pracy == "Edycja Istniejącego Zlecenia":
@@ -1023,12 +1051,6 @@ def render(sh):
                         pdf_bytes = generate_pro_pdf(paczka_pdf)
                             
                         miasto_zal_val = get_cmr_city_format(z_sel, z_man, df_miejsca)
-                        
-                        base_cmr = 24122250
-                        if tryb_pracy == "Edycja Istniejącego Zlecenia":
-                            numer_cmr_final = str(base_cmr + int(idx_pd))
-                        else:
-                            numer_cmr_final = str(base_cmr + len(df_zlecenia))
                             
                         if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
                             odbiorca_cmr_text = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
@@ -1042,9 +1064,10 @@ def render(sh):
                             "miasto_zal": miasto_zal_val,
                             "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
                             "waga": waga,
-                            "nr_cmr": numer_cmr_final,
+                            "nr_cmr": nr_cmr_zapisany,
                             "auto": c_auto_nr,       
-                            "kierowca": c_kierowca   
+                            "kierowca": c_kierowca,
+                            "przewoznik": nazwa_przewoznika
                         }
                         
                         cmr_bytes = generate_cmr_excel(dane_cmr)
@@ -1057,7 +1080,7 @@ def render(sh):
                         st.session_state.pdf_bytes = pdf_bytes
                         st.session_state.cmr_bytes = cmr_bytes
                         st.session_state.nazwa_pdf = f"Order_{nr_zlecenia.replace('/', '_')}.pdf"
-                        st.session_state.nazwa_cmr = f"CMR_{nr_zlecenia.replace('/', '_')}.xlsx"
+                        st.session_state.nazwa_cmr = f"CMR_{nr_zlecenia.replace('/', '_')}_{nr_cmr_zapisany}.xlsx"
                         st.session_state.dokumenty_wygenerowane = True
                         
                         st.cache_data.clear()
@@ -1069,7 +1092,7 @@ def render(sh):
             with col_pdf:
                 st.download_button("📥 POBIERZ ZLECENIE (PDF)", data=st.session_state.pdf_bytes, file_name=st.session_state.nazwa_pdf, mime="application/pdf", use_container_width=True)
             with col_cmr:
-                st.download_button("📝 POBIERZ GOTOWY CMR (5 STRON)", data=st.session_state.cmr_bytes, file_name=st.session_state.nazwa_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                st.download_button(f"📝 POBIERZ GOTOWY CMR ({nr_cmr_zapisany})", data=st.session_state.cmr_bytes, file_name=st.session_state.nazwa_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🔄 Wyczyść i przygotuj nowe zlecenie", use_container_width=True):
@@ -1123,19 +1146,18 @@ def render(sh):
                         with c_docs:
                             if st.button("📄 Przygotuj Dokumenty", key=f"doc_pro_{row_idx}", use_container_width=True):
                                 with st.spinner("Rekonstrukcja danych z bazy..."):
-                                    paczka, cmr, hist_nr = odtworz_dane_zlecenia(row, df_miejsca, df_przewoznicy, idx_pd)
+                                    paczka, cmr, hist_nr = odtworz_dane_zlecenia(row, df_miejsca, df_przewoznicy, idx_pd, row_idx)
                                     st.session_state.hist_pdf_bytes = generate_pro_pdf(paczka)
                                     st.session_state.hist_cmr_bytes = generate_cmr_excel(cmr)
                                     st.session_state.hist_nr = hist_nr
+                                    st.session_state.hist_cmr_nr = cmr.get("nr_cmr", "")
                                     st.session_state.hist_gen_row = row_idx
                                     st.rerun()
                                     
                         with c_del:
                             if st.button("🗑️ Usuń", key=f"del_pro_{row_idx}", use_container_width=True):
-                                ws_zlecenia = sh.worksheet("Zlecenia")
-                                ws_zlecenia.delete_row(row_idx)
+                                db.delete_row("Zlecenia", row_idx)
                                 st.success(f"Zlecenie {nr} zostało trwale usunięte!")
-                                st.cache_data.clear()
                                 st.rerun()
                         
                         if st.session_state.hist_gen_row == row_idx:
@@ -1144,7 +1166,8 @@ def render(sh):
                             with d1:
                                 st.download_button("📥 POBIERZ PDF", data=st.session_state.hist_pdf_bytes, file_name=f"Order_{st.session_state.hist_nr.replace('/','_')}.pdf", mime="application/pdf", key=f"dl_pdf_{row_idx}", use_container_width=True)
                             with d2:
-                                st.download_button("📝 POBIERZ CMR", data=st.session_state.hist_cmr_bytes, file_name=f"CMR_{st.session_state.hist_nr.replace('/','_')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_cmr_{row_idx}", use_container_width=True)
+                                nazwa_pliku_cmr = f"CMR_{st.session_state.hist_nr.replace('/','_')}_{st.session_state.hist_cmr_nr}.xlsx" if st.session_state.hist_cmr_nr else f"CMR_{st.session_state.hist_nr.replace('/','_')}.xlsx"
+                                st.download_button("📝 POBIERZ CMR", data=st.session_state.hist_cmr_bytes, file_name=nazwa_pliku_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_cmr_{row_idx}", use_container_width=True)
                         
                         st.markdown('<hr style="border-color: rgba(197, 168, 128, 0.1); margin: 5px 0 15px 0;">', unsafe_allow_html=True)
             else:
