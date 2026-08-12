@@ -312,8 +312,10 @@ def render(sh):
                                         "przewoznik": str(dane_eventu.get("Przewoznik", ""))
                                     }
                                     cmr_bytes = generate_cmr_excel(dane_cmr)
+                                    
+                                    st.caption("💡 Zapisz formularz edycji na dole, aby przycisk pobrał nowe dane.")
                                     st.download_button(
-                                        label=f"📥 Pobierz CMR ({nr_cmr_zapisany})",
+                                        label=f"📥 Pobierz ZAKTUALIZOWANY CMR ({nr_cmr_zapisany})",
                                         data=cmr_bytes,
                                         file_name=f"CMR_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx",
                                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -422,7 +424,7 @@ def render(sh):
                                 u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
                                 
-                                # ---- ZMIANA: ADRES DOCELOWY (EDIT) Z LISTY ROZWIJANEJ ----
+                                # ---- ADRES DOCELOWY (EDIT) Z LISTY ROZWIJANEJ ----
                                 akt_miejsce = str(dane_eventu.get('Miejsce_Przeznaczenia', ''))
                                 if akt_miejsce in opcje_lokalizacji:
                                     idx_m = opcje_lokalizacji.index(akt_miejsce)
@@ -694,7 +696,7 @@ def render(sh):
                 id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 
-                # ---- ZMIANA: ADRES DOCELOWY (NOWE ZLECENIE) Z LISTY ROZWIJANEJ ----
+                # ---- ADRES DOCELOWY (NOWE ZLECENIE) Z LISTY ROZWIJANEJ ----
                 u_miejsce_sel_c = st.selectbox("Miejsce docelowe (Odbiorca na CMR)", opcje_lokalizacji)
                 u_miejsce_man_c = st.text_area("Adres Docelowy (ręcznie)") if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else ""
                 
