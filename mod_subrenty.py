@@ -22,7 +22,7 @@ def render(sh):
     na_stanie = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "3. Na stanie SQM (Pracuje)"]) if not df_aktywne_sub.empty else 0
     gotowe_do_zwrotu = len(df_aktywne_sub[df_aktywne_sub.get("Status_Subrentu", pd.Series()) == "4. Gotowe do zwrotu (Alert)"]) if not df_aktywne_sub.empty else 0
     
-    # Renderowanie nowych kart KPI w japońskim stylu
+    # Renderowanie kart KPI
     st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-card">
@@ -59,7 +59,6 @@ def render(sh):
             edited_df_sub = st.data_editor(df_aktywne_sub, use_container_width=True, hide_index=True, key="edit_subrenty")
             
             if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
-                # ================== NOWY, BEZPIECZNY ZAPIS Z TABELI (KROK 3) ==================
                 roznice = df_aktywne_sub.ne(edited_df_sub).any(axis=1)
                 zmienione_indeksy = df_aktywne_sub[roznice].index
                 
@@ -106,19 +105,18 @@ def render(sh):
                 if not co_jedzie or not firma_docelowa:
                     st.error("❌ Musisz uzupełnić nazwę sprzętu oraz wskazać dostawcę!")
                 else:
-                    # ================== BEZPIECZNE DODAWANIE DO BAZY ==================
                     # 1. Zapis nowej firmy (jeśli dotyczy)
                     if firma_docelowa not in katalog_firm:
                         kolumny_firm = [k for k in df_firmy.columns if k != 'sheet_row']
                         nowa_firma_dict = {"Nazwa_Firmy": firma_docelowa}
-                        wiersz_firmy = [nowa_firma_dict.get(k, "") for k in kolumny_firm]
+                        wiersz_firmy = [str(nowa_firma_dict.get(k, "")) for k in kolumny_firm]
                         db.append_data("DB_Katalog_Firm", wiersz_firmy)
                         
                     nowy_wiersz = {
                         "ID_Subrentu": "", "Rodzaj_Zlecenia": rodzaj_zlecenia, "Dostawca": firma_docelowa, "Co_Jedzie": co_jedzie,
                         "Data_Odbioru": str(data_odbioru), "Deadline_Zwrotu": str(deadline_zwrotu),
                         "Status_Subrentu": status_sub, "Transport_IN_Kto": transport_in_kto, "Transport_IN_Dokumenty": transport_in_dok,
-                        "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": 0.0,
+                        "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": "0.0",
                         "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
                         "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
                     }
@@ -128,7 +126,8 @@ def render(sh):
                     nowy_wiersz_z_id = df_temp.iloc[-1]
                     
                     kolumny_sub = [k for k in df_sub.columns if k != 'sheet_row']
-                    wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny_sub]
+                    # Twarde rzutowanie na STR zabezpieczające błędy API
+                    wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny_sub]
                     
                     db.append_data("DB_Subrenty", wiersz_lista)
                     
@@ -143,7 +142,7 @@ def render(sh):
             st.info(f"**Wybrano:** {dane_sub['Co_Jedzie']} (Dostawca: {dane_sub['Dostawca']}) | Deadline: {dane_sub['Deadline_Zwrotu']}")
             
             with st.form("form_subrent_out", clear_on_submit=False):
-                obecny_status = dane_sub["Status_Subrentu"]
+                obecny_status = str(dane_sub["Status_Subrentu"])
                 opcje_statusu = [
                     "1. Zamówione (Oczekuje na IN)", "2. W drodze do SQM (IN)", "3. Na stanie SQM (Pracuje)",
                     "4. Gotowe do zwrotu (Alert)", "5. W drodze powrotnej (OUT)", "6. Zakończone i Rozliczone"
@@ -154,33 +153,34 @@ def render(sh):
                 st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
                 st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>🚚 Logistyka Zwrotu (Etap OUT)</p>", unsafe_allow_html=True)
                 o_col1, o_col2, o_col3 = st.columns(3)
-                with o_col1: t_out_kto = st.text_input("Kto organizuje zwrot?", value=dane_sub.get("Transport_OUT_Kto", ""))
-                with o_col2: t_out_dok = st.text_input("Nr listu zwrotnego / CMR", value=dane_sub.get("Transport_OUT_Dokumenty", ""))
+                with o_col1: t_out_kto = st.text_input("Kto organizuje zwrot?", value=str(dane_sub.get("Transport_OUT_Kto", "")))
+                with o_col2: t_out_dok = st.text_input("Nr listu zwrotnego / CMR", value=str(dane_sub.get("Transport_OUT_Dokumenty", "")))
                 with o_col3: data_zwrotu = st.date_input("Faktyczna Data Zwrotu", value=None)
                 
                 st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
                 st.markdown("<p style='color:#D4AF37; font-weight:700; margin-bottom:15px; font-size: 14px;'>💰 Finanse i Zakończenie</p>", unsafe_allow_html=True)
                 f_col1, f_col2, f_col3 = st.columns(3)
-                with f_col1: koszt = st.number_input("Koszt Całkowity Wypożyczenia (€)", min_value=0.0, value=float(dane_sub.get("Koszt_Calkowity_EUR", 0.0)), step=50.0)
+                with f_col1: koszt = st.number_input("Koszt Całkowity Wypożyczenia (€)", min_value=0.0, value=float(dane_sub.get("Koszt_Calkowity_EUR", 0.0)) if str(dane_sub.get("Koszt_Calkowity_EUR", "0")).replace('.','',1).isdigit() else 0.0, step=50.0)
                 with f_col2: f_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_sub.get("Faktura_Oplacona", "")) if dane_sub.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
-                with f_col3: nr_fak = st.text_input("Nr Faktury od Dostawcy", value=dane_sub.get("Nr_Faktury", ""))
+                with f_col3: nr_fak = st.text_input("Nr Faktury od Dostawcy", value=str(dane_sub.get("Nr_Faktury", "")))
                 
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.form_submit_button("💾 Zapisz Zmiany / Zatwierdź Zwrot"):
                     idx = df_sub[df_sub['ID_Subrentu'] == wybrany_id].index[0]
-                    df_sub.at[idx, 'Status_Subrentu'] = nowy_status
-                    df_sub.at[idx, 'Transport_OUT_Kto'] = t_out_kto
-                    df_sub.at[idx, 'Transport_OUT_Dokumenty'] = t_out_dok
-                    if data_zwrotu: df_sub.at[idx, 'Data_Faktycznego_Zwrotu'] = str(data_zwrotu)
-                    df_sub.at[idx, 'Koszt_Calkowity_EUR'] = float(koszt)
-                    df_sub.at[idx, 'Faktura_Oplacona'] = f_opl
-                    df_sub.at[idx, 'Nr_Faktury'] = nr_fak
                     
-                    # Automatyczna archiwizacja, jeśli wybrano status końcowy
+                    # BEZPIECZNE TWARDE RZUTOWANIE NA STRING
+                    df_sub.at[idx, 'Status_Subrentu'] = str(nowy_status)
+                    df_sub.at[idx, 'Transport_OUT_Kto'] = str(t_out_kto)
+                    df_sub.at[idx, 'Transport_OUT_Dokumenty'] = str(t_out_dok)
+                    if data_zwrotu: df_sub.at[idx, 'Data_Faktycznego_Zwrotu'] = str(data_zwrotu)
+                    
+                    df_sub.at[idx, 'Koszt_Calkowity_EUR'] = str(koszt) 
+                    df_sub.at[idx, 'Faktura_Oplacona'] = str(f_opl)
+                    df_sub.at[idx, 'Nr_Faktury'] = str(nr_fak)
+                    
                     if nowy_status == "6. Zakończone i Rozliczone":
                         df_sub.at[idx, 'Zakonczone_Arch'] = "TAK"
                         
-                    # ================== NOWY, BEZPIECZNY ZAPIS ==================
                     gs_row = int(df_sub.at[idx, 'sheet_row'])
                     db.update_single_row_safe("DB_Subrenty", gs_row, df_sub.loc[idx])
                     
