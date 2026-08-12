@@ -11,13 +11,42 @@ def init_connection():
     sh = gc.open("NOWY PODZIAŁ OBOWIĄZKÓW") 
     return sh
 
-# Zoptymalizowana i KULOODPORNA funkcja load_data z keszowaniem na 60 sekund
+def get_col_letter(col_idx):
+    """Pomocnicza funkcja zamieniająca indeks kolumny (np. 1) na literę Excela (np. A)"""
+    string = ""
+    while col_idx > 0:
+        col_idx, remainder = divmod(col_idx - 1, 26)
+        string = chr(65 + remainder) + string
+    return string
+
+# Zoptymalizowana i KULOODPORNA funkcja load_data z keszowaniem
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(_sh, sheet_name):
     try:
         worksheet = _sh.worksheet(sheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=25)
+        worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
+
+    # =======================================================
+    # AUTO-HEALING: Twarda synchronizacja nagłówków Eventów
+    # =======================================================
+    if sheet_name == "DB_Eventy":
+        expected_headers = [
+            "Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik",
+            "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn",
+            "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "CMR_Gotowe", "CMR_Podpisane_POD", 
+            "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch", 
+            "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"
+        ]
+        try:
+            current_headers = worksheet.row_values(1)
+        except:
+            current_headers = []
+            
+        # Jeśli arkusz ma rozjechane, brakujące lub źle wpisane kolumny - wymuszamy ich nadpisanie poprawnymi
+        if current_headers[:len(expected_headers)] != expected_headers:
+            letter = get_col_letter(len(expected_headers))
+            worksheet.update(values=[expected_headers], range_name=f"A1:{letter}1")
 
     # BARDZO BEZPIECZNE POBIERANIE DANYCH (odporne na błędy pustych/podwójnych nagłówków)
     raw_data = worksheet.get_all_values()
@@ -38,30 +67,14 @@ def load_data(_sh, sheet_name):
     else:
         df = pd.DataFrame()
             
-    # Śledzenie fizycznego wiersza w Google Sheets (zabezpieczenie przed usuwaniem)
+    # Śledzenie fizycznego wiersza w Google Sheets
     if not df.empty:
         df['sheet_row'] = df.index + 2
     else:
         df['sheet_row'] = []
-            
-    if sheet_name == "DB_Eventy":
-        wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
-        for kol in wymagane:
-            if kol not in df.columns: df[kol] = ""
-        domyslne_kolumny = {
-            "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
-            "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
-            "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
-            "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
-            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
-            # KOLUMNY DODANE DO GENERATORA CMR W MODULE EVENTY
-            "Miejsce_Przeznaczenia": "", "Waga": 0, "Nr_Rejestracyjny": "", "Kierowca": "",
-            "Nr_CMR": "" # Globalny numer CMR
-        }
-        for kol, val in domyslne_kolumny.items():
-            if kol not in df.columns: df[kol] = val
 
-    elif sheet_name == "DB_Subrenty":
+    # Fallback dla innych arkuszy
+    if sheet_name == "DB_Subrenty":
         domyslne_subrenty = {
             "ID_Subrentu": "", "Rodzaj_Zlecenia": "Dry Hire", "Dostawca": "", "Co_Jedzie": "",
             "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()),
@@ -109,7 +122,6 @@ def load_data(_sh, sheet_name):
 # Pobieranie danych z pamięci podręcznej (RAM) - również odporne na puste nagłówki
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_data(sheet_name):
-    """Pobiera dane arkusza jako DataFrame wykorzystując pamięć podręczną (TTL = 60s)."""
     sh = init_connection()
     try:
         ws = sh.worksheet(sheet_name)
@@ -133,13 +145,11 @@ def fetch_data(sheet_name):
 # GŁÓWNY REJESTR NUMERACJI CMR
 # ==========================================
 def get_next_cmr_number():
-    """Pobiera i bezpiecznie inkrementuje globalny numer CMR z arkusza systemowego."""
     sh = init_connection()
     try:
         ws = sh.worksheet("System_Ustawienia")
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title="System_Ustawienia", rows=5, cols=2)
-        # Ustawiamy start o jeden mniejszy niż docelowy (24122253 -> wygeneruje 24122254)
         ws.update(values=[['Klucz', 'Wartosc'], ['Ostatni_CMR', '24122253']], range_name='A1:B2')
         ws = sh.worksheet("System_Ustawienia")
         
@@ -155,9 +165,7 @@ def get_next_cmr_number():
 # ==========================================
 # FUNKCJE BEZPIECZNEGO ZAPISU I ARCHIWIZACJI
 # ==========================================
-
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
-    """Bezpieczna zmiana jednego wiersza z natychmiastową inwalidacją pamięci podręcznej."""
     sh = init_connection()
     ws = sh.worksheet(sheet_name)
     
@@ -166,43 +174,29 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
         dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
         
     row_list = dane_do_zapisu.tolist()
-    
-    def get_col_letter(col_idx):
-        string = ""
-        while col_idx > 0:
-            col_idx, remainder = divmod(col_idx - 1, 26)
-            string = chr(65 + remainder) + string
-        return string
-        
     ostatnia_kolumna = get_col_letter(len(row_list))
     zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
     
     ws.update(values=[row_list], range_name=zakres)
-    st.cache_data.clear()  # Wymuszenie pobrania świeżych danych przy następnym odczycie
+    st.cache_data.clear()
     return True
 
 def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
-    """Fizyczne przeniesienie wiersza między zakładkami w Google Sheets (Cold Storage)."""
     sh = init_connection()
     try:
-        # 1. Pobierz lub utwórz arkusz docelowy (Archiwum)
         try:
             ws_arch = sh.worksheet(archive_sheet)
         except gspread.exceptions.WorksheetNotFound:
-            # Jeśli archiwum nie istnieje, utwórz je i sklonuj nagłówki z oryginału
             ws_source = sh.worksheet(source_sheet)
             headers = ws_source.row_values(1)
             ws_arch = sh.add_worksheet(title=archive_sheet, rows=1000, cols=len(headers))
             ws_arch.append_row(headers)
         
-        # 2. Dopisz dane na dół archiwum
         ws_arch.append_row(row_data_list)
-        
-        # 3. Usuń fizycznie z aktywnego arkusza
         ws_source = sh.worksheet(source_sheet)
         ws_source.delete_rows(row_index)
         
-        st.cache_data.clear() # Wymuszenie odświeżenia keszu po archiwizacji
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd fizycznej archiwizacji: {e}")
@@ -211,9 +205,7 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
 # ==========================================
 # POZOSTAŁE FUNKCJE CRUD I POMOCNICZE
 # ==========================================
-
 def save_data(worksheet, edited_df):
-    """Przestarzałe - nadpisuje cały arkusz. Zachowane dla wstecznej kompatybilności."""
     df_to_save = edited_df.copy()
     if 'sheet_row' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['sheet_row'])
@@ -221,7 +213,7 @@ def save_data(worksheet, edited_df):
     with st.spinner('Synchronizacja z chmurą Google... ☁️'):
         worksheet.clear()
         worksheet.update(values=[df_to_save.columns.values.tolist()] + df_to_save.values.tolist(), range_name='A1')
-    st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po zapisie
+    st.cache_data.clear()
     st.toast("Zmiany zapisane pomyślnie!", icon="✅")
 
 def append_data(sheet_name, row_data):
@@ -229,7 +221,7 @@ def append_data(sheet_name, row_data):
     try:
         ws = sh.worksheet(sheet_name)
         ws.append_row(row_data)
-        st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po dodaniu
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd zapisu w {sheet_name}: {e}")
@@ -242,7 +234,7 @@ def update_row(sheet_name, row_index, row_data):
         ostatnia_kolumna = chr(65 + len(row_data) - 1) 
         zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
         ws.update(values=[row_data], range_name=zakres)
-        st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po edycji
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd aktualizacji wiersza {row_index} w {sheet_name}: {e}")
@@ -253,7 +245,7 @@ def delete_row(sheet_name, row_index):
     try:
         ws = sh.worksheet(sheet_name)
         ws.delete_rows(row_index)
-        st.cache_data.clear()  # Wymuszenie pobrania świeżych danych po usunięciu
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd usuwania wiersza {row_index} w {sheet_name}: {e}")
