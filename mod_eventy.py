@@ -308,7 +308,8 @@ def render(sh):
                                         "waga": waga_int,
                                         "nr_cmr": nr_cmr_zapisany,
                                         "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
-                                        "kierowca": str(dane_eventu.get("Kierowca", ""))
+                                        "kierowca": str(dane_eventu.get("Kierowca", "")),
+                                        "przewoznik": str(dane_eventu.get("Przewoznik", ""))
                                     }
                                     cmr_bytes = generate_cmr_excel(dane_cmr)
                                     st.download_button(
