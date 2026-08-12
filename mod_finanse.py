@@ -3,6 +3,52 @@ import pandas as pd
 import plotly.graph_objects as go
 from db import load_data
 import datetime
+import io
+from fpdf import FPDF
+
+def pdf_sanitize(text):
+    text = str(text)
+    replacements = {
+        'ą':'a', 'ć':'c', 'ę':'e', 'ł':'l', 'ń':'n', 'ó':'o', 'ś':'s', 'ź':'z', 'ż':'z',
+        'Ą':'A', 'Ć':'C', 'Ę':'E', 'Ł':'L', 'Ń':'N', 'Ó':'O', 'Ś':'S', 'Ź':'Z', 'Ż':'Z',
+        '€':'EUR', '–':'-', '—':'-', '”':'"', '„':'"', '’':"'", '“':'"', '\xa0':' ',
+        '🔴': '[!]', '🟡': '[-]', '🟢': '[OK]', '⚠️': '[BRAK]'
+    }
+    for pl, eng in replacements.items():
+        text = text.replace(pl, eng)
+    return text.encode('latin-1', 'ignore').decode('latin-1')
+
+def create_pdf_report(df, dzisiaj):
+    pdf = FPDF(orientation='L', unit='mm', format='A4')
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 14)
+    pdf.cell(0, 10, pdf_sanitize(f"Raport Zobowiazan - Stan na {dzisiaj.strftime('%d.%m.%Y')}"), ln=True, align='C')
+    pdf.ln(5)
+    
+    pdf.set_font("Arial", 'B', 8)
+    cols = df.columns.tolist()
+    # Szerokości kolumn dopasowane do A4 w poziomie (~277mm użytecznej szerokości)
+    col_widths = [22, 45, 40, 22, 22, 45, 18, 35, 25] 
+    
+    # Nagłówki
+    for i, col in enumerate(cols):
+        pdf.cell(col_widths[i], 8, pdf_sanitize(col), border=1, align='C')
+    pdf.ln()
+    
+    # Dane
+    pdf.set_font("Arial", '', 7)
+    for _, row in df.iterrows():
+        for i, col in enumerate(cols):
+            val = str(row[col])
+            val_sanitized = pdf_sanitize(val)
+            # Skracanie tekstu, by nie rozbił tabeli
+            max_chars = int(col_widths[i] * 0.65)
+            if len(val_sanitized) > max_chars:
+                val_sanitized = val_sanitized[:max_chars-2] + ".."
+            pdf.cell(col_widths[i], 8, val_sanitized, border=1)
+        pdf.ln()
+        
+    return bytes(pdf.output(dest='S').encode('latin1'))
 
 def render(sh):
     col_title, col_currency = st.columns([5, 1])
@@ -136,7 +182,7 @@ def render(sh):
                     nr_fak = str(row.get("Nr_Faktury", "")).strip()
                     
                     lista_zobowiazan.append({
-                        "Typ Zlecenia": "Event PRO",
+                        "Typ Zlecenia": "Event",
                         "Nazwa Eventu / Zlecenia": str(row.get("Nazwa_Targow", "")),
                         "Kontrahent": str(row.get("Przewoznik", "")),
                         "Data Wykonania Usługi": data_wyk,
@@ -188,36 +234,65 @@ def render(sh):
             df_raport['_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], format="%d.%m.%Y", errors='coerce')
             df_raport.loc[df_raport['_Data_DT'].isna(), '_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], errors='coerce')
             
-            # Obliczanie dni opóźnienia
-            def oblicz_opoznienie(dt):
+            # Obliczanie dni opóźnienia z nową logiką Statusu
+            def oblicz_status(dt):
                 if pd.isna(dt): return "Brak daty płatności"
                 dni = (dzisiaj - dt).days
-                if dni > 0: return f"🔴 {dni} dni PO TERMINIE"
+                if dni > 0: return f"🔴 Płatność opóźniona {dni} dni"
                 elif dni == 0: return "🟡 Płatność na dzisiaj"
-                else: return f"🟢 Zapas {-dni} dni"
+                else: return f"🟢 Pozostało {-dni} dni"
                 
-            df_raport.insert(5, 'Opóźnienie Płatności', df_raport['_Data_DT'].apply(oblicz_opoznienie))
+            df_raport.insert(5, 'Status Płatności', df_raport['_Data_DT'].apply(oblicz_status))
             df_raport = df_raport.sort_values(by='_Data_DT', ascending=True, na_position='last')
             
-            # Finalny widok
             kolumny_docelowe = [
                 "Typ Zlecenia", "Nazwa Eventu / Zlecenia", "Kontrahent", "Data Wykonania Usługi", 
-                "Data Płatności", "Opóźnienie Płatności", "Czy jest POD", "Nr Faktury", "Kwota"
+                "Data Płatności", "Status Płatności", "Czy jest POD", "Nr Faktury", "Kwota"
             ]
             df_widok = df_raport[kolumny_docelowe]
             
             st.dataframe(df_widok, use_container_width=True, hide_index=True)
             
             st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #8C8477; font-size: 13px; font-weight: bold;'>Pobierz zestawienie w wybranym formacie:</p>", unsafe_allow_html=True)
+            
+            # Generowanie plików
             csv_data = df_widok.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Pobierz Gotowy Raport dla Księgowości (.CSV)",
-                data=csv_data,
-                file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.csv",
-                mime="text/csv",
-                type="primary",
-                use_container_width=True
-            )
+            
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                df_widok.to_excel(writer, index=False, sheet_name='Raport_Ksiegowy')
+            excel_data = excel_buffer.getvalue()
+            
+            pdf_data = create_pdf_report(df_widok, dzisiaj)
+            
+            # Przycisk pobierania
+            c_csv, c_xls, c_pdf = st.columns(3)
+            with c_csv:
+                st.download_button(
+                    label="📊 Pobierz jako CSV",
+                    data=csv_data,
+                    file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+            with c_xls:
+                st.download_button(
+                    label="📈 Pobierz jako Excel (.xlsx)",
+                    data=excel_data,
+                    file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    use_container_width=True
+                )
+            with c_pdf:
+                st.download_button(
+                    label="📄 Pobierz jako PDF",
+                    data=pdf_data,
+                    file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
         else:
             st.success("🎉 Raport Księgowy jest pusty. Brak jakichkolwiek zaległych rozliczeń operacyjnych!")
 
