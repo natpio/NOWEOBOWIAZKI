@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from db import load_data
+import datetime
 
 def render(sh):
     col_title, col_currency = st.columns([5, 1])
@@ -29,7 +30,10 @@ def render(sh):
         braki_ev = df_ev[(df_ev['Zakonczone_Arch'] == 'TAK') & ((df_ev['CMR_Podpisane_POD'] == 'NIE') | (df_ev['Nr_Faktury'] == ''))]
     braki_count = len(braki_ev)
 
-    tab_alerty, tab_koszty, tab_rentownosc = st.tabs(["🚨 Alerty i Braki", "💶 Wydatki per Partner", "📈 Rentowność YESTECH"])
+    # NOWA ZAKŁADKA: Raport dla Księgowości na drugim miejscu
+    tab_alerty, tab_ksiegowosc, tab_koszty, tab_rentownosc = st.tabs([
+        "🚨 Alerty i Braki", "🧾 Raport dla Księgowości", "💶 Wydatki per Partner", "📈 Rentowność YESTECH"
+    ])
 
     with tab_alerty:
         t_spozn = "Brak przeterminowanych płatności!" if spoznione_count == 0 else f"Wykryto {spoznione_count} spóźnień!"
@@ -93,6 +97,110 @@ def render(sh):
         else:
             if not spoznione_ev.empty: st.dataframe(spoznione_ev[['ID_Zlecenia', 'Przewoznik', 'Koszt_Transportu_EUR', 'Data_Platnosci']], use_container_width=True)
             if not braki_ev.empty: st.dataframe(braki_ev[['ID_Zlecenia', 'Przewoznik', 'CMR_Podpisane_POD', 'Nr_Faktury']], use_container_width=True)
+
+    # ==========================================
+    # NOWA ZAKŁADKA: RAPORT DLA KSIĘGOWOŚCI
+    # ==========================================
+    with tab_ksiegowosc:
+        st.markdown("""
+            <div style="background: rgba(197, 168, 128, 0.05); border: 1px solid rgba(197, 168, 128, 0.3); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="color: #C5A880; margin: 0 0 5px 0;">🧾 Inteligentny Raport Zobowiązań</h4>
+                <p style="color: #A39B8F; font-size: 13px; margin: 0;">Poniższa tabela automatycznie agreguje <b>wszystkie nieopłacone pozycje</b> kosztowe z modułów Eventów, Subrentów oraz Yestechu. Sortuje je od najpilniejszych terminów.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        lista_zobowiazan = []
+        
+        def dodaj_do_raportu(df_source, dzial, col_id, col_kontrahent, col_koszt):
+            if not df_source.empty:
+                # Filtr na pozycje nieopłacone
+                df_unpaid = df_source[df_source.get('Faktura_Oplacona', pd.Series()) != "TAK"].copy()
+                
+                for _, row in df_unpaid.iterrows():
+                    # Bezpieczna konwersja kosztu
+                    try:
+                        koszt_str = str(row.get(col_koszt, "0")).replace(',', '.').replace(' ', '')
+                        if koszt_str in ["", "nan", "None", "N/A"]: koszt_val = 0.0
+                        else: koszt_val = float(koszt_str)
+                    except:
+                        koszt_val = 0.0
+                        
+                    # Agregujemy tylko jeśli jest jakikolwiek koszt
+                    if koszt_val > 0:
+                        data_plat = str(row.get("Data_Platnosci", ""))
+                        nr_fak = str(row.get("Nr_Faktury", "")).strip()
+                        if nr_fak in ["", "nan", "None", "N/A"]: nr_fak = "⚠️ BRAK FAKTURY"
+                        
+                        lista_zobowiazan.append({
+                            "Termin Płatności": data_plat,
+                            "Kwota (EUR)": koszt_val,
+                            "Kontrahent": row.get(col_kontrahent, ""),
+                            "Nr Faktury": nr_fak,
+                            "Dział": dzial,
+                            "ID Operacji": row.get(col_id, "")
+                        })
+
+        # Zlewamy dane z 3 modułów
+        dodaj_do_raportu(df_ev, "Eventy / Cargo", "ID_Zlecenia", "Przewoznik", "Koszt_Transportu_EUR")
+        dodaj_do_raportu(df_sub, "Subrenty Sprzętu", "ID_Subrentu", "Dostawca", "Koszt_Calkowity_EUR")
+        dodaj_do_raportu(df_yt, "Yestech Eksport", "ID_Yestech", "Przewoznik", "Koszt_Rzeczywisty")
+        
+        df_raport = pd.DataFrame(lista_zobowiazan)
+        
+        if not df_raport.empty:
+            # Mechanizm sortowania i obliczania statusów z daty
+            df_raport['_Data_DT'] = pd.to_datetime(df_raport['Termin Płatności'], errors='coerce')
+            df_raport = df_raport.sort_values(by='_Data_DT', ascending=True, na_position='last')
+            
+            def oblicz_status(dt):
+                if pd.isna(dt): return "Nieznany termin"
+                dni = (dt - dzisiaj).days
+                if dni < 0: return f"🔴 {-dni} dni PO TERMINIE"
+                elif dni == 0: return "🟡 Na dzisiaj!"
+                else: return f"🟢 Za {dni} dni"
+                
+            # Wstrzykujemy status tuż po dacie
+            df_raport.insert(1, 'Status Płatności', df_raport['_Data_DT'].apply(oblicz_status))
+            
+            suma_calkowita = df_raport['Kwota (EUR)'].sum()
+            suma_przeterminowane = df_raport[df_raport['_Data_DT'] < dzisiaj]['Kwota (EUR)'].sum()
+            
+            # Karty podsumowujące
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(f"""
+                <div style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="color: #BA4949; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Przeterminowane zobowiązania</div>
+                    <div style="color: #E2DCD3; font-size: 24px; font-weight: 400; font-family: 'Shippori Mincho', serif;">{suma_przeterminowane:,.2f} €</div>
+                </div>
+                """, unsafe_allow_html=True)
+            with c2:
+                st.markdown(f"""
+                <div style="background: rgba(119, 163, 133, 0.1); border: 1px solid #77A385; padding: 15px; border-radius: 8px; text-align: center;">
+                    <div style="color: #77A385; font-size: 12px; font-weight: 700; text-transform: uppercase; margin-bottom: 5px;">Wszystkie nadchodzące kwoty</div>
+                    <div style="color: #E2DCD3; font-size: 24px; font-weight: 400; font-family: 'Shippori Mincho', serif;">{suma_calkowita:,.2f} €</div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            kolumny_widoczne = ["Termin Płatności", "Status Płatności", "Kwota (EUR)", "Kontrahent", "Nr Faktury", "Dział", "ID Operacji"]
+            df_widok = df_raport[kolumny_widoczne]
+            
+            st.dataframe(df_widok, use_container_width=True, hide_index=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            csv_data = df_widok.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 Pobierz zestawienie do Excela (.CSV)",
+                data=csv_data,
+                file_name=f"Zobowiazania_SQM_{dzisiaj.strftime('%Y-%m-%d')}.csv",
+                mime="text/csv",
+                type="primary",
+                use_container_width=True
+            )
+        else:
+            st.success("🎉 Doskonale! Brak jakichkolwiek nieopłaconych faktur i zobowiązań w systemie!")
 
     with tab_koszty:
         st.subheader("Zestawienie kosztów u partnerów zewnętrznych")
