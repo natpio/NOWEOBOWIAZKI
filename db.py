@@ -24,7 +24,7 @@ def load_data(_sh, sheet_name):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
-    # Bezpieczne pobieranie odporne na puste nagłówki
+    # Bezpieczne pobieranie odporne na puste nagłówki (bez ingerencji w fizyczny układ)
     raw_data = worksheet.get_all_values()
     if raw_data and len(raw_data) > 0:
         headers = raw_data[0]
@@ -46,7 +46,6 @@ def load_data(_sh, sheet_name):
     else:
         df['sheet_row'] = []
 
-    # Dynamiczne uzupełnianie kolumn (dodaje na koniec, jeśli ich brakuje)
     if sheet_name == "DB_Eventy":
         wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch",
                     "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"]
@@ -147,9 +146,6 @@ def get_next_cmr_number():
     ws.update_acell('B2', str(next_cmr))
     return str(next_cmr)
 
-# ==========================================
-# KULOODPORNY MECHANIZM ZAPISU (Zabezpieczenie JSON)
-# ==========================================
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
     try:
         sh = init_connection()
@@ -159,7 +155,6 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
         if 'sheet_row' in dane_do_zapisu:
             dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
             
-        # SANITYZACJA: Zamiana wszystkiego na czyste ciągi znaków (eliminuje błędy API Google)
         row_list = []
         for val in dane_do_zapisu.tolist():
             if pd.isna(val) or val is None:
@@ -170,7 +165,6 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
         ostatnia_kolumna = get_col_letter(len(row_list))
         zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
         
-        # Ochrona przed wersjami biblioteki GSpread
         try:
             ws.update(values=[row_list], range_name=zakres)
         except TypeError:
@@ -205,9 +199,6 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         st.error(f"Błąd fizycznej archiwizacji: {e}")
         return False
 
-# ==========================================
-# POZOSTAŁE FUNKCJE CRUD I POMOCNICZE
-# ==========================================
 def save_data(worksheet, edited_df):
     df_to_save = edited_df.copy()
     if 'sheet_row' in df_to_save.columns:
@@ -215,7 +206,6 @@ def save_data(worksheet, edited_df):
         
     with st.spinner('Synchronizacja z chmurą Google... ☁️'):
         worksheet.clear()
-        # Sanityzacja pełnego zapisu
         df_str = df_to_save.astype(str).replace('nan', '')
         worksheet.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
     st.cache_data.clear()
