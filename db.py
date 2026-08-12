@@ -24,7 +24,7 @@ def load_data(_sh, sheet_name):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
-    # BARDZO BEZPIECZNE POBIERANIE DANYCH 
+    # BARDZO BEZPIECZNE POBIERANIE DANYCH (Odporne na puste nagłówki)
     raw_data = worksheet.get_all_values()
     if raw_data and len(raw_data) > 0:
         headers = raw_data[0]
@@ -46,18 +46,19 @@ def load_data(_sh, sheet_name):
     else:
         df['sheet_row'] = []
 
+    # UZUPEŁNIANIE BRAKUJĄCYCH KOLUMN DLA EVENTÓW (Bez ingerencji w fizyczny arkusz)
     if sheet_name == "DB_Eventy":
-        wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+        wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch",
+                    "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"]
         for kol in wymagane:
             if kol not in df.columns: df[kol] = ""
+            
         domyslne_kolumny = {
             "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
             "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
             "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
             "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
-            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "",
-            "Miejsce_Przeznaczenia": "", "Waga": 0, "Nr_Rejestracyjny": "", "Kierowca": "",
-            "Nr_CMR": ""
+            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
         }
         for kol, val in domyslne_kolumny.items():
             if kol not in df.columns: df[kol] = val
