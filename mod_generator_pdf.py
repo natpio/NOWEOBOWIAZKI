@@ -237,8 +237,8 @@ def safe_set_cell(sheet, coordinate, value):
 
 def generate_cmr_excel(dane):
     szablon_path = "Szablon_CMR.xlsx"
-    if not os.path.exists(szablon_path): 
-        raise FileNotFoundError(f"Brak pliku szablonu: {szablon_path}")
+    if not os.path.exists(szablon_path):
+        raise FileNotFoundError(f"Nie znaleziono pliku szablonu: {szablon_path}. Umieść go w katalogu głównym.")
         
     wb = openpyxl.load_workbook(szablon_path)
     nadawca_tekst = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
@@ -247,10 +247,10 @@ def generate_cmr_excel(dane):
         for row in sheet.iter_rows(min_row=1, max_row=75, min_col=1, max_col=24):
             for cell in row:
                 if cell.fill and cell.fill.start_color:
-                    if str(cell.fill.start_color.rgb) in ['00000000', 'FF000000', '000000']:
+                    color_val = str(cell.fill.start_color.rgb)
+                    if color_val in ['00000000', 'FF000000', '000000']:
                         cell.fill = PatternFill(fill_type=None)
 
-        # Standardowe pola CMR z lewej strony
         safe_set_cell(sheet, 'D6', nadawca_tekst)
         safe_set_cell(sheet, 'D14', dane.get('odbiorca', ''))
         safe_set_cell(sheet, 'D20', dane.get('miejsce_przeznaczenia', ''))
@@ -262,11 +262,8 @@ def generate_cmr_excel(dane):
         safe_set_cell(sheet, 'H69', dane.get('data_zal', ''))
         safe_set_cell(sheet, 'T6', dane.get('nr_cmr', ''))
         
-        # Prawa strona - Przewoźnik, Auto, Kierowca
-        safe_set_cell(sheet, 'O14', dane.get('przewoznik', ''))
-        safe_set_cell(sheet, 'O17', dane.get('auto', ''))       
-        safe_set_cell(sheet, 'O24', dane.get('kierowca', ''))   
-        
+        # Prawa strona (Rubryka 16) - Przewoźnik, Auto, Kierowca
+        safe_set_cell(sheet, 'L13', dane.get('przewoznik', ''))
         safe_set_cell(sheet, 'L14', dane.get('auto', ''))
         safe_set_cell(sheet, 'L15', dane.get('kierowca', ''))
         
@@ -276,10 +273,13 @@ def generate_cmr_excel(dane):
     return output.read()
 
 def get_cmr_city_format(place_name, manual_addr, df):
-    if place_name == "Magazyn SQM Komorniki": 
+    if place_name == "Magazyn SQM Komorniki":
         return "Komorniki, PL"
+    
     if place_name == "INNE (wpisz ręcznie)":
-        return ", ".join(p.strip() for p in manual_addr.split(',')[-2:]) if ',' in manual_addr else manual_addr
+        if ',' in manual_addr:
+            return ", ".join(p.strip() for p in manual_addr.split(',')[-2:])
+        return manual_addr
         
     if df is not None and not df.empty:
         row = df[df['Nazwa do listy'] == place_name]
@@ -288,20 +288,30 @@ def get_cmr_city_format(place_name, manual_addr, df):
             miasto = str(r.get('Miasto', place_name)).strip()
             kraj = str(r.get('Kraj', '')).strip()
             skrot = str(r.get('Skrót Kraju', '')).strip() if 'Skrót Kraju' in df.columns else ''
+            
             mapa_krajow = {
                 "Polska": "PL", "Niemcy": "DE", "Francja": "FR", "Hiszpania": "ES",
                 "Włochy": "IT", "Holandia": "NL", "Belgia": "BE", "Szwecja": "SE",
                 "Turcja": "TR", "Szwajcaria": "CH", "Austria": "AT", "Czechy": "CZ",
                 "Słowacja": "SK", "Wielka Brytania": "GB", "USA": "US"
             }
+            
             final_kraj = skrot
             if not final_kraj or final_kraj == 'nan':
-                if kraj in mapa_krajow: final_kraj = mapa_krajow[kraj]
-                elif len(kraj) == 2: final_kraj = kraj.upper()
-                elif kraj and kraj != 'nan': final_kraj = kraj[:2].upper()
-                else: final_kraj = "PL"
-            if miasto == 'nan' or not miasto: miasto = place_name
+                if kraj in mapa_krajow:
+                    final_kraj = mapa_krajow[kraj]
+                elif len(kraj) == 2:
+                    final_kraj = kraj.upper()
+                elif kraj and kraj != 'nan':
+                    final_kraj = kraj[:2].upper()
+                else:
+                    final_kraj = "PL"
+                    
+            if miasto == 'nan' or not miasto:
+                miasto = place_name
+                
             return f"{miasto}, {final_kraj}"
+            
     return place_name
 
 def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
@@ -313,7 +323,8 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
     data_platnosci = str(r.get('Data płatności (szacowana)', r.get('Data_Platnosci', r.iloc[9] if len(r) > 9 else '')))
     
     stawka_str = str(r.get('Stawka', r.iloc[17] if len(r) > 17 else '0 EUR'))
-    stawka_final, waluta = 0.0, "EUR"
+    stawka_final = 0.0
+    waluta = "EUR"
     if " " in stawka_str:
         try:
             stawka_final = float(stawka_str.split(" ")[0])
@@ -343,26 +354,43 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
         return place_name
 
     full_zal_pdf = build_full_address(z_sel, df_miejsca)
+    
     m_roz_baza = str(r.get('Miejsce Rozladunku', r.iloc[5] if len(r) > 5 else ''))
     roz_list = m_roz_baza.split(" | ")
     lista_roz_pdf = [build_full_address(x, df_miejsca) for x in roz_list]
-    if len(lista_roz_pdf) > 1: full_roz_pdf = "\n\n".join([f"DROP {idx+1}:\n{tekst}" for idx, tekst in enumerate(lista_roz_pdf)])
-    else: full_roz_pdf = lista_roz_pdf[0] if lista_roz_pdf else ""
+    if len(lista_roz_pdf) > 1:
+        full_roz_pdf = "\n\n".join([f"DROP {idx+1}:\n{tekst}" for idx, tekst in enumerate(lista_roz_pdf)])
+    else:
+        full_roz_pdf = lista_roz_pdf[0] if lista_roz_pdf else ""
         
     uwagi_baza = str(r.get('Uwagi / Instrukcje', r.iloc[13] if len(r) > 13 else ''))
-    c_auto_full, val_instrukcje, waga_val, postoj_val, wartosc_towaru = "", uwagi_baza, 1000, 0.0, 100000
-    data_emp_in_1, data_emp_in_2, data_dostawa_pustych, data_odbior_pelnych, cykl_part = "", "", "", "", ""
+    
+    c_auto_full = ""
+    val_instrukcje = uwagi_baza
+    waga_val = 1000
+    postoj_val = 0.0
+    wartosc_towaru = 100000
+    
+    data_emp_in_1 = ""
+    data_emp_in_2 = ""
+    data_dostawa_pustych = ""
+    data_odbior_pelnych = ""
+    cykl_part = ""
+    
     odbiorca_cmr_hist = full_roz_pdf
     
     if " || " in uwagi_baza:
         parts = uwagi_baza.split(" || ")
         val_instrukcje = parts[-1]
+        
         if "%%CMR:SQM%%" in val_instrukcje:
             odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
             val_instrukcje = val_instrukcje.replace(" %%CMR:SQM%%", "").replace("%%CMR:SQM%%", "")
+            
         for p in parts:
             p = p.strip()
-            if p.startswith("AUTO:"): c_auto_full = p.replace("AUTO:", "").strip()
+            if p.startswith("AUTO:"):
+                c_auto_full = p.replace("AUTO:", "").strip()
             elif p.startswith("WART:"):
                 try: wartosc_towaru = int(re.sub(r'[^0-9]', '', p))
                 except: pass
@@ -372,7 +400,9 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
             elif p.startswith("POSTOJ:"):
                 try: postoj_val = float(re.sub(r'[^0-9.]', '', p))
                 except: pass
-            elif p.startswith("CYKL:"): cykl_part = p
+            elif p.startswith("CYKL:"):
+                cykl_part = p
+                
     else:
         if "%%CMR:SQM%%" in uwagi_baza:
             odbiorca_cmr_hist = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
@@ -384,82 +414,124 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
     if "EMP:" in cykl_part:
         try:
             emp_raw = cykl_part.split("EMP: ")[1].split(" | ")[0]
-            if "," in emp_raw: data_emp_in_1, data_emp_in_2 = emp_raw.split(",")[0].strip(), emp_raw.split(",")[1].strip()
-            else: data_emp_in_1 = emp_raw.strip()
+            if "," in emp_raw:
+                data_emp_in_1 = emp_raw.split(",")[0].strip()
+                data_emp_in_2 = emp_raw.split(",")[1].strip()
+            else:
+                data_emp_in_1 = emp_raw.strip()
         except: pass
+        
     if "DEM:" in cykl_part:
         try:
             dem_raw = cykl_part.split("DEM: ")[1].split(" | ")[0]
-            if "," in dem_raw: data_dostawa_pustych, data_odbior_pelnych = dem_raw.split(",")[0].strip(), dem_raw.split(",")[1].strip()
-            else: data_odbior_pelnych = dem_raw.strip()
+            if "," in dem_raw:
+                data_dostawa_pustych = dem_raw.split(",")[0].strip()
+                data_odbior_pelnych = dem_raw.split(",")[1].strip()
+            else:
+                data_odbior_pelnych = dem_raw.strip()
         except: pass
     elif "POWRÓT:" in cykl_part:
-        try: data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
+        try:
+            data_odbior_pelnych = cykl_part.split("POWRÓT: ")[1].split(" | ")[0].strip()
         except: pass
 
     typ_zlecenia = "Pełny event" if "TARGI" in str(r.get('Typ', r.iloc[16] if len(r)>16 else '')) or "CYKL:" in uwagi_baza else "Tylko dostawa"
     uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_full}\n{val_instrukcje}"
     
     termin_dni = 30
-    try: termin_dni = (datetime.strptime(data_platnosci, "%Y-%m-%d") - datetime.strptime(data_roz.split(",")[-1].strip(), "%Y-%m-%d")).days
-    except: pass
+    try:
+        dz_roz_ost = data_roz.split(",")[-1].strip()
+        dt_roz = datetime.strptime(dz_roz_ost, "%Y-%m-%d")
+        dt_plat = datetime.strptime(data_platnosci, "%Y-%m-%d")
+        termin_dni = (dt_plat - dt_roz).days
+    except:
+        pass
     
     paczka_pdf = {
-        "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia, "przewoznik_nazwa": nazwa_przewoznika, "przewoznik_detale": detale_przewoznika,
-        "stawka": stawka_final, "waluta": waluta, "postoj": postoj_val, "zaladunek": full_zal_pdf, "data_zal": data_zal,
-        "rozladunek": full_roz_pdf, "data_roz": data_roz, "data_emp_in_1": data_emp_in_1, "data_emp_in_2": data_emp_in_2, 
-        "data_dostawa_pustych": data_dostawa_pustych, "data_odbior_pelnych": data_odbior_pelnych, "waga": waga_val, 
-        "auto": c_auto_full, "uwagi": uwagi_na_pdf, "opiekun": podpis, "termin_dni": termin_dni, "data_platnosci": data_platnosci
+        "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia,
+        "przewoznik_nazwa": nazwa_przewoznika, "przewoznik_detale": detale_przewoznika,
+        "stawka": stawka_final, "waluta": waluta, "postoj": postoj_val,
+        "zaladunek": full_zal_pdf, "data_zal": data_zal,
+        "rozladunek": full_roz_pdf, "data_roz": data_roz,
+        "data_emp_in_1": data_emp_in_1, "data_emp_in_2": data_emp_in_2, 
+        "data_dostawa_pustych": data_dostawa_pustych, "data_odbior_pelnych": data_odbior_pelnych,
+        "waga": waga_val, 
+        "auto": c_auto_full, "uwagi": uwagi_na_pdf, "opiekun": podpis,
+        "termin_dni": termin_dni,
+        "data_platnosci": data_platnosci
     }
     
-    auto_val, kierowca_val = c_auto_full, ""
-    if "/" in c_auto_full: auto_val, kierowca_val = c_auto_full.split("/", 1)[0].strip(), c_auto_full.split("/", 1)[1].strip()
+    auto_val = c_auto_full
+    kierowca_val = ""
+    if "/" in c_auto_full:
+        parts_auto = c_auto_full.split("/", 1)
+        auto_val = parts_auto[0].strip()
+        kierowca_val = parts_auto[1].strip()
         
     miasto_zal_val = get_cmr_city_format(z_sel, "", df_miejsca)
-    
-    # ----------------------------------------------------
-    # BEZPIECZNE ODCZYTYWANIE / GENEROWANIE NUMERU CMR
-    # ----------------------------------------------------
+
     numer_cmr_final = str(r.get('Nr_CMR', r.iloc[18] if len(r) > 18 else ''))
     
     if not numer_cmr_final.strip() or numer_cmr_final in ["nan", "None"]:
         numer_cmr_final = str(db.get_next_cmr_number())
         
         wiersz_lista = r.copy()
-        if 'sheet_row' in wiersz_lista: 
+        if 'sheet_row' in wiersz_lista:
             wiersz_lista = wiersz_lista.drop('sheet_row')
             
-        w_list = [str(x) if not pd.isna(x) else "" for x in wiersz_lista.tolist()]
+        w_list = wiersz_lista.tolist()
         
-        if len(w_list) < 19: 
+        if len(w_list) < 19:
             w_list.extend([""] * (19 - len(w_list)))
             
         w_list[18] = numer_cmr_final
         db.update_row("Zlecenia", row_idx, w_list)
 
     dane_cmr = {
-        "odbiorca": odbiorca_cmr_hist, "miejsce_przeznaczenia": full_roz_pdf, "data_zal": data_zal, "miasto_zal": miasto_zal_val,
-        "opis_ladunku": "MULTIMEDIA / Exhibition Equipment", "waga": waga_val, "nr_cmr": numer_cmr_final,
-        "auto": auto_val, "kierowca": kierowca_val, "przewoznik": nazwa_przewoznika
+        "odbiorca": odbiorca_cmr_hist,
+        "miejsce_przeznaczenia": full_roz_pdf,
+        "data_zal": data_zal,
+        "miasto_zal": miasto_zal_val,
+        "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+        "waga": waga_val,
+        "nr_cmr": numer_cmr_final,
+        "auto": auto_val,
+        "kierowca": kierowca_val,
+        "przewoznik": nazwa_przewoznika
     }
+    
     return paczka_pdf, dane_cmr, nr_zlecenia
 
 @st.cache_data(ttl=30, show_spinner=False)
 def pobierz_dane_z_bazy():
-    return db.fetch_data("Projekty"), db.fetch_data("Miejsca"), db.fetch_data("Zleceniobiorcy"), db.fetch_data("Zlecenia")
+    df_projekty = db.fetch_data("Projekty")
+    df_miejsca = db.fetch_data("Miejsca")
+    df_przewoznicy = db.fetch_data("Zleceniobiorcy")
+    df_zlecenia = db.fetch_data("Zlecenia")
+    return df_projekty, df_miejsca, df_przewoznicy, df_zlecenia
 
 def render(sh):
     if 'dokumenty_wygenerowane' not in st.session_state:
         st.session_state.dokumenty_wygenerowane = False
-        st.session_state.pdf_bytes, st.session_state.cmr_bytes = None, None
-        st.session_state.nazwa_pdf, st.session_state.nazwa_cmr, st.session_state.komunikat = "", "", ""
+        st.session_state.pdf_bytes = None
+        st.session_state.cmr_bytes = None
+        st.session_state.nazwa_pdf = ""
+        st.session_state.nazwa_cmr = ""
+        st.session_state.komunikat = ""
         
     if 'hist_gen_row' not in st.session_state:
         st.session_state.hist_gen_row = None
-        st.session_state.hist_pdf_bytes, st.session_state.hist_cmr_bytes = None, None
-        st.session_state.hist_nr, st.session_state.hist_cmr_nr = "", ""
+        st.session_state.hist_pdf_bytes = None
+        st.session_state.hist_cmr_bytes = None
+        st.session_state.hist_nr = ""
+        st.session_state.hist_cmr_nr = ""
 
-    st.markdown('<div class="module-header-container"><h1 class="module-title">Generator Zleceń PRO</h1><div class="module-subtitle">オーダーの生成 ✦ TRANSPORT ORDERS</div></div>', unsafe_allow_html=True)
+    st.markdown('''
+        <div class="module-header-container">
+            <h1 class="module-title">Generator Zleceń PRO</h1>
+            <div class="module-subtitle">オーダーの生成 ✦ TRANSPORT ORDERS</div>
+        </div>
+    ''', unsafe_allow_html=True)
 
     with st.spinner("Ładowanie telemetrii bazy danych..."):
         df_projekty, df_miejsca, df_przewoznicy, df_zlecenia = pobierz_dane_z_bazy()
@@ -468,31 +540,72 @@ def render(sh):
 
     with tab1:
         c1, c2 = st.columns(2)
-        with c1: tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
-        with c2: kategoria_zlecenia = st.radio("Kategoria zlecenia (gdzie zapisać?):", ["Zlecenie Poboczne (Eksport do rejestru)", "Zlecenie Eventowe (Pomiń rejestr poboczny)"], horizontal=True)
+        with c1:
+            tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
+        with c2:
+            kategoria_zlecenia = st.radio(
+                "Kategoria zlecenia (gdzie zapisać?):", 
+                ["Zlecenie Poboczne (Eksport do rejestru)", "Zlecenie Eventowe (Pomiń rejestr poboczny)"], 
+                horizontal=True
+            )
         st.markdown("<br>", unsafe_allow_html=True)
 
-        wybrane_zlecenie_nr, gs_row_index = None, None
-        val_typ_zlecenia, val_waga, val_postoj = "Tylko dostawa", 1000, 0.0
-        val_data_zal, val_data_roz_1, val_data_roz_2 = datetime.now().date(), datetime.now().date(), None
-        val_data_emp_in_1, val_data_emp_in_2, val_data_dostawa_pustych, val_data_odbior_pelnych = datetime.now().date(), None, datetime.now().date(), datetime.now().date()
-        val_termin_dni, val_zrodlo, val_nazwa_przewoznika, val_detale_przewoznika = 30, "Przewoźnik stały (Baza)", "Wybierz...", ""
-        val_stawka_final, val_waluta, val_projekt, val_z_sel = 0.0, "EUR", "Brak", "Magazyn SQM Komorniki"
-        val_z_man, val_c_auto_nr, val_c_kierowca, val_wartosc_towaru = "", "", "", 100000
-        val_instrukcje = "Parking strzeżony, pasy zabezpieczające; załadować po długości, casy nie mogą leżeć, kłódka / Guarded parking, safety belts; load lengthwise, cases cannot lie down, safe lock."
-        val_podpis, val_miejsca_rozladunku_raw, val_odbiorca_cmr = "PD", [], "Miejsce przeznaczenia (Klient)"
+        domyslny_tekst = "Parking strzeżony, pasy zabezpieczające; załadować po długości, casy nie mogą leżeć, kłódka / Guarded parking, safety belts; load lengthwise, cases cannot lie down, safe lock."
 
-        df_cargo = df_zlecenia[df_zlecenia['Dział'] == 'LOGISTYKA CARGO'].copy() if not df_zlecenia.empty and 'Dział' in df_zlecenia.columns else df_zlecenia.copy() if not df_zlecenia.empty else pd.DataFrame()
+        wybrane_zlecenie_nr = None
+        gs_row_index = None
+
+        val_typ_zlecenia = "Tylko dostawa"
+        val_waga = 1000
+        val_postoj = 0.0
+        val_data_zal = datetime.now().date()
+        
+        val_data_roz_1 = datetime.now().date()
+        val_data_roz_2 = None
+        
+        val_data_emp_in_1 = datetime.now().date()
+        val_data_emp_in_2 = None
+        val_data_dostawa_pustych = datetime.now().date()
+        val_data_odbior_pelnych = datetime.now().date()
+        
+        val_termin_dni = 30
+        val_zrodlo = "Przewoźnik stały (Baza)"
+        val_nazwa_przewoznika = "Wybierz..."
+        val_detale_przewoznika = ""
+        val_stawka_final = 0.0
+        val_waluta = "EUR"
+        val_projekt = "Brak"
+        val_z_sel = "Magazyn SQM Komorniki"
+        val_z_man = ""
+        val_c_auto_nr = ""
+        val_c_kierowca = ""
+        val_wartosc_towaru = 100000
+        val_instrukcje = domyslny_tekst
+        val_podpis = "PD"
+        val_miejsca_rozladunku_raw = []
+        val_odbiorca_cmr = "Miejsce przeznaczenia (Klient)"
+
+        if not df_zlecenia.empty:
+            if 'Dział' in df_zlecenia.columns:
+                df_cargo = df_zlecenia[df_zlecenia['Dział'] == 'LOGISTYKA CARGO'].copy()
+            else:
+                df_cargo = df_zlecenia.copy()
+        else:
+            df_cargo = pd.DataFrame()
 
         if tryb_pracy == "Edycja Istniejącego Zlecenia":
             if not df_cargo.empty:
-                wybrane_zlecenie_nr = st.selectbox("🎯 Wybierz numer zlecenia do korekty/edycji:", df_cargo['Numer zlecenia'].astype(str).tolist())
+                lista_nr = df_cargo['Numer zlecenia'].astype(str).tolist()
+                wybrane_zlecenie_nr = st.selectbox("🎯 Wybierz numer zlecenia do korekty/edycji:", lista_nr)
+                
                 idx_pd = df_zlecenia[df_zlecenia['Numer zlecenia'] == wybrane_zlecenie_nr].index[0]
                 r_edit = df_zlecenia.iloc[idx_pd]
                 gs_row_index = int(idx_pd) + 2 
                 
                 nr_cmr_zapisany = str(r_edit.get('Nr_CMR', r_edit.iloc[18] if len(r_edit)>18 else ''))
-                if not nr_cmr_zapisany.strip() or nr_cmr_zapisany in ["nan", "None"]: nr_cmr_zapisany = db.get_next_cmr_number()
+                if not nr_cmr_zapisany.strip() or nr_cmr_zapisany in ["nan", "None"]:
+                    nr_cmr_zapisany = db.get_next_cmr_number()
+                
                 val_typ_zlecenia = "Pełny event" if "TARGI" in str(r_edit.get('Typ', '')) or "CYKL:" in str(r_edit.get('Uwagi / Instrukcje', '')) else "Tylko dostawa"
                 
                 try: val_data_zal = datetime.strptime(str(r_edit.get('Data załadunku', r_edit.iloc[6])), "%Y-%m-%d").date()
@@ -512,14 +625,21 @@ def render(sh):
                 
                 stawka_str = str(r_edit.get('Stawka', '0 EUR'))
                 if " " in stawka_str:
-                    try: val_stawka_final, val_waluta = float(stawka_str.split(" ")[0]), stawka_str.split(" ")[1]
+                    try:
+                        val_stawka_final = float(stawka_str.split(" ")[0])
+                        val_waluta = stawka_str.split(" ")[1]
                     except: pass
                 else:
                     try: val_stawka_final = float(stawka_str)
                     except: pass
                     
-                val_nazwa_przewoznika, val_projekt, val_z_sel = str(r_edit.get('Zleceniobiorca', '')), str(r_edit.get('ID Projektu', '')), str(r_edit.get('Miejsce Zaladunku', ''))
-                val_miejsca_rozladunku_raw = str(r_edit.get('Miejsce Rozladunku', '')).split(" | ")
+                val_nazwa_przewoznika = str(r_edit.get('Zleceniobiorca', ''))
+                val_projekt = str(r_edit.get('ID Projektu', ''))
+                val_z_sel = str(r_edit.get('Miejsce Zaladunku', ''))
+                
+                m_roz_baza = str(r_edit.get('Miejsce Rozladunku', ''))
+                val_miejsca_rozladunku_raw = m_roz_baza.split(" | ")
+                
                 uwagi_baza = str(r_edit.get('Uwagi / Instrukcje', r_edit.iloc[13] if len(r_edit)>13 else ''))
                 
                 if " || " in uwagi_baza:
@@ -528,12 +648,16 @@ def render(sh):
                     if "%%CMR:SQM%%" in val_instrukcje:
                         val_odbiorca_cmr = "SQM (Wysyłka na własne stoisko/event)"
                         val_instrukcje = val_instrukcje.replace(" %%CMR:SQM%%", "").replace("%%CMR:SQM%%", "")
+                        
                     for p in parts:
                         p = p.strip()
                         if p.startswith("AUTO:"):
                             auto_full = p.replace("AUTO:", "").strip()
-                            if "/" in auto_full: val_c_auto_nr, val_c_kierowca = auto_full.split("/", 1)[0].strip(), auto_full.split("/", 1)[1].strip()
-                            else: val_c_auto_nr = auto_full
+                            if "/" in auto_full:
+                                val_c_auto_nr = auto_full.split("/", 1)[0].strip()
+                                val_c_kierowca = auto_full.split("/", 1)[1].strip()
+                            else:
+                                val_c_auto_nr = auto_full
                         elif p.startswith("WART:"):
                             try: val_wartosc_towaru = int(re.sub(r'[^0-9]', '', p))
                             except: pass
@@ -571,8 +695,11 @@ def render(sh):
                     if "AUTO: " in uwagi_baza:
                         try: 
                             auto_full = uwagi_baza.split("AUTO: ")[1].split(" ||")[0]
-                            if "/" in auto_full: val_c_auto_nr, val_c_kierowca = auto_full.split("/", 1)[0].strip(), auto_full.split("/", 1)[1].strip()
-                            else: val_c_auto_nr = auto_full.strip()
+                            if "/" in auto_full:
+                                val_c_auto_nr = auto_full.split("/", 1)[0].strip()
+                                val_c_kierowca = auto_full.split("/", 1)[1].strip()
+                            else:
+                                val_c_auto_nr = auto_full.strip()
                         except: pass
                     if "WART: " in uwagi_baza:
                         try: val_wartosc_towaru = int(uwagi_baza.split("WART: ")[1].split(" PLN")[0])
@@ -582,10 +709,13 @@ def render(sh):
                     dz_roz_ost = val_data_roz_2 if val_data_roz_2 else val_data_roz_1
                     dt_plat_str = str(r_edit.get('Data płatności (szacowana)', r_edit.iloc[9] if len(r_edit)>9 else ''))
                     val_termin_dni = (datetime.strptime(dt_plat_str, "%Y-%m-%d").date() - dz_roz_ost).days
-                except: val_termin_dni = 30
+                except:
+                    val_termin_dni = 30
                     
                 if "/" in wybrane_zlecenie_nr:
-                    try: val_podpis = "".join([c for c in wybrane_zlecenie_nr.split("/")[-1] if c.isalpha()])[:2]
+                    try:
+                        last_part = wybrane_zlecenie_nr.split("/")[-1]
+                        val_podpis = "".join([c for c in last_part if c.isalpha()])[:2]
                     except: pass
                     
                 if not df_przewoznicy.empty and 'Skrócona Nazwa' in df_przewoznicy.columns:
@@ -598,7 +728,8 @@ def render(sh):
                         val_zrodlo = "Przewoźnik z giełdy (Jednorazowy)"
                         val_detale_przewoznika = "Zweryfikuj dane adresowe z giełdy..."
             else:
-                st.warning("Baza zleceń jest pusta - brak danych do edycji."); st.stop()
+                st.warning("Baza zleceń jest pusta - brak danych do edycji.")
+                st.stop()
         else:
             nr_cmr_zapisany = db.get_next_cmr_number()
 
@@ -608,7 +739,8 @@ def render(sh):
                 if wyszukiwana_fraza:
                     maska = df_miejsca.astype(str).apply(lambda row: row.str.contains(wyszukiwana_fraza, case=False, na=False).any(), axis=1)
                     st.dataframe(df_miejsca[maska], use_container_width=True, hide_index=True)
-                else: st.dataframe(df_miejsca, use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(df_miejsca, use_container_width=True, hide_index=True)
 
         with st.expander("➕ Brak miejsca na liście? Dodaj nową lokalizację do Słownika"):
             with st.form("form_nowe_miejsce", clear_on_submit=True):
@@ -620,30 +752,44 @@ def render(sh):
                 k1, k2 = st.columns(2)
                 nowy_kraj = k1.text_input("Kraj:", value="Polska")
                 nowy_skrot = k2.text_input("Skrót Kraju (do CMR):", value="PL")
+                
                 if st.form_submit_button("💾 Zapisz lokalizację w bazie"):
                     if nowa_nazwa_lista.strip():
                         kolumny_miejsca = df_miejsca.columns.tolist() if not df_miejsca.empty else ["Nazwa do listy", "Nazwa pełna / Firma", "Ulica i numer", "Kod pocztowy", "Miasto", "Kraj", "Skrót Kraju"]
-                        slownik_nowego = {"Nazwa do listy": nowa_nazwa_lista.strip(), "Nazwa pełna / Firma": nowa_firma.strip(), "Ulica i numer": nowa_ulica.strip(), "Kod pocztowy": nowy_kod.strip(), "Miasto": nowe_miasto.strip(), "Kraj": nowy_kraj.strip(), "Skrót Kraju": nowy_skrot.strip()}
+                        slownik_nowego = {
+                            "Nazwa do listy": nowa_nazwa_lista.strip(), 
+                            "Nazwa pełna / Firma": nowa_firma.strip(), 
+                            "Ulica i numer": nowa_ulica.strip(), 
+                            "Kod pocztowy": nowy_kod.strip(), 
+                            "Miasto": nowe_miasto.strip(), 
+                            "Kraj": nowy_kraj.strip(),
+                            "Skrót Kraju": nowy_skrot.strip()
+                        }
                         nowy_wiersz = [str(slownik_nowego.get(kol, "")) for kol in kolumny_miejsca]
                         if db.append_data("Miejsca", nowy_wiersz):
                             st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
-                            st.cache_data.clear(); st.rerun()
+                            st.cache_data.clear()
+                            st.rerun()
 
         lista_eventow = df_projekty['Nazwa Eventu'].dropna().unique().tolist() if not df_projekty.empty else ["Brak"]
         lista_miejsc_baza = df_miejsca['Nazwa do listy'].tolist() if not df_miejsca.empty else []
         opcje_lokalizacji = ["Magazyn SQM Komorniki"] + lista_miejsc_baza + ["INNE (wpisz ręcznie)"]
 
-        typ_zlecenia = st.radio("Tryb operacji:", ["Tylko dostawa", "Pełny event"], index=["Tylko dostawa", "Pełny event"].index(val_typ_zlecenia), horizontal=True)
+        tryb_idx = ["Tylko dostawa", "Pełny event"].index(val_typ_zlecenia)
+        typ_zlecenia = st.radio("Tryb operacji:", ["Tylko dostawa", "Pełny event"], index=tryb_idx, horizontal=True)
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>1. Harmonogram Zlecenia</p>", unsafe_allow_html=True)
             waga = st.number_input("Waga ładunku (kg):", min_value=100, step=100, value=int(val_waga))
+            
             d1, d2, d3 = st.columns(3)
             data_zal = d1.date_input("Data załadunku (PL):", val_data_zal)
             data_roz_1 = d2.date_input("Rozładunek 1 (Cel):", val_data_roz_1)
             data_roz_2 = d3.date_input("Rozładunek 2 (Opcja):", value=val_data_roz_2)
+            
             data_roz_combined = str(data_roz_1)
-            if data_roz_2: data_roz_combined += f", {data_roz_2}"
+            if data_roz_2:
+                data_roz_combined += f", {data_roz_2}"
             
             if typ_zlecenia == "Pełny event":
                 st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.1);'>", unsafe_allow_html=True)
@@ -651,104 +797,156 @@ def render(sh):
                 e1, e2 = st.columns(2)
                 data_emp_in_1 = e1.date_input("Data odbioru 1:", val_data_emp_in_1)
                 data_emp_in_2 = e2.date_input("Data odbioru 2 (Opcjonalnie):", value=val_data_emp_in_2)
+                
                 st.markdown("<p style='font-size: 13px; color: #8C8477; margin-top: 10px; margin-bottom: 5px;'>🛠️ Demontaż targów (Powrót):</p>", unsafe_allow_html=True)
                 r1, r2 = st.columns(2)
                 data_dostawa_pustych = r1.date_input("Dostawa pustych casów:", val_data_dostawa_pustych)
                 data_odbior_pelnych = r2.date_input("Odbiór pełnych po demontażu:", val_data_odbior_pelnych)
-            else: data_emp_in_1, data_emp_in_2, data_dostawa_pustych, data_odbior_pelnych = "", "", "", ""
+            else:
+                data_emp_in_1, data_emp_in_2, data_dostawa_pustych, data_odbior_pelnych = "", "", "", ""
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>2. Wybór Przewoźnika i Płatności</p>", unsafe_allow_html=True)
-            zrodlo = st.radio("Sposób wyboru podwykonawcy:", ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"], index=["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"].index(val_zrodlo) if val_zrodlo in ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"] else 0, horizontal=True)
-            detale_przewoznika, nazwa_przewoznika = "", ""
+            zrodlo_idx = ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"].index(val_zrodlo) if val_zrodlo in ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"] else 0
+            zrodlo = st.radio("Sposób wyboru podwykonawcy:", ["Przewoźnik stały (Baza)", "Przewoźnik z giełdy (Jednorazowy)"], index=zrodlo_idx, horizontal=True)
+            
+            detale_przewoznika = ""
+            nazwa_przewoznika = ""
 
             if zrodlo == "Przewoźnik stały (Baza)":
                 f1, f2, f3, f4 = st.columns([2, 1, 1, 1])
                 lista_cennikowa = df_przewoznicy['Skrócona Nazwa'].dropna().tolist() if not df_przewoznicy.empty else []
-                if tryb_pracy == "Edycja Istniejącego Zlecenia" and val_nazwa_przewoznika not in lista_cennikowa: lista_cennikowa.append(val_nazwa_przewoznika)
-                nazwa_przewoznika = f1.selectbox("Wybierz partnera ze słownika:", ["Wybierz..."] + lista_cennikowa, index=lista_cennikowa.index(val_nazwa_przewoznika)+1 if val_nazwa_przewoznika in lista_cennikowa else 0)
+                if tryb_pracy == "Edycja Istniejącego Zlecenia" and val_nazwa_przewoznika not in lista_cennikowa:
+                    lista_cennikowa.append(val_nazwa_przewoznika)
+                    
+                def_p_idx = 0
+                if val_nazwa_przewoznika in lista_cennikowa:
+                    def_p_idx = lista_cennikowa.index(val_nazwa_przewoznika) + 1
+                    
+                nazwa_przewoznika = f1.selectbox("Wybierz partnera ze słownika:", ["Wybierz..."] + lista_cennikowa, index=def_p_idx)
+                
                 if nazwa_przewoznika != "Wybierz...":
                     if not df_przewoznicy.empty and 'Skrócona Nazwa' in df_przewoznicy.columns:
                         row_p = df_przewoznicy[df_przewoznicy['Skrócona Nazwa'] == nazwa_przewoznika]
                         if not row_p.empty:
                             r = row_p.iloc[0]
                             detale_przewoznika = f"{str(r.get('Pełna Nazwa', nazwa_przewoznika))}\n{str(r.get('Ulica i numer', ''))}\n{str(r.get('Kod pocztowy i Miasto', ''))}, {str(r.get('Kraj', 'Polska'))}\nNIP: {str(r.get('NIP', ''))}".strip()
-                        else: detale_przewoznika = nazwa_przewoznika
-                    else: detale_przewoznika = nazwa_przewoznika
+                        else:
+                            detale_przewoznika = nazwa_przewoznika
+                    else: 
+                        detale_przewoznika = nazwa_przewoznika
 
                 stawka_final = f2.number_input("Stawka Total:", value=float(val_stawka_final))
-                waluta = f3.selectbox("Waluta:", ["EUR", "PLN"], index=["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0)
+                currency_idx = ["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0
+                waluta = f3.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
                 postoj = f4.number_input("Postój:", value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
             else:
                 nazwa_przewoznika = st.text_input("Nazwa firmy z giełdy:", value=val_nazwa_przewoznika)
                 detale_przewoznika = st.text_area("Pełne dane (Adres, NIP do zlecenia):", value=val_detale_przewoznika)
                 f1, f2, f3 = st.columns(3)
                 stawka_final = f1.number_input("Stawka netto:", min_value=0.0, value=float(val_stawka_final))
-                waluta = f2.selectbox("Waluta:", ["EUR", "PLN"], index=["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0)
+                currency_idx = ["EUR", "PLN"].index(val_waluta) if val_waluta in ["EUR", "PLN"] else 0
+                waluta = f2.selectbox("Waluta:", ["EUR", "PLN"], index=currency_idx)
                 postoj = f3.number_input("Postój:", min_value=0.0, value=float(val_postoj)) if typ_zlecenia == "Pełny event" else 0.0
                 
             t1, t2 = st.columns([1, 2])
             termin_dni = t1.number_input("Termin płatności (dni):", min_value=0, max_value=120, value=int(val_termin_dni), step=1)
             
             if typ_zlecenia == "Pełny event" and data_odbior_pelnych:
-                data_platnosci = data_odbior_pelnych + timedelta(days=2) + timedelta(days=termin_dni)
+                data_powrotu_komorniki = data_odbior_pelnych + timedelta(days=2)
+                data_platnosci = data_powrotu_komorniki + timedelta(days=termin_dni)
                 t2.info(f"📅 Wyliczona data zapłaty (Odbiór z targów + 2 dni drogi + {termin_dni} dni): **{data_platnosci.strftime('%d.%m.%Y')}**")
             else:
-                data_platnosci = (data_roz_2 if data_roz_2 else data_roz_1) + timedelta(days=termin_dni)
+                ostateczny_rozladunek = data_roz_2 if data_roz_2 else data_roz_1
+                data_platnosci = ostateczny_rozladunek + timedelta(days=termin_dni)
                 t2.info(f"📅 Wyliczona data zapłaty (Rozładunek + {termin_dni} dni): **{data_platnosci.strftime('%d.%m.%Y')}**")
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>3. Logistyka Miejsc</p>", unsafe_allow_html=True)
-            projekt = st.selectbox("Przypisz do Projektu (Opcjonalnie):", lista_eventow, index=lista_eventow.index(val_projekt) if val_projekt in lista_eventow else 0)
+            
+            def_proj_idx = lista_eventow.index(val_projekt) if val_projekt in lista_eventow else 0
+            projekt = st.selectbox("Przypisz do Projektu (Opcjonalnie):", lista_eventow, index=def_proj_idx)
             
             l1, l2 = st.columns(2)
             with l1:
-                idx_z = opcje_lokalizacji.index(val_z_sel) if val_z_sel in opcje_lokalizacji else (opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0)
+                if val_z_sel in opcje_lokalizacji:
+                    idx_z = opcje_lokalizacji.index(val_z_sel)
+                    init_z_man = ""
+                else:
+                    idx_z = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
+                    init_z_man = val_z_sel
+                    
                 z_sel = st.selectbox("Miejsce startu (Załadunek):", opcje_lokalizacji, index=idx_z)
-                z_man = st.text_input("Adres startu (ręcznie):", value=val_z_sel if val_z_sel not in opcje_lokalizacji else "") if z_sel == "INNE (wpisz ręcznie)" else ""
+                z_man = st.text_input("Adres startu (ręcznie):", value=init_z_man) if z_sel == "INNE (wpisz ręcznie)" else ""
                 
             miejsca_rozladunku = []
             with l2:
                 if typ_zlecenia == "Tylko dostawa":
                     st.markdown("🚚 **Dostawa wieloetapowa (Drop)**")
-                    liczba_punktow = st.number_input("Liczba miejsc rozładunku:", min_value=1, max_value=10, value=int(len(val_miejsca_rozladunku_raw) if len(val_miejsca_rozladunku_raw) > 0 else 1), step=1)
+                    init_len = len(val_miejsca_rozladunku_raw) if len(val_miejsca_rozladunku_raw) > 0 else 1
+                    liczba_punktow = st.number_input("Liczba miejsc rozładunku:", min_value=1, max_value=10, value=int(init_len), step=1)
+                    
                     for i in range(int(liczba_punktow)):
                         def_r_item = val_miejsca_rozladunku_raw[i] if i < len(val_miejsca_rozladunku_raw) else "Wybierz..."
-                        idx_r = opcje_lokalizacji.index(def_r_item) if def_r_item in opcje_lokalizacji else (opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0)
+                        if def_r_item in opcje_lokalizacji:
+                            idx_r = opcje_lokalizacji.index(def_r_item)
+                            init_r_man = ""
+                        else:
+                            idx_r = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
+                            init_r_man = def_r_item if def_r_item != "Wybierz..." else ""
+                            
                         r_s = st.selectbox(f"Cel dostawy DROP {i+1}:", opcje_lokalizacji, index=idx_r, key=f"r_sel_{i}")
-                        r_m = st.text_input(f"Adres DROP {i+1} (ręcznie):", value=def_r_item if def_r_item not in opcje_lokalizacji and def_r_item != "Wybierz..." else "", key=f"r_man_{i}") if r_s == "INNE (wpisz ręcznie)" else ""
+                        r_m = st.text_input(f"Adres DROP {i+1} (ręcznie):", value=init_r_man, key=f"r_man_{i}") if r_s == "INNE (wpisz ręcznie)" else ""
                         miejsca_rozladunku.append((r_s, r_m))
                 else:
                     def_r_item = val_miejsca_rozladunku_raw[0] if len(val_miejsca_rozladunku_raw) > 0 else "Wybierz..."
-                    idx_r = opcje_lokalizacji.index(def_r_item) if def_r_item in opcje_lokalizacji else (opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0)
+                    if def_r_item in opcje_lokalizacji:
+                        idx_r = opcje_lokalizacji.index(def_r_item)
+                        init_r_man = ""
+                    else:
+                        idx_r = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
+                        init_r_man = def_r_item if def_r_item != "Wybierz..." else ""
+                        
                     r_s = st.selectbox("Miejsce celu (Targi):", opcje_lokalizacji, index=idx_r)
-                    r_m = st.text_input("Adres celu (ręcznie):", value=def_r_item if def_r_item not in opcje_lokalizacji and def_r_item != "Wybierz..." else "") if r_s == "INNE (wpisz ręcznie)" else ""
+                    r_m = st.text_input("Adres celu (ręcznie):", value=init_r_man) if r_s == "INNE (wpisz ręcznie)" else ""
                     miejsca_rozladunku.append((r_s, r_m))
                     
             st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.2);'>", unsafe_allow_html=True)
-            odbiorca_cmr_ui = st.radio("Kto jest formalnym Odbiorcą na dokumencie CMR (Box 2)?:", ["Miejsce przeznaczenia (Klient)", "SQM (Wysyłka na własne stoisko/event)"], index=1 if val_odbiorca_cmr == "SQM (Wysyłka na własne stoisko/event)" else 0, horizontal=True)
+            odbiorca_cmr_idx = 1 if val_odbiorca_cmr == "SQM (Wysyłka na własne stoisko/event)" else 0
+            odbiorca_cmr_ui = st.radio(
+                "Kto jest formalnym Odbiorcą na dokumencie CMR (Box 2)?:",
+                ["Miejsce przeznaczenia (Klient)", "SQM (Wysyłka na własne stoisko/event)"],
+                index=odbiorca_cmr_idx,
+                horizontal=True
+            )
 
         with st.container(border=True):
             st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px;'>4. Realizacja i Dodatkowe Uwagi</p>", unsafe_allow_html=True)
+            
             col_auto, col_kier, col_wart = st.columns([1.5, 1.5, 1])
             c_auto_nr = col_auto.text_input("Nr rejestracyjny (Auto):", value=val_c_auto_nr, placeholder="np. PO 12345")
             c_kierowca = col_kier.text_input("Kierowca (Imię i Nazwisko):", value=val_c_kierowca, placeholder="np. Jan Kowalski")
             wartosc_towaru = col_wart.number_input("Wymagana Gwarancja OCP (PLN):", min_value=0, value=val_wartosc_towaru)
+            
             u1, u2 = st.columns([3, 1])
             instrukcje = u1.text_area("Instrukcje dodatkowe na Zlecenie:", value=val_instrukcje, height=80)
-            podpis = u2.radio("Podpis Koordynatora:", ["PD", "PK"], index=["PD", "PK"].index(val_podpis) if val_podpis in ["PD", "PK"] else 0, horizontal=True)
+            
+            podpis_idx = ["PD", "PK"].index(val_podpis) if val_podpis in ["PD", "PK"] else 0
+            podpis = u2.radio("Podpis Koordynatora:", ["PD", "PK"], index=podpis_idx, horizontal=True)
 
         btn_label = "⚡ ZAPISZ ZMIANY I REGENERUJ DOKUMENTY" if tryb_pracy == "Edycja Istniejącego Zlecenia" else "⚡ GENERUJ I ZAPISZ ZLECENIE PRO"
 
         if st.button(btn_label, type="primary", use_container_width=True):
-            if not nazwa_przewoznika or nazwa_przewoznika == "Wybierz...": st.error("Wybierz lub wpisz firmę przewozową!")
+            if not nazwa_przewoznika or nazwa_przewoznika == "Wybierz...":
+                st.error("Wybierz lub wpisz firmę przewozową!")
             else:
                 with st.spinner("Generowanie dokumentów i aktualizacja chmury..."):
                     final_zal_db = z_man if z_sel == "INNE (wpisz ręcznie)" else z_sel
                     
                     def build_full_address(place_name, manual_addr, df):
                         if place_name == "INNE (wpisz ręcznie)": return manual_addr
-                        if place_name == "Magazyn SQM Komorniki": return "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+                        if place_name == "Magazyn SQM Komorniki":
+                            return "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
                         if df is not None and not df.empty:
                             row = df[df['Nazwa do listy'] == place_name]
                             if not row.empty:
@@ -757,33 +955,44 @@ def render(sh):
                         return place_name
 
                     full_zal_pdf = build_full_address(z_sel, z_man, df_miejsca)
-                    lista_roz_db, lista_roz_pdf = [], []
+                    
+                    lista_roz_db = []
+                    lista_roz_pdf = []
                     for r_s, r_m in miejsca_rozladunku:
                         lista_roz_db.append(r_m if r_s == "INNE (wpisz ręcznie)" else r_s)
                         lista_roz_pdf.append(build_full_address(r_s, r_m, df_miejsca))
                         
                     final_roz_db = " | ".join(lista_roz_db)
-                    if len(lista_roz_pdf) > 1: full_roz_pdf = "\n\n".join([f"DROP {idx+1}:\n{tekst}" for idx, tekst in enumerate(lista_roz_pdf)])
-                    else: full_roz_pdf = lista_roz_pdf[0]
+                    
+                    if len(lista_roz_pdf) > 1:
+                        full_roz_pdf = "\n\n".join([f"DROP {idx+1}:\n{tekst}" for idx, tekst in enumerate(lista_roz_pdf)])
+                    else:
+                        full_roz_pdf = lista_roz_pdf[0]
                     
                     c_auto_combined = f"{c_auto_nr} / {c_kierowca}" if c_auto_nr and c_kierowca else f"{c_auto_nr}{c_kierowca}"
                     
                     historia_cyklu = f"CYKL: {data_zal} -> {data_roz_combined}"
                     if typ_zlecenia == "Pełny event":
                         emp_str = str(data_emp_in_1)
-                        if data_emp_in_2: emp_str += f",{data_emp_in_2}"
+                        if data_emp_in_2:
+                            emp_str += f",{data_emp_in_2}"
                         dem_str = f"{data_dostawa_pustych},{data_odbior_pelnych}"
                         historia_cyklu += f" | EMP: {emp_str} | DEM: {dem_str}"
                     
                     pelne_uwagi_db = f"AUTO: {c_auto_combined} || WART: {wartosc_towaru} PLN || WAGA: {waga} || POSTOJ: {postoj} || {historia_cyklu} || {instrukcje}"
-                    if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)": pelne_uwagi_db += " %%CMR:SQM%%"
+                    if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
+                        pelne_uwagi_db += " %%CMR:SQM%%"
                         
                     uwagi_na_pdf = f"VEHICLE/DRIVER: {c_auto_combined}\n{instrukcje}"
                     
-                    if tryb_pracy == "Edycja Istniejącego Zlecenia": nr_zlecenia = wybrane_zlecenie_nr
+                    if tryb_pracy == "Edycja Istniejącego Zlecenia":
+                        nr_zlecenia = wybrane_zlecenie_nr
                     else:
                         idx = db.get_next_daily_number(datetime.now().strftime("%Y-%m-%d"))
-                        prefix = "ZLP" if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)" else "EVT"
+                        if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)":
+                            prefix = "ZLP"
+                        else:
+                            prefix = "EVT"
                         nr_zlecenia = f"{prefix}{datetime.now().strftime('%y/%m%d')}/{podpis}{idx:02d}"
                     
                     paczka_pdf = {
@@ -798,7 +1007,6 @@ def render(sh):
                         "termin_dni": termin_dni, "data_platnosci": data_platnosci.strftime('%d.%m.%Y')
                     }
                     
-                    # Wymuszenie jawnej i twardej konwersji (Casting) na string przed zapisem dla 19-elementowej listy
                     wiersz_db = [
                         str(datetime.now().strftime("%Y-%m-%d %H:%M")), str(nr_zlecenia), "LOGISTYKA CARGO", str(nazwa_przewoznika),
                         str(final_zal_db), str(final_roz_db), str(data_zal), str(data_roz_combined), "Zabudowa Targowa PRO",
@@ -820,49 +1028,100 @@ def render(sh):
                             
                     if operacja_sukces:
                         pdf_bytes = generate_pro_pdf(paczka_pdf)
+                            
                         miasto_zal_val = get_cmr_city_format(z_sel, z_man, df_miejsca)
-                        odbiorca_cmr_text = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182" if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)" else full_roz_pdf
+                            
+                        if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)":
+                            odbiorca_cmr_text = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182"
+                        else:
+                            odbiorca_cmr_text = full_roz_pdf
                         
                         dane_cmr = {
-                            "odbiorca": odbiorca_cmr_text, "miejsce_przeznaczenia": full_roz_pdf, "data_zal": str(data_zal),
-                            "miasto_zal": miasto_zal_val, "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-                            "waga": waga, "nr_cmr": nr_cmr_zapisany, "auto": c_auto_nr, "kierowca": c_kierowca, "przewoznik": nazwa_przewoznika
+                            "odbiorca": odbiorca_cmr_text,
+                            "miejsce_przeznaczenia": full_roz_pdf,
+                            "data_zal": str(data_zal),
+                            "miasto_zal": miasto_zal_val,
+                            "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                            "waga": waga,
+                            "nr_cmr": nr_cmr_zapisany,
+                            "auto": c_auto_nr,       
+                            "kierowca": c_kierowca,
+                            "przewoznik": nazwa_przewoznika
                         }
+                        
                         cmr_bytes = generate_cmr_excel(dane_cmr)
                         
-                        st.session_state.komunikat = f"🎉 Zlecenie {nr_zlecenia} zmodyfikowane!" if tryb_pracy == "Edycja Istniejącego Zlecenia" else f"✅ Zlecenie {nr_zlecenia} wygenerowane!"
-                        st.session_state.pdf_bytes, st.session_state.cmr_bytes = pdf_bytes, cmr_bytes
+                        if tryb_pracy == "Edycja Istniejącego Zlecenia":
+                            st.session_state.komunikat = f"🎉 Zlecenie {nr_zlecenia} zostało pomyślnie zmodyfikowane w bazie danych!"
+                        else:
+                            st.session_state.komunikat = f"✅ Zlecenie {nr_zlecenia} zostało wygenerowane i zapisane pomyślnie!"
+                            
+                        st.session_state.pdf_bytes = pdf_bytes
+                        st.session_state.cmr_bytes = cmr_bytes
                         st.session_state.nazwa_pdf = f"Order_{nr_zlecenia.replace('/', '_')}.pdf"
                         st.session_state.nazwa_cmr = f"CMR_{nr_zlecenia.replace('/', '_')}_{nr_cmr_zapisany}.xlsx"
                         st.session_state.dokumenty_wygenerowane = True
-                        st.cache_data.clear(); st.rerun() 
+                        
+                        st.cache_data.clear()
+                        st.rerun() 
 
         if st.session_state.dokumenty_wygenerowane:
             st.success(st.session_state.komunikat)
             col_pdf, col_cmr = st.columns(2)
-            with col_pdf: st.download_button("📥 POBIERZ ZLECENIE (PDF)", data=st.session_state.pdf_bytes, file_name=st.session_state.nazwa_pdf, mime="application/pdf", use_container_width=True)
-            with col_cmr: st.download_button(f"📝 POBIERZ GOTOWY CMR ({nr_cmr_zapisany})", data=st.session_state.cmr_bytes, file_name=st.session_state.nazwa_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            with col_pdf:
+                st.download_button("📥 POBIERZ ZLECENIE (PDF)", data=st.session_state.pdf_bytes, file_name=st.session_state.nazwa_pdf, mime="application/pdf", use_container_width=True)
+            with col_cmr:
+                st.download_button(f"📝 POBIERZ GOTOWY CMR ({nr_cmr_zapisany})", data=st.session_state.cmr_bytes, file_name=st.session_state.nazwa_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🔄 Wyczyść i przygotuj nowe zlecenie", use_container_width=True): st.session_state.dokumenty_wygenerowane = False; st.rerun()
+            if st.button("🔄 Wyczyść i przygotuj nowe zlecenie", use_container_width=True):
+                st.session_state.dokumenty_wygenerowane = False
+                st.rerun()
 
     with tab2:
         st.markdown('<h3 style="color: #E2DCD3; font-family: \'Shippori Mincho\', serif;">Aktywne Zlecenia PRO</h3>', unsafe_allow_html=True)
+        
         try:
             df_pro = df_zlecenia.copy()
+            
             if not df_pro.empty:
                 df_pro['sheet_row'] = df_pro.index + 2
-                if 'Dział' in df_pro.columns: df_pro = df_pro[df_pro['Dział'] == 'LOGISTYKA CARGO']
+                
+                if 'Dział' in df_pro.columns:
+                    df_pro = df_pro[df_pro['Dział'] == 'LOGISTYKA CARGO']
+                
                 df_pro = df_pro.iloc[::-1]
                 
-                if df_pro.empty: st.info("Brak aktywnych zleceń PRO w bazie danych.")
+                if df_pro.empty:
+                    st.info("Brak aktywnych zleceń PRO w bazie danych.")
                 else:
                     for index, row in df_pro.iterrows():
-                        nr, projekt, data_zal, miejsce_zal, miejsce_roz, przewoznik = str(row.get("Numer zlecenia", "Brak numeru")), str(row.get("ID Projektu", "---")), str(row.get("Data załadunku", "---")), str(row.get("Miejsce Zaladunku", "---")), str(row.get("Miejsce Rozladunku", "---")), str(row.get("Zleceniobiorca", "---"))
-                        row_idx, idx_pd = int(row['sheet_row']), int(row.name)
+                        nr = str(row.get("Numer zlecenia", "Brak numeru"))
+                        projekt = str(row.get("ID Projektu", "---"))
+                        data_zal = str(row.get("Data załadunku", "---"))
+                        miejsce_zal = str(row.get("Miejsce Zaladunku", "---"))
+                        miejsce_roz = str(row.get("Miejsce Rozladunku", "---"))
+                        przewoznik = str(row.get("Zleceniobiorca", "---"))
+                        row_idx = int(row['sheet_row'])
+                        idx_pd = int(row.name)
                         
-                        st.markdown(f"""<div class="custom-row" style="margin-bottom: 5px;"><div class="cr-col" style="flex: 2.5;"><div class="cr-title">🚚 {nr}</div><div class="cr-text" style="color: #C5A880;">📦 Projekt: <strong>{projekt}</strong></div><div class="cr-text">👤 Przewoźnik: <strong>{przewoznik}</strong></div></div><div class="cr-col" style="flex: 2;"><div class="cr-text">📅 Załadunek: {data_zal}</div><div class="cr-text">📍 Skąd: {miejsce_zal}</div><div class="cr-text">🏁 Dokąd: {miejsce_roz}</div></div></div>""", unsafe_allow_html=True)
+                        st.markdown(f"""
+                        <div class="custom-row" style="margin-bottom: 5px;">
+                            <div class="cr-col" style="flex: 2.5;">
+                                <div class="cr-title">🚚 {nr}</div>
+                                <div class="cr-text" style="color: #C5A880;">📦 Projekt: <strong>{projekt}</strong></div>
+                                <div class="cr-text">👤 Przewoźnik: <strong>{przewoznik}</strong></div>
+                            </div>
+                            <div class="cr-col" style="flex: 2;">
+                                <div class="cr-text">📅 Załadunek: {data_zal}</div>
+                                <div class="cr-text">📍 Skąd: {miejsce_zal}</div>
+                                <div class="cr-text">🏁 Dokąd: {miejsce_roz}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                         c_info, c_docs, c_del = st.columns([3, 1.5, 1])
+                        
                         with c_docs:
                             if st.button("📄 Przygotuj Dokumenty", key=f"doc_pro_{row_idx}", use_container_width=True):
                                 with st.spinner("Rekonstrukcja danych z bazy..."):
@@ -873,17 +1132,25 @@ def render(sh):
                                     st.session_state.hist_cmr_nr = cmr.get("nr_cmr", "")
                                     st.session_state.hist_gen_row = row_idx
                                     st.rerun()
+                                    
                         with c_del:
                             if st.button("🗑️ Usuń", key=f"del_pro_{row_idx}", use_container_width=True):
-                                db.delete_row("Zlecenia", row_idx); st.success(f"Zlecenie usunięte!"); st.rerun()
+                                db.delete_row("Zlecenia", row_idx)
+                                st.success(f"Zlecenie usunięte!")
+                                st.rerun()
                         
                         if st.session_state.hist_gen_row == row_idx:
                             st.success(f"Pliki gotowe do pobrania!")
                             d1, d2 = st.columns(2)
-                            with d1: st.download_button("📥 POBIERZ PDF", data=st.session_state.hist_pdf_bytes, file_name=f"Order_{st.session_state.hist_nr.replace('/','_')}.pdf", mime="application/pdf", key=f"dl_pdf_{row_idx}", use_container_width=True)
+                            with d1:
+                                st.download_button("📥 POBIERZ PDF", data=st.session_state.hist_pdf_bytes, file_name=f"Order_{st.session_state.hist_nr.replace('/','_')}.pdf", mime="application/pdf", key=f"dl_pdf_{row_idx}", use_container_width=True)
                             with d2:
                                 nazwa_pliku_cmr = f"CMR_{st.session_state.hist_nr.replace('/','_')}_{st.session_state.hist_cmr_nr}.xlsx" if st.session_state.hist_cmr_nr else f"CMR_{st.session_state.hist_nr.replace('/','_')}.xlsx"
                                 st.download_button("📝 POBIERZ CMR", data=st.session_state.hist_cmr_bytes, file_name=nazwa_pliku_cmr, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key=f"dl_cmr_{row_idx}", use_container_width=True)
+                        
                         st.markdown('<hr style="border-color: rgba(197, 168, 128, 0.1); margin: 5px 0 15px 0;">', unsafe_allow_html=True)
-            else: st.info("Baza PRO jest pusta.")
-        except Exception as e: st.error(f"Błąd komunikacji z bazą Zleceń PRO: {e}")
+            else:
+                st.info("Baza PRO jest pusta.")
+                
+        except Exception as e:
+            st.error(f"Błąd komunikacji z bazą Zleceń PRO: {e}")
