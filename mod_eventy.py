@@ -292,7 +292,7 @@ def render(sh):
                                         idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                         
                                         df_do_zapisu = df.copy()
-                                        df_do_zapisu.at[idx, 'Nr_CMR'] = nowy_nr
+                                        df_do_zapisu.at[idx, 'Nr_CMR'] = str(nowy_nr)
                                         gs_row = int(df_do_zapisu.at[idx, 'sheet_row'])
                                         db.update_single_row_safe("DB_Eventy", gs_row, df_do_zapisu.loc[idx])
                                         st.rerun()
@@ -333,7 +333,7 @@ def render(sh):
                             nowy_wiersz['Faza_Procesu'] = "Inicjacja"
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
                             nowy_wiersz['CMR_Gotowe'] = "NIE"
-                            nowy_wiersz['Nr_CMR'] = "" # Klon nie kopiuje numeru CMR
+                            nowy_wiersz['Nr_CMR'] = "" 
                             
                             is_sqm_clone = (nowy_wiersz['Typ_Transportu'] == "Własny SQM")
                             nowy_wiersz['CMR_Podpisane_POD'] = "N/A" if is_sqm_clone else "NIE"
@@ -352,7 +352,7 @@ def render(sh):
                             nowy_wiersz_z_id = df_temp.iloc[-1]
                             
                             kolumny = [k for k in df.columns if k != 'sheet_row']
-                            wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny]
+                            wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny]
                             
                             db.append_data("DB_Eventy", wiersz_lista)
                             st.session_state["wybrany_event_id"] = None 
@@ -424,7 +424,6 @@ def render(sh):
                                 u_id_zlecenia = st.text_input("ID Zlecenia (Wewn. / PRO)", value=str(dane_eventu.get('ID_Zlecenia', '')))
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
                                 
-                                # ---- ADRES DOCELOWY (EDIT) Z LISTY ROZWIJANEJ ----
                                 akt_miejsce = str(dane_eventu.get('Miejsce_Przeznaczenia', ''))
                                 if akt_miejsce in opcje_lokalizacji:
                                     idx_m = opcje_lokalizacji.index(akt_miejsce)
@@ -473,23 +472,24 @@ def render(sh):
                             if st.form_submit_button("💾 Zapisz Zmiany"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                 
-                                df.at[idx, 'ID_Zlecenia'] = u_id_zlecenia
-                                df.at[idx, 'Nazwa_Targow'] = u_nazwa
-                                df.at[idx, 'Miejsce_Przeznaczenia'] = final_miejsce_edit
-                                df.at[idx, 'Przewoznik'] = u_przewoznik
-                                df.at[idx, 'Typ_Transportu'] = u_typ_transp
-                                df.at[idx, 'Typ_Pojazdu'] = u_typ_pojazd
-                                df.at[idx, 'Nr_Rejestracyjny'] = u_nr_rejestracyjny
-                                df.at[idx, 'Kierowca'] = u_kierowca
-                                df.at[idx, 'Waga'] = u_waga
+                                # ===== KRYTYCZNA POPRAWKA: TWARDY CASTING NA STRING =====
+                                df.at[idx, 'ID_Zlecenia'] = str(u_id_zlecenia)
+                                df.at[idx, 'Nazwa_Targow'] = str(u_nazwa)
+                                df.at[idx, 'Miejsce_Przeznaczenia'] = str(final_miejsce_edit)
+                                df.at[idx, 'Przewoznik'] = str(u_przewoznik)
+                                df.at[idx, 'Typ_Transportu'] = str(u_typ_transp)
+                                df.at[idx, 'Typ_Pojazdu'] = str(u_typ_pojazd)
+                                df.at[idx, 'Nr_Rejestracyjny'] = str(u_nr_rejestracyjny)
+                                df.at[idx, 'Kierowca'] = str(u_kierowca)
+                                df.at[idx, 'Waga'] = str(u_waga) 
                                 
                                 if u_typ_transp == "Zewnętrzny":
-                                    df.at[idx, 'Nr_Zlecenia_Zewn'] = u_id_zlecenia
+                                    df.at[idx, 'Nr_Zlecenia_Zewn'] = str(u_id_zlecenia)
                                 else:
                                     df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
                                 
-                                df.at[idx, 'Faza_Procesu'] = u_faza
-                                df.at[idx, 'Status_Magazyn'] = u_status_mag
+                                df.at[idx, 'Faza_Procesu'] = str(u_faza)
+                                df.at[idx, 'Status_Magazyn'] = str(u_status_mag)
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 
                                 rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
@@ -498,12 +498,12 @@ def render(sh):
                                 if rozładunki_str:
                                     df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {u_notatki}"
                                 else:
-                                    df.at[idx, 'Notatki'] = u_notatki
+                                    df.at[idx, 'Notatki'] = str(u_notatki)
                                 
                                 gs_row = int(df.at[idx, 'sheet_row'])
                                 db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
                                 
-                                st.session_state["wybrany_event_id"] = u_id_zlecenia 
+                                st.session_state["wybrany_event_id"] = str(u_id_zlecenia) 
                                 st.success("Pomyślnie zaktualizowano dane!")
                                 st.rerun()
 
@@ -551,13 +551,13 @@ def render(sh):
                             
                             if st.form_submit_button("💾 Zapisz Slot"):
                                 nowy_slot = [
-                                    dane_eventu['ID_Zlecenia'],
-                                    s_typ,
+                                    str(dane_eventu['ID_Zlecenia']),
+                                    str(s_typ),
                                     str(s_data) if s_data else "",
                                     s_od.strftime("%H:%M") if s_od else "",
                                     s_do.strftime("%H:%M") if s_do else "",
-                                    s_brama,
-                                    s_notatki
+                                    str(s_brama),
+                                    str(s_notatki)
                                 ]
                                 db.append_data("DB_Sloty", nowy_slot)
                                 st.success("Dodano nowy slot!")
@@ -587,12 +587,12 @@ def render(sh):
                                     u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
                                     
                                     st.info(f"Numer referencyjny na zewnątrz: {dane_eventu.get('Nr_Zlecenia_Zewn', '')}")
-                                    u_nr_fak = st.text_input("Nr Faktury Zewn.", value=dane_eventu.get("Nr_Faktury", ""))
+                                    u_nr_fak = st.text_input("Nr Faktury Zewn.", value=str(dane_eventu.get("Nr_Faktury", "")))
                                 with col_f2:
                                     u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
-                                    dp_val = dane_eventu.get("Data_Platnosci", "")
+                                    dp_val = str(dane_eventu.get("Data_Platnosci", ""))
                                     try:
-                                        dp_val_parsed = datetime.datetime.strptime(str(dp_val), "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
+                                        dp_val_parsed = datetime.datetime.strptime(dp_val, "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
                                     except:
                                         dp_val_parsed = None
                                     u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
@@ -600,14 +600,15 @@ def render(sh):
                             st.markdown("<br>", unsafe_allow_html=True)
                             if st.form_submit_button("💾 Zapisz Aktualizacje"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                                df.at[idx, 'CMR_Gotowe'] = u_cmr
-                                df.at[idx, 'CMR_Podpisane_POD'] = u_pod
-                                df.at[idx, 'PP_Otrzymane'] = u_pp
-                                df.at[idx, 'Nr_Faktury'] = u_nr_fak
+                                df.at[idx, 'CMR_Gotowe'] = str(u_cmr)
+                                df.at[idx, 'CMR_Podpisane_POD'] = str(u_pod)
+                                df.at[idx, 'PP_Otrzymane'] = str(u_pp)
+                                df.at[idx, 'Nr_Faktury'] = str(u_nr_fak)
                                 
                                 if not is_sqm:
-                                    df.at[idx, 'Koszt_Transportu_EUR'] = float(u_koszt)
-                                    df.at[idx, 'Faktura_Oplacona'] = u_faktura_opl
+                                    # ===== KRYTYCZNA POPRAWKA: KONWERSJA NA STRING =====
+                                    df.at[idx, 'Koszt_Transportu_EUR'] = str(u_koszt)
+                                    df.at[idx, 'Faktura_Oplacona'] = str(u_faktura_opl)
                                     df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
                                     
                                 gs_row = int(df.at[idx, 'sheet_row'])
@@ -680,7 +681,7 @@ def render(sh):
                             "Kraj": nowy_kraj.strip(),
                             "Skrót Kraju": nowy_skrot.strip()
                         }
-                        nowy_wiersz = [slownik_nowego.get(kol, "") for kol in kolumny_miejsca]
+                        nowy_wiersz = [str(slownik_nowego.get(kol, "")) for kol in kolumny_miejsca]
                         if db.append_data("Miejsca", nowy_wiersz):
                             st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
                             st.cache_data.clear()
@@ -696,7 +697,6 @@ def render(sh):
                 id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
                 
-                # ---- ADRES DOCELOWY (NOWE ZLECENIE) Z LISTY ROZWIJANEJ ----
                 u_miejsce_sel_c = st.selectbox("Miejsce docelowe (Odbiorca na CMR)", opcje_lokalizacji)
                 u_miejsce_man_c = st.text_area("Adres Docelowy (ręcznie)") if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else ""
                 
@@ -762,16 +762,16 @@ def render(sh):
                     finalne_miejsce_przeznaczenia = u_miejsce_man_c if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else u_miejsce_sel_c
                         
                     nowy_wiersz = {
-                        "ID_Zlecenia": id_zlecenia_custom, "Nazwa_Targow": nazwa_targow, "Typ_Transportu": typ_transportu,
-                        "Faza_Procesu": faza_procesu, "Typ_Pojazdu": typ_pojazdu, "Przewoznik": przewoznik,
+                        "ID_Zlecenia": str(id_zlecenia_custom), "Nazwa_Targow": str(nazwa_targow), "Typ_Transportu": str(typ_transportu),
+                        "Faza_Procesu": str(faza_procesu), "Typ_Pojazdu": str(typ_pojazdu), "Przewoznik": str(przewoznik),
                         "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
-                        "Status_Magazyn": status_magazyn,
-                        "Notatki": finalne_notatki, "Koszt_Transportu_EUR": koszt_transportu, "CMR_Gotowe": cmr_gotowe, 
-                        "CMR_Podpisane_POD": cmr_podpisane, "Nr_Zlecenia_Zewn": nr_zewn_final, 
-                        "Nr_Faktury": nr_faktury, "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
-                        "Faktura_Oplacona": faktura_opl, "PP_Otrzymane": pp_otrzymane, "Zakonczone_Arch": "NIE",
-                        "Miejsce_Przeznaczenia": finalne_miejsce_przeznaczenia, "Waga": waga, "Nr_Rejestracyjny": nr_rejestracyjny, 
-                        "Kierowca": kierowca, "Nr_CMR": ""
+                        "Status_Magazyn": str(status_magazyn),
+                        "Notatki": str(finalne_notatki), "Koszt_Transportu_EUR": str(koszt_transportu), "CMR_Gotowe": str(cmr_gotowe), 
+                        "CMR_Podpisane_POD": str(cmr_podpisane), "Nr_Zlecenia_Zewn": str(nr_zewn_final), 
+                        "Nr_Faktury": str(nr_faktury), "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
+                        "Faktura_Oplacona": str(faktura_opl), "PP_Otrzymane": str(pp_otrzymane), "Zakonczone_Arch": "NIE",
+                        "Miejsce_Przeznaczenia": str(finalne_miejsce_przeznaczenia), "Waga": str(waga), "Nr_Rejestracyjny": str(nr_rejestracyjny), 
+                        "Kierowca": str(kierowca), "Nr_CMR": ""
                     }
 
                     df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
@@ -779,7 +779,7 @@ def render(sh):
                     nowy_wiersz_z_id = df_temp.iloc[-1]
                     
                     kolumny = [k for k in df.columns if k != 'sheet_row']
-                    wiersz_lista = [nowy_wiersz_z_id.get(k, "") for k in kolumny]
+                    wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny]
                     
                     db.append_data("DB_Eventy", wiersz_lista)
                     
