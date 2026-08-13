@@ -7,6 +7,7 @@ import base64
 
 # Import modułów aplikacji
 import mod_command_center
+import mod_harmonogram  # <--- ZAIMPORTOWANY NOWY MODUŁ GANTT
 import mod_eventy
 import mod_zlecenia_poboczne
 import mod_subrenty
@@ -101,6 +102,7 @@ def main():
         
         opcje_menu = [
             "COMMAND CENTER",
+            "HARMONOGRAM (GANTT)",
             "GENERATOR ZLECEŃ PRO", 
             "EVENTY / TARGI", 
             "ZLECENIA POBOCZNE",
@@ -110,14 +112,16 @@ def main():
             "FINANSE I RAPORTY"
         ]
 
-        # --- Inicjalizacja stanu menu ---
+        ikony_menu = [
+            "cpu", "calendar-range", "file-earmark-pdf", "truck", 
+            "briefcase", "box", "globe", "database", "graph-up"
+        ]
+
         if "menu_option" not in st.session_state:
             st.session_state["menu_option"] = "COMMAND CENTER"
             
-        # Wymuszamy NATYCHMIASTOWĄ zamianę stanu w pamięci na wielkie litery
         st.session_state["menu_option"] = str(st.session_state["menu_option"]).upper()
         
-        # Zabezpieczenie przed błędnymi nazwami
         if st.session_state["menu_option"] not in opcje_menu:
             if "PRO" in st.session_state["menu_option"]:
                 st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
@@ -131,7 +135,7 @@ def main():
         wybrany_modul = option_menu(
             menu_title=None,
             options=opcje_menu,
-            icons=["cpu", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"], 
+            icons=ikony_menu, 
             default_index=aktualny_indeks,
             styles={
                 "container": {"padding": "0!important", "background-color": "transparent"},
@@ -167,7 +171,6 @@ def main():
             </div>
         ''', unsafe_allow_html=True)
         
-        # Przycisk ręcznego odświeżania keszu
         if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True, type="primary"):
             st.cache_data.clear()
             st.rerun()
@@ -179,6 +182,8 @@ def main():
     # --- ROUTING MODUŁÓW ---
     if wybrany_modul == "COMMAND CENTER":
         mod_command_center.render(sh)
+    elif wybrany_modul == "HARMONOGRAM (GANTT)":
+        mod_harmonogram.render(sh)
     elif wybrany_modul == "GENERATOR ZLECEŃ PRO":
         mod_generator_pdf.render(sh) 
     elif wybrany_modul == "EVENTY / TARGI":
