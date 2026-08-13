@@ -81,7 +81,7 @@ def render(sh):
             else:
                 przewoznik = str(row.get("Przewoznik", "")).strip()
                 zasob = f"🏢 {przewoznik}" if przewoznik else "🏢 ZEWNĘTRZNY: Nieznany"
-                kategoria = "Zewnętrzni Przewoźnicy"
+                kategoria = "Zewnętrzni (Eventy/PRO)"
                 
             zlecenie = str(row.get("ID_Zlecenia", "")) or str(row.get("Nazwa_Targow", "Brak nazwy"))
             
@@ -110,7 +110,7 @@ def render(sh):
                 "Start": start,
                 "Koniec": end,
                 "Zasób": f"🏢 {przewoznik}",
-                "Kategoria": "Zewnętrzni Przewoźnicy"
+                "Kategoria": "Zewnętrzni (Eventy/PRO)"
             })
             
     # 3. Zlecenia Poboczne
@@ -136,7 +136,7 @@ def render(sh):
                 "Start": start,
                 "Koniec": end,
                 "Zasób": f"🏢 {przewoznik}",
-                "Kategoria": "Zewnętrzni Przewoźnicy"
+                "Kategoria": "Zewnętrzni (Poboczne)"
             })
 
     if not tasks:
@@ -168,8 +168,8 @@ def render(sh):
     with c_f1:
         wybrane_kategorie = st.multiselect(
             "Filtruj Kategorie:", 
-            ["Flota Własna SQM", "Zewnętrzni Przewoźnicy"], 
-            default=["Flota Własna SQM", "Zewnętrzni Przewoźnicy"]
+            ["Flota Własna SQM", "Zewnętrzni (Eventy/PRO)", "Zewnętrzni (Poboczne)"], 
+            default=["Flota Własna SQM", "Zewnętrzni (Eventy/PRO)", "Zewnętrzni (Poboczne)"]
         )
     with c_f2:
         wyszukaj_zasob = st.text_input("Szukaj Kierowcy / Przewoźnika (np. 'SQM', 'Jan Kowalski')", placeholder="Wpisz fragment nazwy...")
@@ -201,8 +201,9 @@ def render(sh):
             hover_name="Zlecenie",
             custom_data=["Start_Str", "Koniec_Str", "Liczba Dni"],
             color_discrete_map={
-                "Flota Własna SQM": "#C5A880",       # SQM Gold
-                "Zewnętrzni Przewoźnicy": "#3B82F6"  # Niebieski Corporate
+                "Flota Własna SQM": "#C5A880",             # SQM Gold
+                "Zewnętrzni (Eventy/PRO)": "#3B82F6",      # Niebieski
+                "Zewnętrzni (Poboczne)": "#10B981"         # Szmaragdowy / Zielony
             }
         )
         
@@ -259,7 +260,7 @@ def render(sh):
         df_raport = df_filtered[['Kategoria', 'Zasób', 'Zlecenie', 'Start_Str', 'Koniec_Str', 'Liczba Dni']].copy()
         df_raport.columns = ['Kategoria', 'Kierowca / Przewoźnik', 'Numer Zlecenia', 'Od (Data)', 'Do (Data)', 'Czas (Dni)']
         
-        # Oczyszczenie przedrostków "🧑‍✈️ SQM:" z tabeli, żeby Excel był czysty
+        # Oczyszczenie przedrostków z tabeli, żeby Excel był czysty
         df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🧑‍✈️ SQM: ', '')
         df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🚛 AUTO SQM: ', '')
         df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🏢 ', '')
