@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
+import io
 import re
 import db
 
@@ -144,23 +145,25 @@ def render(sh):
 
     df_gantt = pd.DataFrame(tasks)
     
-    # --- PRZETWARZANIE DAT DLA SILNIKA PLOTLY ---
-    df_gantt['Start'] = pd.to_datetime(df_gantt['Start'])
-    df_gantt['Koniec_Real'] = pd.to_datetime(df_gantt['Koniec'])
+    # --- PRZETWARZANIE DAT DLA SILNIKA PLOTLY I RAPORTÓW ---
+    df_gantt['Start_DT'] = pd.to_datetime(df_gantt['Start'])
+    df_gantt['Koniec_DT'] = pd.to_datetime(df_gantt['Koniec'])
     
-    # Trick graficzny: Plotly przy tej samej dacie Start i Koniec rysuje pasek o grubości 0px.
-    # Dlatego sztucznie dodajemy +1 dzień tylko dla prawego krańca prostokąta, 
-    # ale w dymku na hover i tak wyświetlamy prawidłową datę bez przekłamań.
-    df_gantt['Koniec_Viz'] = df_gantt['Koniec_Real'] + pd.Timedelta(days=1)
+    # Obliczanie fizycznej liczby dni zlecenia
+    df_gantt['Liczba Dni'] = (df_gantt['Koniec_DT'] - df_gantt['Start_DT']).dt.days + 1
     
-    # Zapis tekstowy dla tooltipów
-    df_gantt['Start_Str'] = df_gantt['Start'].dt.strftime('%d.%m.%Y')
-    df_gantt['Koniec_Str'] = df_gantt['Koniec_Real'].dt.strftime('%d.%m.%Y')
+    # Trick graficzny dla Plotly
+    df_gantt['Koniec_Viz'] = df_gantt['Koniec_DT'] + pd.Timedelta(days=1)
     
-    # Sortowanie, aby kierowcy SQM byli u góry osi Y, a potem przewoźnicy (alfabetycznie)
-    df_gantt = df_gantt.sort_values(by=["Kategoria", "Zasób"], ascending=[True, False])
+    # Zapis tekstowy dla tooltipów i tabeli raportowej
+    df_gantt['Start_Str'] = df_gantt['Start_DT'].dt.strftime('%d.%m.%Y')
+    df_gantt['Koniec_Str'] = df_gantt['Koniec_DT'].dt.strftime('%d.%m.%Y')
+    
+    # Wstępne sortowanie
+    df_gantt = df_gantt.sort_values(by=["Kategoria", "Zasób", "Start_DT"], ascending=[True, False, True])
 
     # Interfejs filtrów
+    st.markdown("### 🔍 Opcje widoku i Raportowanie")
     c_f1, c_f2 = st.columns(2)
     with c_f1:
         wybrane_kategorie = st.multiselect(
@@ -168,68 +171,132 @@ def render(sh):
             ["Flota Własna SQM", "Zewnętrzni Przewoźnicy"], 
             default=["Flota Własna SQM", "Zewnętrzni Przewoźnicy"]
         )
+    with c_f2:
+        wyszukaj_zasob = st.text_input("Szukaj Kierowcy / Przewoźnika (np. 'SQM', 'Jan Kowalski')", placeholder="Wpisz fragment nazwy...")
         
     if not wybrane_kategorie:
         st.warning("Wybierz przynajmniej jedną kategorię zasobów.")
         return
         
-    df_gantt = df_gantt[df_gantt['Kategoria'].isin(wybrane_kategorie)]
+    df_filtered = df_gantt[df_gantt['Kategoria'].isin(wybrane_kategorie)]
+    
+    if wyszukaj_zasob:
+        df_filtered = df_filtered[df_filtered['Zasób'].str.contains(wyszukaj_zasob, case=False, na=False)]
 
-    # --- RYSOWANIE WYKRESU (PLOTLY) ---
-    fig = px.timeline(
-        df_gantt, 
-        x_start="Start", 
-        x_end="Koniec_Viz", 
-        y="Zasób", 
-        color="Kategoria",
-        hover_name="Zlecenie",
-        custom_data=["Start_Str", "Koniec_Str"],
-        color_discrete_map={
-            "Flota Własna SQM": "#C5A880",       # SQM Gold
-            "Zewnętrzni Przewoźnicy": "#3B82F6"  # Niebieski Corporate
-        }
-    )
-    
-    # Customizacja Dymka (Hover)
-    fig.update_traces(
-        hovertemplate="<b>%{hovertext}</b><br><br>Początek: %{customdata[0]}<br>Koniec: %{customdata[1]}<extra></extra>",
-        width=0.4 # Estetyczna grubość paska
-    )
-    
-    # Oś Y odwrócona, żeby "A" było na górze
-    fig.update_yaxes(autorange="reversed") 
-    
-    # Inteligentna wysokość - kalendarz rośnie, jeśli dodasz dużo kierowców
-    height_calc = max(400, len(df_gantt['Zasób'].unique()) * 40 + 120)
-    
-    fig.update_layout(
-        plot_bgcolor='rgba(28, 26, 24, 0.6)',
-        paper_bgcolor='rgba(18, 16, 14, 0)',
-        font=dict(color='#E2DCD3', family='Inter'),
-        margin=dict(l=10, r=20, t=30, b=20),
-        xaxis=dict(
-            showgrid=True, 
-            gridcolor='rgba(197, 168, 128, 0.15)',
-            tickformat="%d\n%b",
-            title=""
-        ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor='rgba(197, 168, 128, 0.05)',
-            title="",
-            tickfont=dict(size=12, color='#E2DCD3')
-        ),
-        legend=dict(
-            title="", 
-            orientation="h", 
-            yanchor="bottom", 
-            y=1.02, 
-            xanchor="right", 
-            x=1
-        ),
-        height=height_calc
-    )
+    if df_filtered.empty:
+        st.warning("Brak wyników dla podanych filtrów.")
+        return
 
-    st.markdown('<div style="background: rgba(28, 26, 24, 0.8); backdrop-filter: blur(10px); padding: 15px; border-radius: 12px; border: 1px solid rgba(197, 168, 128, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
-    st.markdown('</div>', unsafe_allow_html=True)
+    # --- ZAKŁADKI: WYKRES ORAZ TABELA RAPORTOWA ---
+    tab_wykres, tab_raport = st.tabs(["📊 Wykres Wizualny", "🧾 Tabela i Zapotrzebowanie (Raport)"])
+
+    # 1. WIDOK GRAFICZNY GANTTA
+    with tab_wykres:
+        fig = px.timeline(
+            df_filtered, 
+            x_start="Start_DT", 
+            x_end="Koniec_Viz", 
+            y="Zasób", 
+            color="Kategoria",
+            hover_name="Zlecenie",
+            custom_data=["Start_Str", "Koniec_Str", "Liczba Dni"],
+            color_discrete_map={
+                "Flota Własna SQM": "#C5A880",       # SQM Gold
+                "Zewnętrzni Przewoźnicy": "#3B82F6"  # Niebieski Corporate
+            }
+        )
+        
+        # Customizacja Dymka (Hover)
+        fig.update_traces(
+            hovertemplate="<b>%{hovertext}</b><br><br>Zajętość od: %{customdata[0]}<br>Zajętość do: %{customdata[1]}<br>Czas trwania: %{customdata[2]} dni<extra></extra>",
+            width=0.4 # Estetyczna grubość paska
+        )
+        
+        # Oś Y odwrócona, żeby "A" było na górze
+        fig.update_yaxes(autorange="reversed") 
+        
+        # Inteligentna wysokość - kalendarz rośnie, jeśli dodasz dużo kierowców
+        height_calc = max(400, len(df_filtered['Zasób'].unique()) * 40 + 120)
+        
+        fig.update_layout(
+            plot_bgcolor='rgba(28, 26, 24, 0.6)',
+            paper_bgcolor='rgba(18, 16, 14, 0)',
+            font=dict(color='#E2DCD3', family='Inter'),
+            margin=dict(l=10, r=20, t=30, b=20),
+            xaxis=dict(
+                showgrid=True, 
+                gridcolor='rgba(197, 168, 128, 0.15)',
+                tickformat="%d\n%b",
+                title=""
+            ),
+            yaxis=dict(
+                showgrid=True,
+                gridcolor='rgba(197, 168, 128, 0.05)',
+                title="",
+                tickfont=dict(size=12, color='#E2DCD3')
+            ),
+            legend=dict(
+                title="", 
+                orientation="h", 
+                yanchor="bottom", 
+                y=1.02, 
+                xanchor="right", 
+                x=1
+            ),
+            height=height_calc
+        )
+
+        st.markdown('<div style="background: rgba(28, 26, 24, 0.8); backdrop-filter: blur(10px); padding: 15px; border-radius: 12px; border: 1px solid rgba(197, 168, 128, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    # 2. WIDOK TABELI RAPORTOWEJ I EKSPORTU
+    with tab_raport:
+        st.markdown("### 📝 Raport Zapotrzebowania na Flotę / Przewoźników")
+        st.info("Ten widok pozwala wyeksportować dokładną, posortowaną chronologicznie listę dni roboczych, w których dany kierowca lub firma transportowa będzie w trasie.")
+        
+        # Przygotowanie eleganckiej tabeli do wyświetlenia
+        df_raport = df_filtered[['Kategoria', 'Zasób', 'Zlecenie', 'Start_Str', 'Koniec_Str', 'Liczba Dni']].copy()
+        df_raport.columns = ['Kategoria', 'Kierowca / Przewoźnik', 'Numer Zlecenia', 'Od (Data)', 'Do (Data)', 'Czas (Dni)']
+        
+        # Oczyszczenie przedrostków "🧑‍✈️ SQM:" z tabeli, żeby Excel był czysty
+        df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🧑‍✈️ SQM: ', '')
+        df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🚛 AUTO SQM: ', '')
+        df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🏢 ', '')
+        
+        # Sortowanie na nowo
+        df_raport['Sort_DT'] = pd.to_datetime(df_raport['Od (Data)'], format="%d.%m.%Y")
+        df_raport = df_raport.sort_values(by=['Kategoria', 'Kierowca / Przewoźnik', 'Sort_DT']).drop(columns=['Sort_DT'])
+        
+        st.dataframe(df_raport, use_container_width=True, hide_index=True)
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Sekcja pobierania
+        col_csv, col_xls = st.columns(2)
+        dzisiaj_str = datetime.today().strftime('%Y-%m-%d')
+        
+        with col_csv:
+            csv_data = df_raport.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📊 Pobierz raport harmonogramu (.CSV)",
+                data=csv_data,
+                file_name=f"Harmonogram_Flota_{dzisiaj_str}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+        
+        with col_xls:
+            excel_buffer = io.BytesIO()
+            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                df_raport.to_excel(writer, index=False, sheet_name='Harmonogram')
+            excel_data = excel_buffer.getvalue()
+            
+            st.download_button(
+                label="📈 Pobierz raport harmonogramu (.xlsx)",
+                data=excel_data,
+                file_name=f"Harmonogram_Flota_{dzisiaj_str}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True
+            )
