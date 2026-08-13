@@ -7,27 +7,21 @@ import re
 import db
 
 def normalize_date(d_str, return_as_str=False):
-    """Zmienia dowolny tekst na obiekt datetime lub string formatu YYYY-MM-DD."""
     if pd.isna(d_str) or not str(d_str).strip():
         return None
     d_str = str(d_str).strip()
     try:
-        # Obsługa listy dat po przecinku (bierzemy ostatnią)
         if "," in d_str:
             d_str = d_str.split(",")[-1].strip()
-            
         if "." in d_str:
             dt = datetime.strptime(d_str, "%d.%m.%Y")
         else:
-            # Ucina ewentualne godziny (bierzemy samą datę)
             dt = datetime.strptime(d_str.split(" ")[0], "%Y-%m-%d")
-            
         return dt.strftime("%Y-%m-%d") if return_as_str else dt
     except:
         return None
 
 def extract_end_date_from_notes(notatki, start_date):
-    """Próbuje wyłuskać datę z tagu [Rozładunki: ...] w notatkach."""
     if pd.isna(notatki):
         return start_date
     notatki = str(notatki)
@@ -38,60 +32,58 @@ def extract_end_date_from_notes(notatki, start_date):
         return extracted if extracted else start_date
     return start_date
 
-def draw_gantt_chart(df_plot):
-    """Funkcja pomocnicza generująca gotowy, ostylowany wykres Plotly."""
+def draw_gantt_chart(df_plot, kolor_paska):
+    """Nowy, wysoce czytelny render wykresu Gantta z grubymi paskami i tekstem."""
+    
+    # Dynamiczna wysokość dająca dużo przestrzeni na tekst (60px na wiersz)
+    unikalne_zasoby = len(df_plot['Zasób'].unique())
+    height_calc = max(200, unikalne_zasoby * 60 + 100) 
+    
     fig = px.timeline(
         df_plot, 
         x_start="Start_DT", 
         x_end="Koniec_Viz", 
         y="Zasób", 
-        color="Kategoria",
+        text="Zlecenie", # Magiczna właściwość - wrzuca nazwy bezpośrednio w paski!
         hover_name="Zlecenie",
         custom_data=["Start_Str", "Koniec_Str", "Liczba Dni"],
-        color_discrete_map={
-            "Flota Własna SQM": "#C5A880",             # SQM Gold
-            "Zewnętrzni (Eventy/PRO)": "#3B82F6",      # Niebieski Corporate
-            "Zewnętrzni (Poboczne)": "#10B981"         # Szmaragdowy / Zielony
-        }
+        color_discrete_sequence=[kolor_paska]
     )
     
-    # Customizacja Dymka (Hover)
+    # Customizacja grubości pasków i tekstu
     fig.update_traces(
         hovertemplate="<b>%{hovertext}</b><br><br>Zajętość od: %{customdata[0]}<br>Zajętość do: %{customdata[1]}<br>Czas trwania: %{customdata[2]} dni<extra></extra>",
-        width=0.4 # Estetyczna grubość paska
+        width=0.75,  # Pogrubione paski
+        textposition='inside', # Tekst wymuszony wewnątrz paska
+        textfont=dict(size=12, color='white', family="Inter", weight="bold"),
+        insidetextanchor='middle'
     )
     
-    # Oś Y odwrócona, żeby "A" było na górze
-    fig.update_yaxes(autorange="reversed") 
+    fig.update_yaxes(
+        autorange="reversed", 
+        title="",
+        tickfont=dict(size=13, color='#E2DCD3', family='Inter', weight="bold"),
+        showgrid=True,
+        gridcolor='rgba(255, 255, 255, 0.03)'
+    )
     
-    # Inteligentna wysokość - kalendarz rośnie zależnie od ilości wierszy
-    height_calc = max(400, len(df_plot['Zasób'].unique()) * 40 + 120)
+    fig.update_xaxes(
+        showgrid=True, 
+        gridwidth=1,
+        gridcolor='rgba(255, 255, 255, 0.15)', # Wyraźniejsza pionowa siatka
+        tickformat="%d.%m",
+        title="",
+        tickfont=dict(size=12, color='#A39B8F'),
+        side="top" # Oś czasu przeniesiona na górę dla łatwiejszego czytania
+    )
     
+    # Wyłączona przezroczystość - solidne tło zapewnia maksymalny kontrast!
     fig.update_layout(
-        plot_bgcolor='rgba(28, 26, 24, 0.6)',
-        paper_bgcolor='rgba(18, 16, 14, 0)',
+        plot_bgcolor='#1C1A18', 
+        paper_bgcolor='#12100E',
         font=dict(color='#E2DCD3', family='Inter'),
-        margin=dict(l=10, r=20, t=30, b=20),
-        xaxis=dict(
-            showgrid=True, 
-            gridcolor='rgba(197, 168, 128, 0.15)',
-            tickformat="%d\n%b",
-            title=""
-        ),
-        yaxis=dict(
-            showgrid=True,
-            gridcolor='rgba(197, 168, 128, 0.05)',
-            title="",
-            tickfont=dict(size=12, color='#E2DCD3')
-        ),
-        legend=dict(
-            title="", 
-            orientation="h", 
-            yanchor="bottom", 
-            y=1.02, 
-            xanchor="right", 
-            x=1
-        ),
+        margin=dict(l=10, r=20, t=40, b=10),
+        showlegend=False,
         height=height_calc
     )
     return fig
@@ -105,7 +97,7 @@ def render(sh):
     ''', unsafe_allow_html=True)
     
     st.markdown("""
-        <p style="color: #8C8477; font-size: 13px; margin-bottom: 25px;">Wizualizacja "z lotu ptaka" pokazująca, w jakich dniach zablokowani są konkretni Przewoźnicy oraz Kierowcy z Floty SQM. Podzielona intuicyjnie na duże Projekty/Eventy oraz mniejsze Zlecenia Poboczne.</p>
+        <p style="color: #8C8477; font-size: 13px; margin-bottom: 25px;">Wizualizacja "z lotu ptaka" z wyraźnym podziałem na kategorię sprzętu i przewoźników. Nazwy zleceń widoczne są bezpośrednio na wykresie.</p>
     """, unsafe_allow_html=True)
     
     with st.spinner("Pobieranie i agregacja danych kalendarzowych z 3 modułów..."):
@@ -133,7 +125,7 @@ def render(sh):
                 kierowca = str(row.get("Kierowca", "")).strip()
                 pojazd = str(row.get("Nr_Rejestracyjny", "")).strip()
                 if kierowca: zasob = f"🧑‍✈️ SQM: {kierowca}"
-                elif pojazd: zasob = f"🚛 AUTO SQM: {pojazd}"
+                elif pojazd: zasob = f"🚛 SQM AUTO: {pojazd}"
                 else: zasob = "🚛 FLOTA SQM (Nieokreślona)"
                 kategoria = "Flota Własna SQM"
             else:
@@ -177,7 +169,7 @@ def render(sh):
         for _, row in df_zlp_akt.iterrows():
             nr = str(row.get("Nr Zlecenia", ""))
             
-            # Pomijamy zlecenia, które już wpadły jako PRO lub EVT (żeby uniknąć dublowania pasków na osi)
+            # Pomijamy zlecenia, które już wpadły jako PRO lub EVT
             if str(nr).startswith("CRG") or str(nr).startswith("EVT"):
                 continue 
                 
@@ -190,7 +182,7 @@ def render(sh):
             przewoznik = str(row.get("Przewoźnik", "")).strip()
             
             tasks.append({
-                "Zlecenie": f"[POBOCZNE] {nr}",
+                "Zlecenie": f"[POB] {nr}",
                 "Start": start,
                 "Koniec": end,
                 "Zasób": f"🏢 {przewoznik}",
@@ -210,54 +202,50 @@ def render(sh):
     # Obliczanie fizycznej liczby dni zlecenia
     df_gantt['Liczba Dni'] = (df_gantt['Koniec_DT'] - df_gantt['Start_DT']).dt.days + 1
     
-    # Trick graficzny dla Plotly (+1 dzień dla wizualizacji zakończenia)
+    # Trick graficzny dla Plotly (+1 dzień dla pełnej szerokości paska w ostatnim dniu)
     df_gantt['Koniec_Viz'] = df_gantt['Koniec_DT'] + pd.Timedelta(days=1)
     
-    # Zapis tekstowy dla tooltipów i tabeli raportowej
     df_gantt['Start_Str'] = df_gantt['Start_DT'].dt.strftime('%d.%m.%Y')
     df_gantt['Koniec_Str'] = df_gantt['Koniec_DT'].dt.strftime('%d.%m.%Y')
     
-    # Wstępne sortowanie
     df_gantt = df_gantt.sort_values(by=["Kategoria", "Zasób", "Start_DT"], ascending=[True, False, True])
 
     # --- ZAKŁADKI GŁÓWNE MODUŁU ---
     tab_eventy, tab_poboczne, tab_raport = st.tabs([
-        "🎪 Eventy i Projekty PRO", 
+        "🎪 Eventy, PRO i Flota", 
         "🚚 Zlecenia Poboczne", 
         "🧾 Tabela i Zapotrzebowanie (Raport)"
     ])
 
     # ==========================================
-    # ZAKŁADKA 1: EVENTY I PRO
+    # ZAKŁADKA 1: EVENTY I FLOTA WŁASNA
     # ==========================================
     with tab_eventy:
-        df_ev_pro = df_gantt[df_gantt['Kategoria'].isin(["Flota Własna SQM", "Zewnętrzni (Eventy/PRO)"])].copy()
+        st.markdown("<p style='font-size: 13px; color: #8C8477;'>Wyszukaj konkretnego kierowcę lub firmę:</p>", unsafe_allow_html=True)
+        wyszukaj_ev = st.text_input("Szukaj:", placeholder="np. 'SQM', 'Jan Kowalski', 'FRANTRANS'", key="ev_search", label_visibility="collapsed")
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        if not df_ev_pro.empty:
-            c_f1, c_f2 = st.columns(2)
-            with c_f1:
-                wybrane_kat_ev = st.multiselect(
-                    "Filtruj Kategorie:", 
-                    ["Flota Własna SQM", "Zewnętrzni (Eventy/PRO)"], 
-                    default=["Flota Własna SQM", "Zewnętrzni (Eventy/PRO)"],
-                    key="ev_multi"
-                )
-            with c_f2:
-                wyszukaj_ev = st.text_input("Szukaj Kierowcy / Przewoźnika:", placeholder="np. 'SQM', 'Jan Kowalski'", key="ev_search")
-                
-            df_ev_filt = df_ev_pro[df_ev_pro['Kategoria'].isin(wybrane_kat_ev)]
-            if wyszukaj_ev:
-                df_ev_filt = df_ev_filt[df_ev_filt['Zasób'].str.contains(wyszukaj_ev, case=False, na=False)]
-                
-            if not df_ev_filt.empty:
-                fig_ev = draw_gantt_chart(df_ev_filt)
-                st.markdown('<div style="background: rgba(28, 26, 24, 0.8); backdrop-filter: blur(10px); padding: 15px; border-radius: 12px; border: 1px solid rgba(197, 168, 128, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
-                st.plotly_chart(fig_ev, use_container_width=True, config={'displayModeBar': False})
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.warning("Brak wyników dla podanych filtrów.")
-        else:
-            st.info("Brak aktywnych Eventów i Zleceń PRO w systemie.")
+        # 1.1 Pod-wykres: TYLKO FLOTA SQM
+        df_sqm = df_gantt[df_gantt['Kategoria'] == "Flota Własna SQM"].copy()
+        if wyszukaj_ev: df_sqm = df_sqm[df_sqm['Zasób'].str.contains(wyszukaj_ev, case=False, na=False)]
+            
+        if not df_sqm.empty:
+            st.markdown("<h4 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>🟡 Nasi Kierowcy i Pojazdy SQM</h4>", unsafe_allow_html=True)
+            fig_sqm = draw_gantt_chart(df_sqm, kolor_paska="#C5A880") # Złoty
+            st.plotly_chart(fig_sqm, use_container_width=True, config={'displayModeBar': False})
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        # 1.2 Pod-wykres: TYLKO ZEWNĘTRZNI EVENTY/PRO
+        df_zewn = df_gantt[df_gantt['Kategoria'] == "Zewnętrzni (Eventy/PRO)"].copy()
+        if wyszukaj_ev: df_zewn = df_zewn[df_zewn['Zasób'].str.contains(wyszukaj_ev, case=False, na=False)]
+            
+        if not df_zewn.empty:
+            st.markdown("<h4 style='color: #3B82F6; font-family: \"Shippori Mincho\", serif;'>🔵 Przewoźnicy Zewnętrzni (Duże Eventy)</h4>", unsafe_allow_html=True)
+            fig_zewn = draw_gantt_chart(df_zewn, kolor_paska="#3B82F6") # Niebieski
+            st.plotly_chart(fig_zewn, use_container_width=True, config={'displayModeBar': False})
+        
+        if df_sqm.empty and df_zewn.empty:
+            st.warning("Brak wyników dla podanej frazy w tej zakładce.")
 
     # ==========================================
     # ZAKŁADKA 2: ZLECENIA POBOCZNE
@@ -266,21 +254,19 @@ def render(sh):
         df_pob = df_gantt[df_gantt['Kategoria'] == "Zewnętrzni (Poboczne)"].copy()
         
         if not df_pob.empty:
-            wyszukaj_pob = st.text_input("Szukaj Przewoźnika:", placeholder="Wpisz fragment nazwy...", key="pob_search")
+            wyszukaj_pob = st.text_input("Szukaj Przewoźnika:", placeholder="Wpisz fragment nazwy...", key="pob_search", label_visibility="collapsed")
+            st.markdown("<br>", unsafe_allow_html=True)
             
-            df_pob_filt = df_pob
-            if wyszukaj_pob:
-                df_pob_filt = df_pob[df_pob['Zasób'].str.contains(wyszukaj_pob, case=False, na=False)]
+            if wyszukaj_pob: df_pob = df_pob[df_pob['Zasób'].str.contains(wyszukaj_pob, case=False, na=False)]
                 
-            if not df_pob_filt.empty:
-                fig_pob = draw_gantt_chart(df_pob_filt)
-                st.markdown('<div style="background: rgba(28, 26, 24, 0.8); backdrop-filter: blur(10px); padding: 15px; border-radius: 12px; border: 1px solid rgba(197, 168, 128, 0.3); box-shadow: 0 4px 20px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
+            if not df_pob.empty:
+                st.markdown("<h4 style='color: #10B981; font-family: \"Shippori Mincho\", serif;'>🟢 Podwykonawcy (Zlecenia Poboczne)</h4>", unsafe_allow_html=True)
+                fig_pob = draw_gantt_chart(df_pob, kolor_paska="#10B981") # Szmaragdowy
                 st.plotly_chart(fig_pob, use_container_width=True, config={'displayModeBar': False})
-                st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.warning("Brak wyników dla podanych filtrów.")
+                st.warning("Brak wyników dla podanej frazy.")
         else:
-            st.info("Brak aktywnych Zleceń Pobocznych w systemie.")
+            st.info("Brak aktywnych Zleceń Pobocznych z datami.")
 
     # ==========================================
     # ZAKŁADKA 3: RAPORT I EKSPORT
@@ -291,11 +277,13 @@ def render(sh):
         
         zakres_raportu = st.radio(
             "Wybierz zakres generowanego raportu:", 
-            ["Wszystko (Zbiorczy)", "Tylko Eventy i PRO", "Tylko Zlecenia Poboczne"], 
+            ["Wszystko (Zbiorczy)", "Tylko Flota Własna SQM", "Tylko Eventy i PRO", "Tylko Zlecenia Poboczne"], 
             horizontal=True
         )
         
-        if zakres_raportu == "Tylko Eventy i PRO":
+        if zakres_raportu == "Tylko Flota Własna SQM":
+            df_raport_baza = df_gantt[df_gantt['Kategoria'] == "Flota Własna SQM"]
+        elif zakres_raportu == "Tylko Eventy i PRO":
             df_raport_baza = df_gantt[df_gantt['Kategoria'].isin(["Flota Własna SQM", "Zewnętrzni (Eventy/PRO)"])]
         elif zakres_raportu == "Tylko Zlecenia Poboczne":
             df_raport_baza = df_gantt[df_gantt['Kategoria'] == "Zewnętrzni (Poboczne)"]
@@ -305,12 +293,10 @@ def render(sh):
         df_raport = df_raport_baza[['Kategoria', 'Zasób', 'Zlecenie', 'Start_Str', 'Koniec_Str', 'Liczba Dni']].copy()
         df_raport.columns = ['Kategoria', 'Kierowca / Przewoźnik', 'Numer Zlecenia', 'Od (Data)', 'Do (Data)', 'Czas (Dni)']
         
-        # Oczyszczenie przedrostków z tabeli, żeby Excel był czysty
         df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🧑‍✈️ SQM: ', '')
         df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🚛 AUTO SQM: ', '')
         df_raport['Kierowca / Przewoźnik'] = df_raport['Kierowca / Przewoźnik'].str.replace('🏢 ', '')
         
-        # Sortowanie na nowo
         df_raport['Sort_DT'] = pd.to_datetime(df_raport['Od (Data)'], format="%d.%m.%Y")
         df_raport = df_raport.sort_values(by=['Kategoria', 'Kierowca / Przewoźnik', 'Sort_DT']).drop(columns=['Sort_DT'])
         
@@ -318,7 +304,6 @@ def render(sh):
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Sekcja pobierania
         col_csv, col_xls = st.columns(2)
         dzisiaj_str = datetime.today().strftime('%Y-%m-%d')
         
