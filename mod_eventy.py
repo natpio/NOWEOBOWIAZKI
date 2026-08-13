@@ -279,94 +279,90 @@ def render(sh):
                         st.caption(f"🆔 {dane_eventu['ID_Zlecenia']}<br>👤 {dane_eventu['Przewoznik']}", unsafe_allow_html=True)
                         
                     with c_cmr:
-                        if is_sqm:
-                            waga_val = str(dane_eventu.get("Waga", "0"))
-                            waga_int = int(float(waga_val)) if waga_val.replace('.','',1).isdigit() else 0
-                            
-                            nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
-                            
-                            if not nr_cmr_zapisany or nr_cmr_zapisany.strip() in ["", "nan", "None"]:
-                                if st.button("📝 Wygeneruj Nr CMR", use_container_width=True):
-                                    with st.spinner("Pobieranie numeru CMR z puli..."):
-                                        nowy_nr = db.get_next_cmr_number()
-                                        idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                                        
-                                        df_do_zapisu = df.copy()
-                                        df_do_zapisu.at[idx, 'Nr_CMR'] = str(nowy_nr)
-                                        gs_row = int(df_do_zapisu.at[idx, 'sheet_row'])
-                                        db.update_single_row_safe("DB_Eventy", gs_row, df_do_zapisu.loc[idx])
-                                        st.rerun()
-                            else:
-                                try:
-                                    resolved_dest = get_full_address(str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])), df_miejsca)
-                                    dane_cmr = {
-                                        "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
-                                        "miejsce_przeznaczenia": resolved_dest,
-                                        "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
-                                        "miasto_zal": "Komorniki, PL",
-                                        "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-                                        "waga": waga_int,
-                                        "nr_cmr": str(nr_cmr_zapisany),
-                                        "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
-                                        "kierowca": str(dane_eventu.get("Kierowca", "")),
-                                        "przewoznik": str(dane_eventu.get("Przewoznik", ""))
-                                    }
-                                    cmr_bytes = generate_cmr_excel(dane_cmr)
+                        waga_val = str(dane_eventu.get("Waga", "0"))
+                        waga_int = int(float(waga_val)) if waga_val.replace('.','',1).isdigit() else 0
+                        
+                        nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
+                        
+                        if not nr_cmr_zapisany or nr_cmr_zapisany.strip() in ["", "nan", "None"]:
+                            if st.button("📝 Wygeneruj Nr CMR", use_container_width=True):
+                                with st.spinner("Pobieranie numeru CMR z puli..."):
+                                    nowy_nr = db.get_next_cmr_number()
+                                    idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                     
-                                    st.caption("💡 Zapisz formularz edycji na dole, aby przycisk pobrał nowe dane.")
-                                    st.download_button(
-                                        label=f"📥 Pobierz ZAKTUALIZOWANY CMR ({nr_cmr_zapisany})",
-                                        data=cmr_bytes,
-                                        file_name=f"CMR_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx",
-                                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                        use_container_width=True
-                                    )
-                                    
-                                    # ==========================================
-                                    # LOGIKA ZWROTNEGO CMR W MODULE EVENTÓW
-                                    # ==========================================
-                                    st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
-                                    st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🔙 Dokument na drogę powrotną</p>", unsafe_allow_html=True)
-                                    data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{dane_eventu['ID_Zlecenia']}")
-                                    
-                                    if data_powrotu_cmr:
-                                        if st.button("⚙️ Nadaj nowy nr z bazy i Generuj Powrót", use_container_width=True, key=f"btn_powrot_{dane_eventu['ID_Zlecenia']}"):
-                                            with st.spinner("Pobieranie kolejnego numeru z licznika..."):
-                                                nowy_nr_powrotny = db.get_next_cmr_number()
-                                                target_place_name = str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow']))
-                                                miasto_zal_powrot = get_cmr_city_format(target_place_name, target_place_name, df_miejsca)
-                                                
-                                                dane_cmr_powrot = {
-                                                    "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
-                                                    "miejsce_przeznaczenia": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
-                                                    "data_zal": str(data_powrotu_cmr),
-                                                    "miasto_zal": miasto_zal_powrot,
-                                                    "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-                                                    "waga": waga_int,
-                                                    "nr_cmr": str(nowy_nr_powrotny),
-                                                    "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
-                                                    "kierowca": str(dane_eventu.get("Kierowca", "")),
-                                                    "przewoznik": str(dane_eventu.get("Przewoznik", ""))
-                                                }
-                                                st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"] = generate_cmr_excel(dane_cmr_powrot)
-                                                st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"] = nowy_nr_powrotny
-                                                st.rerun()
-                                                
-                                        # Wyświetlanie gotowego przycisku POBIERZ
-                                        if f"powrot_bytes_{dane_eventu['ID_Zlecenia']}" in st.session_state:
-                                            nr_gen = st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"]
-                                            st.download_button(
-                                                label=f"🔙 Pobierz gotowy CMR POWRÓT ({nr_gen})",
-                                                data=st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"],
-                                                file_name=f"CMR_POWROT_{dane_eventu['ID_Zlecenia']}_{nr_gen}.xlsx",
-                                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                                use_container_width=True,
-                                                key=f"dl_pow_{dane_eventu['ID_Zlecenia']}"
-                                            )
-                                except Exception as e:
-                                    st.error("Szablon CMR niedostępny.")
+                                    df_do_zapisu = df.copy()
+                                    df_do_zapisu.at[idx, 'Nr_CMR'] = str(nowy_nr)
+                                    gs_row = int(df_do_zapisu.at[idx, 'sheet_row'])
+                                    db.update_single_row_safe("DB_Eventy", gs_row, df_do_zapisu.loc[idx])
+                                    st.rerun()
                         else:
-                            st.info("💡 Zewn. transport. Wygeneruj CMR w Module PRO.")
+                            try:
+                                resolved_dest = get_full_address(str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])), df_miejsca)
+                                dane_cmr = {
+                                    "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
+                                    "miejsce_przeznaczenia": resolved_dest,
+                                    "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
+                                    "miasto_zal": "Komorniki, PL",
+                                    "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                                    "waga": waga_int,
+                                    "nr_cmr": str(nr_cmr_zapisany),
+                                    "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                    "kierowca": str(dane_eventu.get("Kierowca", "")),
+                                    "przewoznik": str(dane_eventu.get("Przewoznik", ""))
+                                }
+                                cmr_bytes = generate_cmr_excel(dane_cmr)
+                                
+                                st.caption("💡 Zapisz formularz edycji na dole, aby przycisk pobrał nowe dane.")
+                                st.download_button(
+                                    label=f"📥 Pobierz ZAKTUALIZOWANY CMR ({nr_cmr_zapisany})",
+                                    data=cmr_bytes,
+                                    file_name=f"CMR_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx",
+                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                    use_container_width=True
+                                )
+                                
+                                # ==========================================
+                                # LOGIKA ZWROTNEGO CMR W MODULE EVENTÓW
+                                # ==========================================
+                                st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
+                                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🔙 Dokument na drogę powrotną</p>", unsafe_allow_html=True)
+                                data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{dane_eventu['ID_Zlecenia']}")
+                                
+                                if data_powrotu_cmr:
+                                    if st.button("⚙️ Nadaj nowy nr z bazy i Generuj Powrót", use_container_width=True, key=f"btn_powrot_{dane_eventu['ID_Zlecenia']}"):
+                                        with st.spinner("Pobieranie kolejnego numeru z licznika..."):
+                                            nowy_nr_powrotny = db.get_next_cmr_number()
+                                            target_place_name = str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow']))
+                                            miasto_zal_powrot = get_cmr_city_format(target_place_name, target_place_name, df_miejsca)
+                                            
+                                            dane_cmr_powrot = {
+                                                "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
+                                                "miejsce_przeznaczenia": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
+                                                "data_zal": str(data_powrotu_cmr),
+                                                "miasto_zal": miasto_zal_powrot,
+                                                "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                                                "waga": waga_int,
+                                                "nr_cmr": str(nowy_nr_powrotny),
+                                                "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                                "kierowca": str(dane_eventu.get("Kierowca", "")),
+                                                "przewoznik": str(dane_eventu.get("Przewoznik", ""))
+                                            }
+                                            st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"] = generate_cmr_excel(dane_cmr_powrot)
+                                            st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"] = nowy_nr_powrotny
+                                            st.rerun()
+                                            
+                                    if f"powrot_bytes_{dane_eventu['ID_Zlecenia']}" in st.session_state:
+                                        nr_gen = st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"]
+                                        st.download_button(
+                                            label=f"🔙 Pobierz gotowy CMR POWRÓT ({nr_gen})",
+                                            data=st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"],
+                                            file_name=f"CMR_POWROT_{dane_eventu['ID_Zlecenia']}_{nr_gen}.xlsx",
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            use_container_width=True,
+                                            key=f"dl_pow_{dane_eventu['ID_Zlecenia']}"
+                                        )
+                            except Exception as e:
+                                st.error("Szablon CMR niedostępny.")
 
                     with c_dup:
                         if st.button("📋 Klonuj", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
@@ -514,7 +510,6 @@ def render(sh):
                             if st.form_submit_button("💾 Zapisz Zmiany"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                 
-                                # ===== KRYTYCZNA POPRAWKA: TWARDY CASTING NA STRING =====
                                 df.at[idx, 'ID_Zlecenia'] = str(u_id_zlecenia)
                                 df.at[idx, 'Nazwa_Targow'] = str(u_nazwa)
                                 df.at[idx, 'Miejsce_Przeznaczenia'] = str(final_miejsce_edit)
@@ -648,7 +643,6 @@ def render(sh):
                                 df.at[idx, 'Nr_Faktury'] = str(u_nr_fak)
                                 
                                 if not is_sqm:
-                                    # ===== KRYTYCZNA POPRAWKA: KONWERSJA NA STRING =====
                                     df.at[idx, 'Koszt_Transportu_EUR'] = str(u_koszt)
                                     df.at[idx, 'Faktura_Oplacona'] = str(u_faktura_opl)
                                     df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
