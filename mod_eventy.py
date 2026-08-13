@@ -8,7 +8,6 @@ from db import load_data, generuj_smart_id
 from mod_generator_pdf import generate_cmr_excel, get_cmr_city_format
 
 def get_full_address(place_name, df_miejsca):
-    """Funkcja pomocnicza do pobierania pełnego adresu z bazy na potrzeby CMR."""
     if place_name == "INNE (wpisz ręcznie)": 
         return ""
     if place_name == "Magazyn SQM Komorniki":
@@ -28,7 +27,6 @@ def render(sh):
     
     worksheet, df = load_data(sh, "DB_Eventy")
     
-    # POBRANIE SŁOWNIKA MIEJSC
     df_miejsca = db.fetch_data("Miejsca")
     lista_miejsc_baza = df_miejsca['Nazwa do listy'].dropna().tolist() if not df_miejsca.empty else []
     opcje_lokalizacji = ["Magazyn SQM Komorniki"] + lista_miejsc_baza + ["INNE (wpisz ręcznie)"]
@@ -97,7 +95,7 @@ def render(sh):
             
             wyszukiwarka = st.text_input(
                 "Wyszukiwarka", 
-                placeholder="🔍 Wpisz nazwę targów, przewoźnika, ID zlecenia, fakturę (rozdzielaj przecinkiem)...",
+                placeholder="🔍 Wpisz nazwę targów, przewoźnika, ID zlecenia, fakturę...",
                 label_visibility="collapsed"
             )
             st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
@@ -106,67 +104,45 @@ def render(sh):
             active_filter = st.session_state["filtr_eventow"]
             
             def get_filter_style(is_active):
-                if is_active:
-                    return "background: linear-gradient(135deg, rgba(197, 168, 128, 0.35) 0%, rgba(197, 168, 128, 0.15) 100%); border: 1px solid #C5A880; box-shadow: 0 4px 15px rgba(0,0,0,0.3);"
-                else:
-                    return "background: rgba(28, 26, 24, 0.75); border: 1px solid rgba(197, 168, 128, 0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
+                if is_active: return "background: linear-gradient(135deg, rgba(197, 168, 128, 0.35) 0%, rgba(197, 168, 128, 0.15) 100%); border: 1px solid #C5A880; box-shadow: 0 4px 15px rgba(0,0,0,0.3);"
+                else: return "background: rgba(28, 26, 24, 0.75); border: 1px solid rgba(197, 168, 128, 0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
 
             with f_col1:
-                st.markdown(f"""
-                <div style="{get_filter_style(active_filter == 'Wszystkie')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
-                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Wszystkie</div>
-                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">すべて</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"""<div style="{get_filter_style(active_filter == 'Wszystkie')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Wszystkie</div></div>""", unsafe_allow_html=True)
                 if st.button("Filtruj Wszystkie", use_container_width=True, key="btn_f_all"):
                     st.session_state["filtr_eventow"] = "Wszystkie"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
 
             with f_col2:
-                st.markdown(f"""
-                <div style="{get_filter_style(active_filter == 'BrakCMR')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
-                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak CMR ({braki_cmr})</div>
-                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">CMRなし</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"""<div style="{get_filter_style(active_filter == 'BrakCMR')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak CMR ({braki_cmr})</div></div>""", unsafe_allow_html=True)
                 if st.button("Filtruj Brak CMR", use_container_width=True, key="btn_f_cmr"):
                     st.session_state["filtr_eventow"] = "BrakCMR"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
 
             with f_col3:
-                st.markdown(f"""
-                <div style="{get_filter_style(active_filter == 'BrakPOD')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
-                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak POD ({braki_pod})</div>
-                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">POD受領待ち</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"""<div style="{get_filter_style(active_filter == 'BrakPOD')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak POD ({braki_pod})</div></div>""", unsafe_allow_html=True)
                 if st.button("Filtruj Brak POD", use_container_width=True, key="btn_f_pod"):
                     st.session_state["filtr_eventow"] = "BrakPOD"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
 
             with f_col4:
-                st.markdown(f"""
-                <div style="{get_filter_style(active_filter == 'BrakFaktury')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
-                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Nieopłacone ({braki_faktury})</div>
-                    <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">未払い請求書</div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f"""<div style="{get_filter_style(active_filter == 'BrakFaktury')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
+                    <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Nieopłacone ({braki_faktury})</div></div>""", unsafe_allow_html=True)
                 if st.button("Filtruj Nieopłacone", use_container_width=True, key="btn_f_fak"):
                     st.session_state["filtr_eventow"] = "BrakFaktury"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
             
             df_widok = df_aktywne.copy()
-            
-            if st.session_state["filtr_eventow"] == "BrakCMR":
-                df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1)]
-            elif st.session_state["filtr_eventow"] == "BrakPOD":
-                df_widok = df_widok[df_widok.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
-            elif st.session_state["filtr_eventow"] == "BrakFaktury":
-                df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
+            if st.session_state["filtr_eventow"] == "BrakCMR": df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1)]
+            elif st.session_state["filtr_eventow"] == "BrakPOD": df_widok = df_widok[df_widok.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
+            elif st.session_state["filtr_eventow"] == "BrakFaktury": df_widok = df_widok[df_widok.get("Faktura_Oplacona", pd.Series()) == "NIE"]
 
             if wyszukiwarka and not df_widok.empty:
                 frazy = [f.strip().lower() for f in wyszukiwarka.split(",") if f.strip()]
@@ -186,10 +162,7 @@ def render(sh):
             
             with col_lista:
                 if df_widok.empty:
-                    if wyszukiwarka:
-                        st.warning(f"Brak zleceń pasujących do frazy: **{wyszukiwarka}** w wybranym filtrze.")
-                    else:
-                        st.info("Brak zleceń spełniających wybrane kryteria filtra.")
+                    st.info("Brak zleceń spełniających wybrane kryteria.")
                 else:
                     for index, row in df_widok.iterrows():
                         faza = str(row.get('Faza_Procesu', '')).lower()
@@ -203,61 +176,46 @@ def render(sh):
                         is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
                         braki_tagi_html = ""
                         
-                        if wymaga_cmr(row):
-                            braki_tagi_html += f"<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
-                        
+                        if wymaga_cmr(row): braki_tagi_html += f"<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
                         if not is_sqm_row:
-                            if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
-                                braki_tagi_html += f"<span class='tag-zen-orange'>📄 BRAK POD</span>"
-                            if str(row.get('Faktura_Oplacona', '')) == 'NIE':
-                                braki_tagi_html += f"<span class='tag-zen-red'>💰 NIEOPŁACONE</span>"
-                            if str(row.get('PP_Otrzymane', '')) == 'NIE':
-                                braki_tagi_html += f"<span class='tag-zen-blue'>💳 BRAK PP</span>"
+                            if str(row.get('CMR_Podpisane_POD', '')) == 'NIE': braki_tagi_html += f"<span class='tag-zen-orange'>📄 BRAK POD</span>"
+                            if str(row.get('Faktura_Oplacona', '')) == 'NIE': braki_tagi_html += f"<span class='tag-zen-red'>💰 NIEOPŁACONE</span>"
+                            if str(row.get('PP_Otrzymane', '')) == 'NIE': braki_tagi_html += f"<span class='tag-zen-blue'>💳 BRAK PP</span>"
 
-                        if braki_tagi_html:
-                            tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
-                        else:
-                            tags_div = ""
-
+                        tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>' if braki_tagi_html else ""
                         data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
-                        if data_zal_lista in ['', 'None', 'nan', 'NaT']:
-                            data_zal_lista = 'Brak danych'
+                        if data_zal_lista in ['', 'None', 'nan', 'NaT']: data_zal_lista = 'Brak danych'
                             
-                        notatki_str = str(row.get('Notatki', ''))
-                        data_roz_lista = "Brak danych"
-                        if "[Rozładunki:" in notatki_str:
-                            try: data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
-                            except: pass
+                        # Wyciąganie daty powrotu dla widoku listy (żeby było czytelnie)
+                        powrot_lista = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
+                        if powrot_lista in ['', 'None', 'nan', 'NaT']:
+                            powrot_lista = "Brak danych"
 
                         c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
-                        
                         with c_karta:
-                            html_karta = f"""
-<div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
-    <div style="display: flex; width: 100%; justify-content: space-between;">
-        <div class="cr-col" style="width: 40%;">
-            <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
-            <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
-        </div>
-        <div class="cr-col" style="width: 25%;">
-            <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-            <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
-        </div>
-        <div class="cr-col" style="width: 35%; align-items: flex-end;">
-            <span class="cr-text" style="margin-bottom: 2px; font-size: 12px;">📅 Załadunek: <b style="color: #C5A880;">{data_zal_lista}</b></span>
-            <span class="cr-text" style="margin-bottom: 6px; font-size: 12px;">🏁 Rozładunek: <b style="color: #83A5DB;">{data_roz_lista}</b></span>
-            <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
-        </div>
-    </div>
-    {tags_div}
-</div>
-"""
-                            st.markdown(html_karta, unsafe_allow_html=True)
+                            st.markdown(f"""
+                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
+                                <div style="display: flex; width: 100%; justify-content: space-between;">
+                                    <div class="cr-col" style="width: 40%;">
+                                        <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
+                                        <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+                                    </div>
+                                    <div class="cr-col" style="width: 25%;">
+                                        <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
+                                        <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
+                                    </div>
+                                    <div class="cr-col" style="width: 35%; align-items: flex-end;">
+                                        <span class="cr-text" style="margin-bottom: 2px; font-size: 12px;">📅 Załadunek: <b style="color: #C5A880;">{data_zal_lista}</b></span>
+                                        <span class="cr-text" style="margin-bottom: 6px; font-size: 12px;">🔙 Powrót: <b style="color: #83A5DB;">{powrot_lista}</b></span>
+                                        <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                                    </div>
+                                </div>
+                                {tags_div}
+                            </div>""", unsafe_allow_html=True)
                             
                         with c_btn:
                             is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
                             btn_type = "primary" if is_primary else "secondary"
-                            
                             if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
                                 st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
                                 st.rerun()
@@ -267,29 +225,23 @@ def render(sh):
                     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
                     is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
                     
-                    st.markdown("""
-                        <div style="background: rgba(28, 26, 24, 0.85); padding: 25px; border-radius: 8px; border: 1px solid rgba(197, 168, 128, 0.3);">
-                            <p style="color: #8C8477; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;">Szczegóły Operacji</p>
-                    """, unsafe_allow_html=True)
-                    
+                    st.markdown("""<div style="background: rgba(28, 26, 24, 0.85); padding: 25px; border-radius: 8px; border: 1px solid rgba(197, 168, 128, 0.3);">
+                                <p style="color: #8C8477; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;">Szczegóły Operacji</p>""", unsafe_allow_html=True)
                     st.markdown(f"<h3 style='color: #E2DCD3; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     
                     c_id, c_cmr, c_dup = st.columns([4, 3, 3])
-                    with c_id:
-                        st.caption(f"🆔 {dane_eventu['ID_Zlecenia']}<br>👤 {dane_eventu['Przewoznik']}", unsafe_allow_html=True)
+                    with c_id: st.caption(f"🆔 {dane_eventu['ID_Zlecenia']}<br>👤 {dane_eventu['Przewoznik']}", unsafe_allow_html=True)
                         
                     with c_cmr:
                         waga_val = str(dane_eventu.get("Waga", "0"))
                         waga_int = int(float(waga_val)) if waga_val.replace('.','',1).isdigit() else 0
-                        
                         nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
                         
                         if not nr_cmr_zapisany or nr_cmr_zapisany.strip() in ["", "nan", "None"]:
                             if st.button("📝 Wygeneruj Nr CMR", use_container_width=True):
-                                with st.spinner("Pobieranie numeru CMR z puli..."):
+                                with st.spinner("Pobieranie numeru CMR..."):
                                     nowy_nr = db.get_next_cmr_number()
                                     idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                                    
                                     df_do_zapisu = df.copy()
                                     df_do_zapisu.at[idx, 'Nr_CMR'] = str(nowy_nr)
                                     gs_row = int(df_do_zapisu.at[idx, 'sheet_row'])
@@ -300,52 +252,31 @@ def render(sh):
                                 resolved_dest = get_full_address(str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow'])), df_miejsca)
                                 dane_cmr = {
                                     "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
-                                    "miejsce_przeznaczenia": resolved_dest,
-                                    "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
-                                    "miasto_zal": "Komorniki, PL",
-                                    "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-                                    "waga": waga_int,
-                                    "nr_cmr": str(nr_cmr_zapisany),
-                                    "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
-                                    "kierowca": str(dane_eventu.get("Kierowca", "")),
-                                    "przewoznik": str(dane_eventu.get("Przewoznik", ""))
+                                    "miejsce_przeznaczenia": resolved_dest, "data_zal": str(dane_eventu.get("Data_Zlecenia_Tr", "")),
+                                    "miasto_zal": "Komorniki, PL", "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
+                                    "waga": waga_int, "nr_cmr": str(nr_cmr_zapisany), "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                    "kierowca": str(dane_eventu.get("Kierowca", "")), "przewoznik": str(dane_eventu.get("Przewoznik", ""))
                                 }
                                 cmr_bytes = generate_cmr_excel(dane_cmr)
+                                st.download_button(label=f"📥 Pobierz ZAKTUALIZOWANY CMR", data=cmr_bytes, file_name=f"CMR_{dane_eventu['ID_Zlecenia']}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
                                 
-                                st.caption("💡 Zapisz formularz edycji na dole, aby przycisk pobrał nowe dane.")
-                                st.download_button(
-                                    label=f"📥 Pobierz ZAKTUALIZOWANY CMR ({nr_cmr_zapisany})",
-                                    data=cmr_bytes,
-                                    file_name=f"CMR_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx",
-                                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                    use_container_width=True
-                                )
-                                
-                                # ==========================================
-                                # LOGIKA ZWROTNEGO CMR W MODULE EVENTÓW
-                                # ==========================================
                                 st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
                                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🔙 Dokument na drogę powrotną</p>", unsafe_allow_html=True)
                                 data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{dane_eventu['ID_Zlecenia']}")
                                 
                                 if data_powrotu_cmr:
-                                    if st.button("⚙️ Nadaj nowy nr z bazy i Generuj Powrót", use_container_width=True, key=f"btn_powrot_{dane_eventu['ID_Zlecenia']}"):
-                                        with st.spinner("Pobieranie kolejnego numeru z licznika..."):
+                                    if st.button("⚙️ Nadaj nowy nr i Generuj Powrót", use_container_width=True, key=f"btn_powrot_{dane_eventu['ID_Zlecenia']}"):
+                                        with st.spinner("Pobieranie kolejnego numeru..."):
                                             nowy_nr_powrotny = db.get_next_cmr_number()
                                             target_place_name = str(dane_eventu.get("Miejsce_Przeznaczenia", dane_eventu['Nazwa_Targow']))
                                             miasto_zal_powrot = get_cmr_city_format(target_place_name, target_place_name, df_miejsca)
-                                            
                                             dane_cmr_powrot = {
                                                 "odbiorca": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
                                                 "miejsce_przeznaczenia": "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182",
-                                                "data_zal": str(data_powrotu_cmr),
-                                                "miasto_zal": miasto_zal_powrot,
-                                                "opis_ladunku": "MULTIMEDIA / Exhibition Equipment",
-                                                "waga": waga_int,
-                                                "nr_cmr": str(nowy_nr_powrotny),
-                                                "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
-                                                "kierowca": str(dane_eventu.get("Kierowca", "")),
-                                                "przewoznik": str(dane_eventu.get("Przewoznik", ""))
+                                                "data_zal": str(data_powrotu_cmr), "miasto_zal": miasto_zal_powrot,
+                                                "opis_ladunku": "MULTIMEDIA / Exhibition Equipment", "waga": waga_int,
+                                                "nr_cmr": str(nowy_nr_powrotny), "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
+                                                "kierowca": str(dane_eventu.get("Kierowca", "")), "przewoznik": str(dane_eventu.get("Przewoznik", ""))
                                             }
                                             st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"] = generate_cmr_excel(dane_cmr_powrot)
                                             st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"] = nowy_nr_powrotny
@@ -353,14 +284,7 @@ def render(sh):
                                             
                                     if f"powrot_bytes_{dane_eventu['ID_Zlecenia']}" in st.session_state:
                                         nr_gen = st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"]
-                                        st.download_button(
-                                            label=f"🔙 Pobierz gotowy CMR POWRÓT ({nr_gen})",
-                                            data=st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"],
-                                            file_name=f"CMR_POWROT_{dane_eventu['ID_Zlecenia']}_{nr_gen}.xlsx",
-                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                                            use_container_width=True,
-                                            key=f"dl_pow_{dane_eventu['ID_Zlecenia']}"
-                                        )
+                                        st.download_button(label=f"🔙 Pobierz gotowy CMR POWRÓT ({nr_gen})", data=st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"], file_name=f"CMR_POWROT_{dane_eventu['ID_Zlecenia']}_{nr_gen}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_pow_{dane_eventu['ID_Zlecenia']}")
                             except Exception as e:
                                 st.error("Szablon CMR niedostępny.")
 
@@ -372,7 +296,6 @@ def render(sh):
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
                             nowy_wiersz['CMR_Gotowe'] = "NIE"
                             nowy_wiersz['Nr_CMR'] = "" 
-                            
                             is_sqm_clone = (nowy_wiersz['Typ_Transportu'] == "Własny SQM")
                             nowy_wiersz['CMR_Podpisane_POD'] = "N/A" if is_sqm_clone else "NIE"
                             nowy_wiersz['Faktura_Oplacona'] = "N/A" if is_sqm_clone else "NIE"
@@ -381,17 +304,12 @@ def render(sh):
                             nowy_wiersz['Data_Platnosci'] = "N/A" if is_sqm_clone else ""
                             nowy_wiersz['Zakonczone_Arch'] = "NIE"
                             nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
-                            
-                            if 'sheet_row' in nowy_wiersz:
-                                del nowy_wiersz['sheet_row']
-                                
+                            if 'sheet_row' in nowy_wiersz: del nowy_wiersz['sheet_row']
                             df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                             df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                             nowy_wiersz_z_id = df_temp.iloc[-1]
-                            
                             kolumny = [k for k in df.columns if k != 'sheet_row']
                             wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny]
-                            
                             db.append_data("DB_Eventy", wiersz_lista)
                             st.session_state["wybrany_event_id"] = None 
                             st.success("✅ Skopiowano zlecenie (Bezpieczny zapis)!")
@@ -405,51 +323,22 @@ def render(sh):
                     else: plik_img = "default.png"
                     
                     if os.path.exists(plik_img):
-                        with open(plik_img, "rb") as f:
-                            b64_img = base64.b64encode(f.read()).decode()
-                        st.markdown(f"""
-                        <div style="width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin: 15px 0; border: 1px solid rgba(197, 168, 128, 0.2);">
-                            <img src="data:image/png;base64,{b64_img}" style="width: 100%; height: auto; display: block; object-fit: cover;">
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"""
-                        <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
-                            <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        with open(plik_img, "rb") as f: b64_img = base64.b64encode(f.read()).decode()
+                        st.markdown(f"""<div style="width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin: 15px 0; border: 1px solid rgba(197, 168, 128, 0.2);"><img src="data:image/png;base64,{b64_img}" style="width: 100%; height: auto; display: block; object-fit: cover;"></div>""", unsafe_allow_html=True)
 
                     braki_zlecenia = []
-                    if wymaga_cmr(dane_eventu):
-                        braki_zlecenia.append("📝 <b>Wystawić dokument CMR</b> dla kierowcy")
-                    
+                    if wymaga_cmr(dane_eventu): braki_zlecenia.append("📝 <b>Wystawić dokument CMR</b> dla kierowcy")
                     if not is_sqm:
-                        if dane_eventu.get("CMR_Podpisane_POD") == "NIE":
-                            braki_zlecenia.append("📄 <b>Odzyskać podpisane CMR (POD)</b> po dostawie")
-                        if dane_eventu.get("Faktura_Oplacona") == "NIE":
-                            braki_zlecenia.append("💰 <b>Opłacić fakturę</b> zewnętrznego przewoźnika")
-                        if dane_eventu.get("PP_Otrzymane") == "NIE":
-                            braki_zlecenia.append("💳 Zdobyć i wgrać <b>Potwierdzenie Przelewu (PP)</b>")
-                        if str(dane_eventu.get("Nr_Faktury", "")).strip() in ["", "None"]:
-                            braki_zlecenia.append("🔢 Wprowadzić <b>Numer Faktury Zewnętrznej</b>")
+                        if dane_eventu.get("CMR_Podpisane_POD") == "NIE": braki_zlecenia.append("📄 <b>Odzyskać podpisane CMR (POD)</b> po dostawie")
+                        if dane_eventu.get("Faktura_Oplacona") == "NIE": braki_zlecenia.append("💰 <b>Opłacić fakturę</b> zewnętrznego przewoźnika")
+                        if dane_eventu.get("PP_Otrzymane") == "NIE": braki_zlecenia.append("💳 Zdobyć i wgrać <b>Potwierdzenie Przelewu (PP)</b>")
+                        if str(dane_eventu.get("Nr_Faktury", "")).strip() in ["", "None"]: braki_zlecenia.append("🔢 Wprowadzić <b>Numer Faktury Zewnętrznej</b>")
 
                     if braki_zlecenia:
                         lista_brakow = "".join([f"<li style='margin-bottom: 5px;'>{b}</li>" for b in braki_zlecenia])
-                        st.markdown(f"""
-                        <div style="background: rgba(186, 73, 73, 0.05); border: 1px solid rgba(186, 73, 73, 0.3); padding: 15px 20px; border-radius: 8px; margin: 15px 0;">
-                            <h4 style="color: #BA4949; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">⚠️ Wymagane Akcje:</h4>
-                            <ul style="color: #E2DCD3; font-size: 13px; margin: 0; padding-left: 20px;">
-                                {lista_brakow}
-                            </ul>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"""<div style="background: rgba(186, 73, 73, 0.05); border: 1px solid rgba(186, 73, 73, 0.3); padding: 15px 20px; border-radius: 8px; margin: 15px 0;"><h4 style="color: #BA4949; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">⚠️ Wymagane Akcje:</h4><ul style="color: #E2DCD3; font-size: 13px; margin: 0; padding-left: 20px;">{lista_brakow}</ul></div>""", unsafe_allow_html=True)
                     else:
-                        st.markdown(f"""
-                        <div style="background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.3); padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">✅</span>
-                            <span style="color: #77A385; font-size: 13px; font-weight: 600;">Wszystkie dokumenty i rozliczenia są kompletne.</span>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"""<div style="background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.3); padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px;"><span style="font-size: 18px;">✅</span><span style="color: #77A385; font-size: 13px; font-weight: 600;">Wszystkie dokumenty i rozliczenia są kompletne.</span></div>""", unsafe_allow_html=True)
 
                     det_info, det_har, det_fin, det_arch = st.tabs(["📝 EDYCJA", "⏱️ HARMONOGRAM", "💼 FINANSE", "🏁 ZAKOŃCZ"])
                     
@@ -463,13 +352,8 @@ def render(sh):
                                 u_nazwa = st.text_input("Nazwa Targów / Eventu", value=str(dane_eventu.get('Nazwa_Targow', '')))
                                 
                                 akt_miejsce = str(dane_eventu.get('Miejsce_Przeznaczenia', ''))
-                                if akt_miejsce in opcje_lokalizacji:
-                                    idx_m = opcje_lokalizacji.index(akt_miejsce)
-                                    init_m_man = ""
-                                else:
-                                    idx_m = opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0
-                                    init_m_man = akt_miejsce
-                                    
+                                idx_m = opcje_lokalizacji.index(akt_miejsce) if akt_miejsce in opcje_lokalizacji else (opcje_lokalizacji.index("INNE (wpisz ręcznie)") if "INNE (wpisz ręcznie)" in opcje_lokalizacji else 0)
+                                init_m_man = akt_miejsce if akt_miejsce not in opcje_lokalizacji else ""
                                 u_miejsce_sel = st.selectbox("Miejsce docelowe (do CMR)", opcje_lokalizacji, index=idx_m)
                                 u_miejsce_man = st.text_area("Adres docelowy (ręcznie)", value=init_m_man) if u_miejsce_sel == "INNE (wpisz ręcznie)" else ""
                                 final_miejsce_edit = u_miejsce_man if u_miejsce_sel == "INNE (wpisz ręcznie)" else u_miejsce_sel
@@ -495,10 +379,15 @@ def render(sh):
                                 except: dp_parsed = None
                                 u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
                                 
-                                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Daty rozładunku na targach:</p>", unsafe_allow_html=True)
-                                r_ed1, r_ed2 = st.columns(2)
+                                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Kalendarz na trasie (Dla Wykresu Gantta):</p>", unsafe_allow_html=True)
+                                r_ed1, r_ed2, r_ed3 = st.columns(3)
                                 u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=None)
-                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
+                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=None)
+                                
+                                dp_zak = str(dane_eventu.get("Data_Zakonczenia_Uslugi", "")).strip()
+                                try: dp_zak_parsed = datetime.datetime.strptime(dp_zak, "%Y-%m-%d").date() if dp_zak not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
+                                except: dp_zak_parsed = None
+                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=dp_zak_parsed)
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
@@ -519,23 +408,17 @@ def render(sh):
                                 df.at[idx, 'Nr_Rejestracyjny'] = str(u_nr_rejestracyjny)
                                 df.at[idx, 'Kierowca'] = str(u_kierowca)
                                 df.at[idx, 'Waga'] = str(u_waga) 
-                                
-                                if u_typ_transp == "Zewnętrzny":
-                                    df.at[idx, 'Nr_Zlecenia_Zewn'] = str(u_id_zlecenia)
-                                else:
-                                    df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
-                                
+                                df.at[idx, 'Nr_Zlecenia_Zewn'] = str(u_id_zlecenia) if u_typ_transp == "Zewnętrzny" else "FLOTA WŁASNA"
                                 df.at[idx, 'Faza_Procesu'] = str(u_faza)
                                 df.at[idx, 'Status_Magazyn'] = str(u_status_mag)
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 
                                 rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
-                                if u_data_roz_2:
-                                    rozładunki_str += f", {u_data_roz_2}"
-                                if rozładunki_str:
-                                    df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {u_notatki}"
-                                else:
-                                    df.at[idx, 'Notatki'] = str(u_notatki)
+                                if u_data_roz_2: rozładunki_str += f", {u_data_roz_2}"
+                                if rozładunki_str: df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {u_notatki}"
+                                else: df.at[idx, 'Notatki'] = str(u_notatki)
+                                
+                                df.at[idx, 'Data_Zakonczenia_Uslugi'] = str(u_data_zakonczenia) if u_data_zakonczenia else ""
                                 
                                 gs_row = int(df.at[idx, 'sheet_row'])
                                 db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
@@ -547,33 +430,14 @@ def render(sh):
                     with det_har:
                         worksheet_sloty, df_sloty = load_data(sh, "DB_Sloty")
                         sloty_eventu = df_sloty[df_sloty['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']] if not df_sloty.empty else pd.DataFrame()
-                        
                         st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:15px; font-size: 14px;'>📍 Zarezerwowane Okna Czasowe</p>", unsafe_allow_html=True)
-                        
                         if not sloty_eventu.empty:
                             for idx, slot in sloty_eventu.iterrows():
-                                st.markdown(f"""
-                                <div style="background: rgba(255,255,255,0.02); border-left: 3px solid #C5A880; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                                        <div>
-                                            <strong style="color: #E2DCD3; font-size: 14px;">{slot.get('Typ_Operacji', '-')}</strong>
-                                            <span style="color: #8C8477; font-size: 12px; margin-left: 10px;">📅 {slot.get('Data_Slota', '-')} | ⏰ {slot.get('Godzina_Od', '-')} - {slot.get('Godzina_Do', '-')}</span>
-                                        </div>
-                                        <div style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #C5A880;">
-                                            Brama: {slot.get('Brama_Rampa', 'Brak') or 'Brak'}
-                                        </div>
-                                    </div>
-                                    <div style="color: #8C8477; font-size: 12px; margin-top: 5px;">{slot.get('Notatki', '')}</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                        else:
-                            st.info("Brak przypisanych slotów dla tego transportu.")
+                                st.markdown(f"""<div style="background: rgba(255,255,255,0.02); border-left: 3px solid #C5A880; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px;"><div style="display: flex; justify-content: space-between; align-items: center;"><div><strong style="color: #E2DCD3; font-size: 14px;">{slot.get('Typ_Operacji', '-')}</strong><span style="color: #8C8477; font-size: 12px; margin-left: 10px;">📅 {slot.get('Data_Slota', '-')} | ⏰ {slot.get('Godzina_Od', '-')} - {slot.get('Godzina_Do', '-')}</span></div><div style="background: rgba(0,0,0,0.3); padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #C5A880;">Brama: {slot.get('Brama_Rampa', 'Brak') or 'Brak'}</div></div><div style="color: #8C8477; font-size: 12px; margin-top: 5px;">{slot.get('Notatki', '')}</div></div>""", unsafe_allow_html=True)
+                        else: st.info("Brak przypisanych slotów dla tego transportu.")
 
-                        st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 15px 0;'>", unsafe_allow_html=True)
-                        
                         with st.form(key=f"form_add_slot_{dane_eventu['ID_Zlecenia']}", clear_on_submit=True):
                             st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>➕ Dodaj Nowy Slot</p>", unsafe_allow_html=True)
-                            
                             s_col1, s_col2 = st.columns(2)
                             with s_col1:
                                 s_typ = st.selectbox("Typ Operacji", ["Montaż", "Odbiór Empties", "Demontaż", "Załadunek (Magazyn)", "Rozładunek (Magazyn)", "Inne"])
@@ -583,19 +447,9 @@ def render(sh):
                                 with ss_col1: s_od = st.time_input("Godz. Od", value=None)
                                 with ss_col2: s_do = st.time_input("Godz. Do", value=None)
                                 s_brama = st.text_input("Brama / Rampa (Gate)")
-                                
                             s_notatki = st.text_input("Dodatkowe Notatki")
-                            
                             if st.form_submit_button("💾 Zapisz Slot"):
-                                nowy_slot = [
-                                    str(dane_eventu['ID_Zlecenia']),
-                                    str(s_typ),
-                                    str(s_data) if s_data else "",
-                                    s_od.strftime("%H:%M") if s_od else "",
-                                    s_do.strftime("%H:%M") if s_do else "",
-                                    str(s_brama),
-                                    str(s_notatki)
-                                ]
+                                nowy_slot = [str(dane_eventu['ID_Zlecenia']), str(s_typ), str(s_data) if s_data else "", s_od.strftime("%H:%M") if s_od else "", s_do.strftime("%H:%M") if s_do else "", str(s_brama), str(s_notatki)]
                                 db.append_data("DB_Sloty", nowy_slot)
                                 st.success("Dodano nowy slot!")
                                 st.rerun()
@@ -603,7 +457,6 @@ def render(sh):
                     with det_fin:
                         with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
                             st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
-                            
                             if is_sqm:
                                 u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
                                 st.info("🚚 Pojazd własnej floty SQM. Pola finansowe są automatycznie ustawione na N/A.")
@@ -613,43 +466,31 @@ def render(sh):
                                 with col_d1: u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
                                 with col_d2: u_pod = st.selectbox("CMR POD?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Podpisane_POD", "")) if dane_eventu.get("CMR_Podpisane_POD", "") in ["", "NIE", "TAK"] else 0)
                                 with col_d3: u_pp = st.selectbox("Potw. Przelewu (PP)?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("PP_Otrzymane", "")) if dane_eventu.get("PP_Otrzymane", "") in ["", "NIE", "TAK"] else 0)
-                                
-                                st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'>", unsafe_allow_html=True)
                                 st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Faktury</p>", unsafe_allow_html=True)
-                                
                                 col_f1, col_f2 = st.columns(2)
                                 with col_f1: 
                                     koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
-                                    koszt_val = float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0
-                                    u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=koszt_val, step=50.0)
-                                    
-                                    st.info(f"Numer referencyjny na zewnątrz: {dane_eventu.get('Nr_Zlecenia_Zewn', '')}")
+                                    u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0, step=50.0)
                                     u_nr_fak = st.text_input("Nr Faktury Zewn.", value=str(dane_eventu.get("Nr_Faktury", "")))
                                 with col_f2:
                                     u_faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("Faktura_Oplacona", "")) if dane_eventu.get("Faktura_Oplacona", "") in ["", "NIE", "TAK"] else 0)
                                     dp_val = str(dane_eventu.get("Data_Platnosci", ""))
-                                    try:
-                                        dp_val_parsed = datetime.datetime.strptime(dp_val, "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
-                                    except:
-                                        dp_val_parsed = None
+                                    try: dp_val_parsed = datetime.datetime.strptime(dp_val, "%Y-%m-%d").date() if dp_val and dp_val != "N/A" else None
+                                    except: dp_val_parsed = None
                                     u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
 
-                            st.markdown("<br>", unsafe_allow_html=True)
                             if st.form_submit_button("💾 Zapisz Aktualizacje"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
                                 df.at[idx, 'CMR_Gotowe'] = str(u_cmr)
                                 df.at[idx, 'CMR_Podpisane_POD'] = str(u_pod)
                                 df.at[idx, 'PP_Otrzymane'] = str(u_pp)
                                 df.at[idx, 'Nr_Faktury'] = str(u_nr_fak)
-                                
                                 if not is_sqm:
                                     df.at[idx, 'Koszt_Transportu_EUR'] = str(u_koszt)
                                     df.at[idx, 'Faktura_Oplacona'] = str(u_faktura_opl)
                                     df.at[idx, 'Data_Platnosci'] = str(u_data_platnosci) if u_data_platnosci else ""
-                                    
                                 gs_row = int(df.at[idx, 'sheet_row'])
                                 db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
-                                
                                 st.success("Zaktualizowano finanse!")
                                 st.rerun()
 
@@ -657,7 +498,6 @@ def render(sh):
                         st.info("Zarchiwizowanie transportu usunie go z widoku aktywnych operacji i przeniesie do Cold Storage.")
                         if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ", type="primary", use_container_width=True):
                             idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                            
                             if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
                                 df.at[idx, 'Faktura_Oplacona'] = "N/A"
                                 df.at[idx, 'PP_Otrzymane'] = "N/A"
@@ -666,31 +506,19 @@ def render(sh):
                                 df.at[idx, 'CMR_Podpisane_POD'] = "N/A"
                                 df.at[idx, 'Nr_Faktury'] = "N/A"
                                 df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
-                                
                             df.at[idx, 'Faza_Procesu'] = "Zamknięte"
                             df.at[idx, 'Zakonczone_Arch'] = "TAK"
-                            
                             wiersz_do_archiwum = df.loc[idx].copy()
                             gs_row = int(wiersz_do_archiwum['sheet_row'])
-                            if 'sheet_row' in wiersz_do_archiwum:
-                                wiersz_do_archiwum = wiersz_do_archiwum.drop('sheet_row')
-                                
+                            if 'sheet_row' in wiersz_do_archiwum: wiersz_do_archiwum = wiersz_do_archiwum.drop('sheet_row')
                             db.archive_row_safe("DB_Eventy", "DB_Eventy ARCHIWUM", gs_row, wiersz_do_archiwum.tolist())
-                            
                             st.session_state["wybrany_event_id"] = None
                             st.success(f"Zlecenie zamknięte i przeniesione do fizycznego archiwum Cold Storage!")
                             st.rerun()
-                            
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown("""
-                        <div style="height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(28, 26, 24, 0.5); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); padding: 40px; text-align: center;">
-                            <span style="color: #8C8477; line-height: 1.6;">Wybierz zlecenie z listy po lewej stronie,<br>aby wyświetlić panel szczegółów i edycję.</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-        else:
-            st.info("Brak aktywnych transportów w bazie danych.")
+                    st.markdown("""<div style="height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(28, 26, 24, 0.5); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); padding: 40px; text-align: center;"><span style="color: #8C8477; line-height: 1.6;">Wybierz zlecenie z listy po lewej stronie,<br>aby wyświetlić panel szczegółów i edycję.</span></div>""", unsafe_allow_html=True)
+        else: st.info("Brak aktywnych transportów w bazie danych.")
 
     with tab_formularz:
         with st.expander("➕ Brak miejsca na liście? Dodaj nową lokalizację do Słownika"):
@@ -700,31 +528,19 @@ def render(sh):
                 nowa_ulica = st.text_input("Ulica i numer:")
                 nowy_kod = st.text_input("Kod pocztowy:")
                 nowe_miasto = st.text_input("Miasto:")
-                
                 k1, k2 = st.columns(2)
                 nowy_kraj = k1.text_input("Kraj:", value="Polska")
                 nowy_skrot = k2.text_input("Skrót Kraju (do CMR):", value="PL")
-                
                 if st.form_submit_button("💾 Zapisz lokalizację w bazie"):
                     if nowa_nazwa_lista.strip():
                         kolumny_miejsca = df_miejsca.columns.tolist() if not df_miejsca.empty else ["Nazwa do listy", "Nazwa pełna / Firma", "Ulica i numer", "Kod pocztowy", "Miasto", "Kraj", "Skrót Kraju"]
-                        slownik_nowego = {
-                            "Nazwa do listy": nowa_nazwa_lista.strip(), 
-                            "Nazwa pełna / Firma": nowa_firma.strip(), 
-                            "Ulica i numer": nowa_ulica.strip(), 
-                            "Kod pocztowy": nowy_kod.strip(), 
-                            "Miasto": nowe_miasto.strip(), 
-                            "Kraj": nowy_kraj.strip(),
-                            "Skrót Kraju": nowy_skrot.strip()
-                        }
+                        slownik_nowego = {"Nazwa do listy": nowa_nazwa_lista.strip(), "Nazwa pełna / Firma": nowa_firma.strip(), "Ulica i numer": nowa_ulica.strip(), "Kod pocztowy": nowy_kod.strip(), "Miasto": nowe_miasto.strip(), "Kraj": nowy_kraj.strip(), "Skrót Kraju": nowy_skrot.strip()}
                         nowy_wiersz = [str(slownik_nowego.get(kol, "")) for kol in kolumny_miejsca]
                         if db.append_data("Miejsca", nowy_wiersz):
                             st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
-                            st.cache_data.clear()
-                            st.rerun()
+                            st.cache_data.clear(); st.rerun()
 
         st.markdown("<h4 style='color: #C5A880; margin-top: 0;'>📝 Podstawowe Dane Operacyjne</h4>", unsafe_allow_html=True)
-        
         typ_transportu = st.radio("Rodzaj transportu:", ["Zewnętrzny", "Własny SQM"], horizontal=True)
         
         with st.form("form_event_pro", clear_on_submit=True):
@@ -732,120 +548,82 @@ def render(sh):
             with f_col1:
                 id_zlecenia_custom = st.text_input("Własne ID Zlecenia (Opcjonalnie)", placeholder="Zostaw puste by wygenerować automatycznie")
                 nazwa_targow = st.text_input("Nazwa Targów / Eventu *")
-                
                 u_miejsce_sel_c = st.selectbox("Miejsce docelowe (Odbiorca na CMR)", opcje_lokalizacji)
                 u_miejsce_man_c = st.text_area("Adres Docelowy (ręcznie)") if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else ""
-                
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
                 
-                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Daty rozładunku na obiekcie (wiele dni):</p>", unsafe_allow_html=True)
-                r_form1, r_form2 = st.columns(2)
+                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Kalendarz na trasie (Dla Wykresu Gantta):</p>", unsafe_allow_html=True)
+                r_form1, r_form2, r_form3 = st.columns(3)
                 data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
-                data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
+                data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcja):", value=None)
+                data_powrotu_baza = r_form3.date_input("Powrót do bazy (Koniec):", value=None)
                 
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Firma Transportowa *")
                 kierowca = st.text_input("Imię i Nazwisko Kierowcy (do CMR)")
                 nr_rejestracyjny = st.text_input("Nr Rejestracyjny Pojazdu (do CMR)")
                 waga = st.number_input("Waga (kg)", min_value=0, step=100)
-                
                 faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
             notatki = st.text_area("Notatki Dodatkowe")
             
             st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color: #C5A880;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
             cmr_gotowe = st.selectbox("Wystawione CMR przed wyjazdem?", ["NIE", "TAK"])
             
             if typ_transportu == "Zewnętrzny":
-                st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'>", unsafe_allow_html=True)
                 st.markdown("<h4 style='color: #C5A880;'>🏁 Finanse i Dowód Dostawy (POD)</h4>", unsafe_allow_html=True)
                 d_col1, d_col2, d_col3 = st.columns(3)
                 with d_col1: cmr_podpisane = st.selectbox("Otrzymano podpisane CMR (POD)?", ["NIE", "TAK"])
                 with d_col2: pp_otrzymane = st.selectbox("Potw. Przelewu (PP)?", ["", "NIE", "TAK"])
                 with d_col3: faktura_opl = st.selectbox("Faktura Opłacona?", ["", "NIE", "TAK"])
-
-                st.markdown("<br>", unsafe_allow_html=True)
                 e_col1, e_col2 = st.columns(2)
                 with e_col1: koszt_transportu = st.number_input("Koszt Transportu (€)", min_value=0.0, value=0.0, step=50.0)
                 with e_col2: nr_faktury = st.text_input("Nr Faktury Przewoźnika")
             else:
                 st.info("💡 Wybrano Flotę Własną SQM. Sekcja finansowa i zewnętrzna została pominięta.")
-                cmr_podpisane, pp_otrzymane, faktura_opl = "N/A", "N/A", "N/A"
-                koszt_transportu, nr_faktury = "N/A", "N/A"
+                cmr_podpisane, pp_otrzymane, faktura_opl, koszt_transportu, nr_faktury = "N/A", "N/A", "N/A", "0", "N/A"
 
-            st.markdown("<br>", unsafe_allow_html=True)
-            
             if st.form_submit_button("🚀 Zainicjuj Zlecenie Systemowe"):
-                if not nazwa_targow or not przewoznik:
-                    st.error("❌ Uzupełnij nazwę targów oraz przewoźnika!")
+                if not nazwa_targow or not przewoznik: st.error("❌ Uzupełnij nazwę targów oraz przewoźnika!")
                 else:
-                    if typ_transportu == "Zewnętrzny":
-                        nr_zewn_final = id_zlecenia_custom
-                    else:
-                        nr_zewn_final = "FLOTA WŁASNA"
-                        
+                    nr_zewn_final = id_zlecenia_custom if typ_transportu == "Zewnętrzny" else "FLOTA WŁASNA"
                     roz_str = str(data_rozladunku_1) if data_rozladunku_1 else ""
-                    if data_rozladunku_2:
-                        roz_str += f", {data_rozladunku_2}"
-                    
-                    finalne_notatki = notatki
-                    if roz_str:
-                        finalne_notatki = f"[Rozładunki: {roz_str}] {notatki}"
-                        
+                    if data_rozladunku_2: roz_str += f", {data_rozladunku_2}"
+                    finalne_notatki = f"[Rozładunki: {roz_str}] {notatki}" if roz_str else notatki
                     finalne_miejsce_przeznaczenia = u_miejsce_man_c if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else u_miejsce_sel_c
                         
                     nowy_wiersz = {
                         "ID_Zlecenia": str(id_zlecenia_custom), "Nazwa_Targow": str(nazwa_targow), "Typ_Transportu": str(typ_transportu),
                         "Faza_Procesu": str(faza_procesu), "Typ_Pojazdu": str(typ_pojazdu), "Przewoznik": str(przewoznik),
                         "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", 
-                        "Status_Magazyn": str(status_magazyn),
-                        "Notatki": str(finalne_notatki), "Koszt_Transportu_EUR": str(koszt_transportu), "CMR_Gotowe": str(cmr_gotowe), 
+                        "Status_Magazyn": str(status_magazyn), "Notatki": str(finalne_notatki), 
+                        "Koszt_Transportu_EUR": str(koszt_transportu), "CMR_Gotowe": str(cmr_gotowe), 
                         "CMR_Podpisane_POD": str(cmr_podpisane), "Nr_Zlecenia_Zewn": str(nr_zewn_final), 
-                        "Nr_Faktury": str(nr_faktury), "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
+                        "Nr_Faktury": str(nr_faktury), 
+                        "Data_Zakonczenia_Uslugi": str(data_powrotu_baza) if data_powrotu_baza else "",
+                        "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": str(faktura_opl), "PP_Otrzymane": str(pp_otrzymane), "Zakonczone_Arch": "NIE",
                         "Miejsce_Przeznaczenia": str(finalne_miejsce_przeznaczenia), "Waga": str(waga), "Nr_Rejestracyjny": str(nr_rejestracyjny), 
                         "Kierowca": str(kierowca), "Nr_CMR": ""
                     }
-
                     df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                     df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                     nowy_wiersz_z_id = df_temp.iloc[-1]
-                    
-                    kolumny = [k for k in df.columns if k != 'sheet_row']
-                    wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny]
-                    
+                    wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in [k for k in df.columns if k != 'sheet_row']]
                     db.append_data("DB_Eventy", wiersz_lista)
-                    
-                    st.session_state.cmr_powrot_bytes = None
-                    st.session_state.cmr_powrot_nr = None
-                    
-                    st.success("🎉 Zlecenie zapisane w bazie chmurowej (Bezpieczny zapis)!")
+                    st.session_state.cmr_powrot_bytes, st.session_state.cmr_powrot_nr = None, None
+                    st.success("🎉 Zlecenie zapisane!")
                     st.rerun()
 
     with tab_archiwum:
         st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
-        st.info("🗄️ Zakończone zlecenia są wyizolowane do osobnej zakładki w chmurze, aby nie spowalniać pracy systemu. Załaduj je tylko w razie potrzeby.")
-        
-        if "arch_loaded_eventy" not in st.session_state:
-            st.session_state["arch_loaded_eventy"] = False
-
+        if "arch_loaded_eventy" not in st.session_state: st.session_state["arch_loaded_eventy"] = False
         if not st.session_state["arch_loaded_eventy"]:
-            if st.button("📥 Połącz i wczytaj bazę archiwalną", use_container_width=True):
-                st.session_state["arch_loaded_eventy"] = True
-                st.rerun()
-                
+            if st.button("📥 Połącz i wczytaj bazę archiwalną", use_container_width=True): st.session_state["arch_loaded_eventy"] = True; st.rerun()
         if st.session_state["arch_loaded_eventy"]:
-            if st.button("❌ Ukryj archiwum (Zwolnij pamięć)", use_container_width=True, type="secondary"):
-                st.session_state["arch_loaded_eventy"] = False
-                st.rerun()
-                
-            with st.spinner("Pobieranie ciężkich danych archiwalnych z Google Sheets..."):
-                df_arch = db.fetch_data("DB_Eventy ARCHIWUM")
-            
-            if not df_arch.empty:
-                st.dataframe(df_arch, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Archiwum jest puste lub zakładka 'DB_Eventy ARCHIWUM' jeszcze nie powstała (zrobi się sama przy pierwszej archiwizacji).")
+            if st.button("❌ Ukryj archiwum", use_container_width=True, type="secondary"): st.session_state["arch_loaded_eventy"] = False; st.rerun()
+            with st.spinner("Pobieranie ciężkich danych archiwalnych..."): df_arch = db.fetch_data("DB_Eventy ARCHIWUM")
+            if not df_arch.empty: st.dataframe(df_arch, use_container_width=True, hide_index=True)
+            else: st.warning("Archiwum jest puste.")
