@@ -50,7 +50,6 @@ def render(sh):
     brak_pod = len(active_all[(active_all.get("POD") == "NIE")]) if not active_all.empty and "POD" in active_all.columns else 0
     brak_fv = len(active_all[(active_all.get("Faktura") == "NIE")]) if not active_all.empty and "Faktura" in active_all.columns else 0
 
-    # KARTY KPI (Teraz minimalistyczne, dziedziczą papier z tła aplikacji)
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
@@ -74,7 +73,6 @@ def render(sh):
 
     tab1, tab_pay, tab2, tab3 = st.tabs(["⚾ Aktywne Zlecenia", "💳 Do opłacenia", "＋ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
 
-    # Wczytywanie sylwetki pałkarza dla tła wierszy (jeśli jest plik batter.png)
     b64_batter = ""
     if os.path.exists("batter.png"):
         with open("batter.png", "rb") as f:
@@ -89,7 +87,6 @@ def render(sh):
             if search_query.lower() not in str(row.values).lower() and search_query != "":
                 continue
 
-            # Przyciski akcji wzorowane na makiecie
             action_buttons = ""
             if row.get("POD") == "NIE":
                 action_buttons += f'<span class="btn-action-red" style="margin-right: 8px;">Brak POD</span>'
@@ -100,33 +97,29 @@ def render(sh):
             nr_zlecenia_wyswietl = row.get('Nr Zlecenia', 'Brak nr')
             row_idx = int(row['sheet_row']) 
             
-            # Wstrzykiwanie półprzezroczystego pałkarza po prawej stronie wiersza
-            bg_style = ""
+            img_html = ""
             if b64_batter:
-                bg_style = f"background-image: url('data:image/png;base64,{b64_batter}'); background-size: 80px auto; background-position: right 30px center; background-repeat: no-repeat;"
+                img_html = f'<div style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); opacity: 0.15; z-index: 1;"><img src="data:image/png;base64,{b64_batter}" height="80"></div>'
 
-            # Render pojedynczego "biletu" w nowym układzie
             st.markdown(f"""
-            <div class="custom-row" style="{bg_style}">
+            <div class="custom-row">
+                {img_html}
                 <div style="display: flex; width: 100%; position: relative; z-index: 2;">
                     
-                    <!-- Lewa sekcja (Dane) -->
                     <div class="cr-col" style="flex: 2.5; padding-right: 15px;">
                         <div class="cr-title">{nr_zlecenia_wyswietl}</div>
                         <div class="cr-text" style="margin-top: 5px;">🚛 Przewoźnik: <strong>{row.get('Przewoźnik', 'Brak')}</strong></div>
                         <div class="cr-text">👤 Opis: <i>{row.get('Opis Ładunku / Trasy', '---')}</i></div>
                     </div>
                     
-                    <!-- Środkowa sekcja (Daty) -->
-                    <div class="cr-col" style="flex: 1.5; border-left: 1px dashed rgba(10, 25, 47, 0.2); padding-left: 20px; justify-content: center;">
+                    <div class="cr-col" style="flex: 1.5; border-left: 1px dashed rgba(10, 25, 47, 0.3); padding-left: 20px; justify-content: center;">
                         <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
                         <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
                         <div class="cr-text">💲 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div>
                         <div style="font-size: 10px; font-weight: 700; margin-top: 5px; color: #0A192F;">{status_val}</div>
                     </div>
                     
-                    <!-- Prawa sekcja (Przyciski akcji) -->
-                    <div class="cr-col" style="flex: 1.2; align-items: flex-end; justify-content: center; flex-direction: row; gap: 5px; padding-right: 100px;">
+                    <div class="cr-col" style="flex: 1.2; align-items: flex-end; justify-content: center; flex-direction: row; gap: 5px; padding-right: 80px;">
                         {action_buttons}
                     </div>
                 </div>
@@ -184,7 +177,6 @@ def render(sh):
                         st.success(f"Usunięto pomyślnie.")
                         st.rerun()
 
-    # WYSWIETLANIE LIST
     with tab1:
         sq_akt = st.text_input("", placeholder="🔍 Wpisz nazwę przewoźnika, opis, numer...", key="sq_akt", label_visibility="collapsed")
         st.markdown("<br>", unsafe_allow_html=True)
