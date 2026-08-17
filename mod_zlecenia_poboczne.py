@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+import base64
+import os
 import db
 
 def parse_date(d_str):
@@ -17,15 +19,15 @@ def parse_date(d_str):
         return datetime.today().date()
 
 def render(sh):
-    # Nagłówek w stylu Japandi
+    # Nagłówek w stylu Baseball x Japandi
     st.markdown('''
         <div class="module-header-container">
             <h1 class="module-title">Zlecenia Poboczne</h1>
-            <div class="module-subtitle">サブオーダー ✦ SECONDARY ORDERS</div>
+            <div class="module-subtitle">⚾ サブオーダー ✦ SECONDARY ORDERS</div>
         </div>
     ''', unsafe_allow_html=True)
 
-    # 1. POBIERANIE DANYCH Z ZAKŁADKI (Przed renderowaniem czegokolwiek)
+    # 1. POBIERANIE DANYCH Z ZAKŁADKI
     worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
     
     # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
@@ -42,7 +44,6 @@ def render(sh):
         pod = str(r.get('POD', 'NIE')).strip().upper()
         fv = str(r.get('Faktura', 'NIE')).strip().upper()
         nr_fv = str(r.get('Nr Faktury', '')).strip()
-        # Warunek przerzucenia: Jest POD + Jest podany numer Faktury + Faktura nie jest jeszcze opłacona
         if pod == 'TAK' and nr_fv and nr_fv.lower() not in ['nan', 'none'] and fv != 'TAK':
             return True
         return False
@@ -62,35 +63,38 @@ def render(sh):
     brak_pod = len(active_all[(active_all.get("POD") == "NIE")]) if not active_all.empty and "POD" in active_all.columns else 0
     brak_fv = len(active_all[(active_all.get("Faktura") == "NIE")]) if not active_all.empty and "Faktura" in active_all.columns else 0
 
-    # 4. WYSWIETLANIE KART KPI NA SAMEJ GÓRZE WIDOKU
+    # 4. WYSWIETLANIE KART KPI (Z klimatycznymi grafikami na tle)
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
             <div class="kpi-header">DO WYSTAWIENIA CMR</div>
             <div class="kpi-sub-jp">CMRの発行待ち</div>
             <div class="kpi-value">{brak_cmr}</div>
-            <div class="kpi-icon-bg">📝</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-header">BRAKUJĄCE ZWROTY POD</div>
             <div class="kpi-sub-jp">POD受領待ち</div>
             <div class="kpi-value">{brak_pod}</div>
-            <div class="kpi-icon-bg">📄</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-header">NIEOPŁACONE FAKTURY</div>
             <div class="kpi-sub-jp">未払い請求書</div>
             <div class="kpi-value">{brak_fv}</div>
-            <div class="kpi-icon-bg">💰</div>
         </div>
     </div>
     <br>
     """, unsafe_allow_html=True)
 
-    # 5. DEKLARACJA ZAKŁADEK (Teraz pojawią się grzecznie POD kartami KPI)
-    tab1, tab_pay, tab2, tab3 = st.tabs(["📂 Aktywne Zlecenia", "💳 Do opłacenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
+    # 5. DEKLARACJA ZAKŁADEK
+    tab1, tab_pay, tab2, tab3 = st.tabs(["⚾ Aktywne Zlecenia", "💳 Do opłacenia", "＋ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
 
-    # Funkcja generująca widok kafelków, używana w zakładkach "Aktywne" i "Do opłacenia"
+    # Przygotowanie Base64 dla sylwetki pałkarza na kafelkach (jeśli plik istnieje)
+    b64_batter = ""
+    if os.path.exists("batter.png"):
+        with open("batter.png", "rb") as f:
+            b64_batter = base64.b64encode(f.read()).decode()
+
+    # Funkcja generująca widok kafelków (biletów meczowych)
     def render_order_list(df_subset, search_query, empty_msg):
         if df_subset.empty:
             st.info(empty_msg)
@@ -107,23 +111,28 @@ def render(sh):
             nr_faktury_val = str(row.get("Nr Faktury", "")).replace("nan", "").strip()
             tag_nr_fv = f'<span class="tag-zen-blue">FV: {nr_faktury_val}</span>' if nr_faktury_val else ''
 
-            tags_html = f'<div class="cr-col" style="flex: 2; flex-direction: row; gap: 8px;">{tag_cmr}{tag_pod}{tag_fv}{tag_nr_fv}</div>'
+            tags_html = f'<div class="cr-col" style="flex: 2; flex-direction: row; gap: 8px; align-items: center;">{tag_cmr}{tag_pod}{tag_fv}{tag_nr_fv}</div>'
 
             status_val = str(row.get('Status', 'PLANOWANIE')).lower()
             nr_zlecenia_wyswietl = row.get('Nr Zlecenia', 'Brak nr')
             row_idx = int(row['sheet_row']) 
             
+            # Styl tła z sylwetką pałkarza po prawej stronie (jeśli asset istnieje)
+            bg_style = ""
+            if b64_batter:
+                bg_style = f"background-image: linear-gradient(90deg, rgba(245, 237, 224, 0.95) 60%, rgba(245, 237, 224, 0.4) 100%), url('data:image/png;base64,{b64_batter}'); background-size: 160px auto; background-position: right center; background-repeat: no-repeat;"
+
             st.markdown(f"""
-            <div class="custom-row">
+            <div class="custom-row" style="{bg_style}">
                 <div class="cr-col" style="flex: 2.5;">
-                    <div class="cr-title">{nr_zlecenia_wyswietl}</div>
-                    <div class="cr-text">🚛 Przewoźnik: {row.get('Przewoźnik', 'Brak')}</div>
-                    <div class="cr-text" style="color: #C5A880; font-style: italic;">📝 {row.get('Opis Ładunku / Trasy', '---')}</div>
+                    <div class="cr-title">⚾ {nr_zlecenia_wyswietl}</div>
+                    <div class="cr-text">🚛 Przewoźnik: <strong>{row.get('Przewoźnik', 'Brak')}</strong></div>
+                    <div class="cr-text" style="color: #990000; font-style: italic;">📝 {row.get('Opis Ładunku / Trasy', '---')}</div>
                 </div>
                 <div class="cr-col" style="flex: 1.5;">
                     <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
                     <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
-                    <div class="cr-text" style="color: #8C8477;">💳 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div>
+                    <div class="cr-text">💳 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div>
                     <div class="cr-badge {status_val}" style="width: max-content; margin-top: 4px;">{row.get('Status', 'PLANOWANIE')}</div>
                 </div>
                 {tags_html}
@@ -190,7 +199,7 @@ def render(sh):
     # KARTA 1: AKTYWNE ZLECENIA
     # ==========================================
     with tab1:
-        st.markdown("<div style='font-size: 10px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px;'>⚡ WYSZUKAJ W AKTYWNYCH:</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size: 11px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;'>⚾ Wyszukaj w aktywnych:</div>", unsafe_allow_html=True)
         sq_akt = st.text_input("", placeholder="🔍 Wpisz nazwę przewoźnika, opis, numer...", key="sq_akt", label_visibility="collapsed")
         render_order_list(df_aktywne, sq_akt, "Brak aktywnych zleceń pobocznych.")
 
@@ -199,7 +208,7 @@ def render(sh):
     # ==========================================
     with tab_pay:
         st.info("💡 Znajdują się tu zlecenia, w których **odzyskano POD** oraz wprowadzono **Numer Faktury zewnętrznej**. Oczekują one wyłącznie na opłacenie.")
-        st.markdown("<div style='font-size: 10px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px;'>⚡ WYSZUKAJ W ZOBOWIĄZANIACH:</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size: 11px; color: #C5A880; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;'>⚾ Wyszukaj w zobowiązaniach:</div>", unsafe_allow_html=True)
         sq_pay = st.text_input("", placeholder="🔍 Wpisz numer faktury, przewoźnika...", key="sq_pay", label_visibility="collapsed")
         render_order_list(df_do_oplacenia, sq_pay, "Obecnie brak zleceń gotowych do opłacenia.")
 
@@ -207,7 +216,7 @@ def render(sh):
     # KARTA 3: UTWÓRZ NOWE ZLECENIE
     # ==========================================
     with tab2:
-        st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Utwórz Nowe Zlecenie Poboczne</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #FDFBF7; font-family: \"Playball\", cursive; font-size: 36px;'>Utwórz Nowe Zlecenie Poboczne</h3>", unsafe_allow_html=True)
         with st.form("form_zlecenia_poboczne", clear_on_submit=True):
             col1, col2 = st.columns(2)
             with col1:
@@ -230,10 +239,10 @@ def render(sh):
                 faktura = st.selectbox("Czy faktura opłacona?", ["TAK", "NIE"], index=1)
                 nr_faktury = st.text_input("Nr Faktury (jeśli już znasz)")
             
-            submit_btn = st.form_submit_button("➕ Dodaj do Bazy", type="primary")
+            submit_btn = st.form_submit_button("＋ Dodaj do Bazy", type="primary")
             
             if submit_btn:
-                if not nr_zlecenia or not przewoznik:
+                if not nr_zlekcenia if 'nr_zlekcenia' in locals() else not nr_zlecenia or not przewoznik:
                     st.error("Numer zlecenia i Przewoźnik są wymagane!")
                 else:
                     nowy_wiersz = [
@@ -246,13 +255,12 @@ def render(sh):
                         st.rerun()
 
     # ==========================================
-    # KARTA 4: ARCHIWUM (LAZY LOADING)
+    # KARTA 4: ARCHIWUM
     # ==========================================
     with tab3:
-        st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='color: #FDFBF7; font-family: \"Playball\", cursive; font-size: 36px;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
         st.info("🗄️ Zakończone zlecenia są wyizolowane do osobnej zakładki w chmurze, aby nie spowalniać pracy systemu. Załaduj je tylko w razie potrzeby.")
         
-        # Pamięć w sesji, żeby tabela nie znikała przy byle przeładowaniu, jeśli już ją pobrano
         if "arch_loaded_poboczne" not in st.session_state:
             st.session_state["arch_loaded_poboczne"] = False
 
@@ -272,4 +280,4 @@ def render(sh):
             if not df_arch.empty:
                 st.dataframe(df_arch, use_container_width=True, hide_index=True)
             else:
-                st.warning("Archiwum jest puste lub zakładka 'Zlecenia Poboczne ARCHIWUM' jeszcze nie powstała (zrobi się sama przy pierwszej archiwizacji).")
+                st.warning("Archiwum jest puste lub zakładka 'Zlecenia Poboczne ARCHIWUM' jeszcze nie powstała.")
