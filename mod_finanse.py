@@ -196,6 +196,7 @@ def render(sh):
         if not df_poboczne.empty:
             df_unpaid_pob = df_poboczne[df_poboczne.get('Faktura', pd.Series()) != "TAK"]
             for _, row in df_unpaid_pob.iterrows():
+                nr_fak = str(row.get("Nr Faktury", "")).strip()
                 lista_zobowiazan.append({
                     "Typ Zlecenia": "Zlecenie Poboczne",
                     "Nazwa Eventu / Zlecenia": str(row.get("Opis Ładunku / Trasy", "")),
@@ -204,7 +205,7 @@ def render(sh):
                     "Data Płatności": str(row.get("Data Płatności", "")),
                     "Kwota": "Wg faktury (Brak wpisu)",
                     "Czy jest POD": str(row.get("POD", "")),
-                    "Nr Faktury": "⚠️ BRAK FAKTURY"
+                    "Nr Faktury": nr_fak if nr_fak not in ["", "nan", "None", "N/A"] else "⚠️ BRAK FAKTURY"
                 })
 
         # 3. Agregacja z Subrentów
