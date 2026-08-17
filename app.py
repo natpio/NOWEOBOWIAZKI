@@ -62,13 +62,20 @@ def init_connection():
     client = gspread.authorize(creds)
     return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
-# 4. EKRAN LOGOWANIA
+# 4. EKRAN LOGOWANIA (Styl Zen/Japandi)
 def login_screen():
     st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown("<div class='login-box' style='background-color: rgba(5, 10, 21, 0.9); padding: 40px; border-radius: 8px; border: 2px dashed #BA4949; text-align: center;'><div style='font-size: 40px; margin-bottom: 10px; color: #C5A880;'>⚾</div><h2 style='color: #E2DCD3; letter-spacing: 2px; margin-bottom: 5px; font-weight: 600;'>SQM HUB</h2><p style='color: #8C8477; font-size: 11px; letter-spacing: 3px; margin-bottom: 30px;'>ヤスミ・ハブ</p>", unsafe_allow_html=True)
+        st.markdown("""
+            <div class='login-box'>
+                <div style='font-size: 40px; margin-bottom: 10px; color: #C5A880;'>⚾</div>
+                <h2 style='color: #E2DCD3; letter-spacing: 2px; margin-bottom: 5px; font-weight: 600;'>SQM HUB</h2>
+                <p style='color: #8C8477; font-size: 11px; letter-spacing: 3px; margin-bottom: 30px;'>ヤスミ・ハブ</p>
+        """, unsafe_allow_html=True)
+        
         pwd = st.text_input("Hasło dostępu / パスワード", type="password")
+        
         if st.button("WEJDŹ / 入る", use_container_width=True, type="primary"):
             if pwd == st.secrets.get("app_password", "sqm2026"):
                 st.session_state["zalogowany"] = True
@@ -79,26 +86,45 @@ def login_screen():
 
 # 5. GŁÓWNA LOGIKA APLIKACJI
 def main():
-    if "zalogowany" not in st.session_state: st.session_state["zalogowany"] = False
+    if "zalogowany" not in st.session_state:
+        st.session_state["zalogowany"] = False
+
     if not st.session_state["zalogowany"]:
         login_screen()
         return
 
-    try: sh = init_connection()
+    try:
+        sh = init_connection()
     except Exception as e:
         st.error(f"Błąd połączenia z bazą danych (Google Sheets): {e}")
         return
 
+    # Przygotowanie Base64 papieru dla Option Menu i awatara
     b64_washi_inline = ""
     if os.path.exists("washi_bg.png"):
-        with open("washi_bg.png", "rb") as f: b64_washi_inline = base64.b64encode(f.read()).decode()
+        with open("washi_bg.png", "rb") as f:
+            b64_washi_inline = base64.b64encode(f.read()).decode()
     elif os.path.exists("washi_bg.jpg"):
-        with open("washi_bg.jpg", "rb") as f: b64_washi_inline = base64.b64encode(f.read()).decode()
+        with open("washi_bg.jpg", "rb") as f:
+            b64_washi_inline = base64.b64encode(f.read()).decode()
 
+    # --- MENU BOCZNE (SIDEBAR) ---
     with st.sidebar:
-        st.markdown('<div class="sidebar-logo-container"><div style="font-size: 38px; color: #BA4949; margin-bottom: -15px; filter: drop-shadow(2px 2px 0px #050A15);">⚾</div><div class="sidebar-logo-text">SQM <span>HUB</span></div><div class="sidebar-logo-sub">Game Plan. Real Results.</div></div>', unsafe_allow_html=True)
+        # LOGO
+        st.markdown('''
+            <div class="sidebar-logo-container">
+                <div style="font-size: 38px; color: #BA4949; margin-bottom: -15px; filter: drop-shadow(2px 2px 0px #050A15);">⚾</div>
+                <div class="sidebar-logo-text">SQM <span>HUB</span></div>
+                <div class="sidebar-logo-sub">Game Plan. Real Results.</div>
+            </div>
+        ''', unsafe_allow_html=True)
         
-        opcje_menu = ["COMMAND CENTER", "HARMONOGRAM (GANTT)", "GENERATOR ZLECEŃ PRO", "EVENTY / TARGI", "ZLECENIA POBOCZNE", "SUBRENTY", "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"]
+        opcje_menu = [
+            "COMMAND CENTER", "HARMONOGRAM (GANTT)", "GENERATOR ZLECEŃ PRO", 
+            "EVENTY / TARGI", "ZLECENIA POBOCZNE", "SUBRENTY", 
+            "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
+        ]
+
         ikony_menu = ["cpu", "calendar-range", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"]
 
         if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
@@ -111,6 +137,7 @@ def main():
 
         aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
         
+        # PŁYWAJĄCE MENU Z PRZEZROCZYSTYM TŁEM
         wybrany_modul = option_menu(
             menu_title=None,
             options=opcje_menu,
@@ -119,9 +146,7 @@ def main():
             styles={
                 "container": {
                     "padding": "0!important", 
-                    "margin": "0!important",
                     "background-color": "transparent !important", 
-                    "width": "100%",
                     "border": "none"
                 },
                 "icon": {"color": "#C5A880", "font-size": "15px"},
@@ -132,31 +157,62 @@ def main():
                     "font-family": "'Inter', sans-serif",
                     "letter-spacing": "0.5px", 
                     "text-align": "left", 
-                    "margin": "0px", 
-                    "padding": "12px 15px 12px 2.5rem",
+                    "margin": "2px 0", 
+                    "padding": "12px 15px",
                     "border-radius": "0px",
                     "transition": "all 0.2s ease"
                 },
                 "nav-link-selected": {
                     "background-color": "#F7F3EC", 
                     "background-image": f"url('data:image/png;base64,{b64_washi_inline}')" if b64_washi_inline else "none",
-                    "background-blend-mode": "multiply",
-                    "background-size": "cover",
                     "color": "#0A192F", 
                     "font-weight": "800",
                     "border-left": "6px solid #C5A880",
-                    "border-radius": "0px",
-                    "box-shadow": "none"
+                    "border-radius": "6px 0 0 6px", 
+                    "box-shadow": "-4px 4px 15px rgba(0,0,0,0.4)"
                 },
             }
         )
         st.session_state["menu_option"] = wybrany_modul
         
-        st.markdown(f'<div class="sidebar-profile-card"><div style="display: flex; align-items: center; gap: 15px;"><div class="profile-avatar" style="background-image: url(\'data:image/png;base64,{b64_washi_inline}\');"><span style="color: #0A192F; font-weight: 800; font-size: 20px; font-family: \'Bebas Neue\', sans-serif;">P</span></div><div><div style="color: #E2DCD3; font-family: \'Inter\', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">Piotr Dukiel</div><div style="color: #C5A880; font-family: \'Inter\', sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Logistics Manager</div><div style="color: #8C8477; font-size: 10px; font-style: italic; margin-top: 4px;">Let\'s hit it out of the park.<br><span style="color:#BA4949; font-weight:bold;">Szef!</span></div><div style="color: #BA4949; font-size: 14px; margin-top: 2px;">★ ★ ★</div></div></div></div><div class="refresh-graphic"><div class="rg-title">REFRESH</div><div class="rg-subtitle">THE LINEUP</div><div class="rg-icon">🏏⚾🏏</div></div><div class="sidebar-buttons">', unsafe_allow_html=True)
-        if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True): st.cache_data.clear(); st.rerun()
-        if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True): st.session_state["zalogowany"] = False; st.rerun()
+        # KARTA PROFILU (Bejsbolowa)
+        st.markdown(f'''
+            <div class="sidebar-profile-card">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div class="profile-avatar" style="background-image: url('data:image/png;base64,{b64_washi_inline}');">
+                        <span style="color: #0A192F; font-weight: 800; font-size: 20px; font-family: 'Bebas Neue', sans-serif;">P</span>
+                    </div>
+                    <div>
+                        <div style="color: #E2DCD3; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">Piotr Dukiel</div>
+                        <div style="color: #C5A880; font-family: 'Inter', sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Logistics Manager</div>
+                        <div style="color: #8C8477; font-size: 10px; font-style: italic; margin-top: 4px;">Let's hit it out of the park.<br><span style="color:#BA4949; font-weight:bold;">Szef!</span></div>
+                        <div style="color: #BA4949; font-size: 14px; margin-top: 2px;">★ ★ ★</div>
+                    </div>
+                </div>
+            </div>
+        ''', unsafe_allow_html=True)
+        
+        # REFRESH THE LINEUP GRAPHIC
+        st.markdown('''
+            <div class="refresh-graphic">
+                <div class="rg-title">REFRESH</div>
+                <div class="rg-subtitle">THE LINEUP</div>
+                <div class="rg-icon">🏏⚾🏏</div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+        # STYLIZOWANE PRZYCISKI
+        st.markdown('<div class="sidebar-buttons">', unsafe_allow_html=True)
+        if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+        if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True):
+            st.session_state["zalogowany"] = False
+            st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # --- ROUTING MODUŁÓW ---
     if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
     elif wybrany_modul == "HARMONOGRAM (GANTT)": mod_harmonogram.render(sh)
     elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
@@ -167,4 +223,5 @@ def main():
     elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI": mod_bazy_danych.render(sh)
     elif wybrany_modul == "FINANSE I RAPORTY": mod_finanse.render(sh)
 
-if __name__ == "__main__": main()
+if __name__ == "__main__":
+    main()
