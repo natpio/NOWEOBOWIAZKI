@@ -146,7 +146,7 @@ def main():
             styles={
                 "container": {
                     "padding": "0!important", 
-                    "background-color": "transparent !important", /* Całkowita przezroczystość */
+                    "background-color": "transparent !important", 
                     "border": "none"
                 },
                 "icon": {"color": "#C5A880", "font-size": "15px"},
@@ -168,7 +168,7 @@ def main():
                     "color": "#0A192F", 
                     "font-weight": "800",
                     "border-left": "6px solid #C5A880",
-                    "border-radius": "6px 0 0 6px", /* Płaskie z prawej strony! */
+                    "border-radius": "6px 0 0 6px", 
                     "box-shadow": "-4px 4px 15px rgba(0,0,0,0.4)"
                 },
             }
