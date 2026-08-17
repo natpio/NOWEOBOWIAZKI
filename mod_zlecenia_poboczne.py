@@ -17,6 +17,7 @@ def parse_date(d_str):
         return datetime.today().date()
 
 def render(sh):
+    # Nagłówek w stylu Japandi
     st.markdown('''
         <div class="module-header-container">
             <h1 class="module-title">Zlecenia Poboczne</h1>
@@ -24,18 +25,17 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    tab1, tab_pay, tab2, tab3 = st.tabs(["📂 Aktywne Zlecenia", "💳 Do opłacenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
-
+    # 1. POBIERANIE DANYCH Z ZAKŁADKI (Przed renderowaniem czegokolwiek)
     worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
     
-    # Inicjalizacja z nowym polem Nr Faktury
+    # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
     if df.empty and not worksheet.row_values(1):
         headers = ["Nr Zlecenia", "Przewoźnik", "Opis Ładunku / Trasy", "Data Załadunku", "Data Rozładunku", "Termin Dni", "Data Płatności", "Status", "CMR", "POD", "Faktura", "Nr Faktury"]
         worksheet.append_row(headers)
         st.cache_data.clear()
         worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
 
-    # Logika rozdzielania na zakładki
+    # 2. LOGIKA ROZDZIELANIA NA ZAKŁADKI
     def is_to_pay(r):
         if str(r.get('Status', '')) == 'ARCHIWUM': 
             return False
@@ -57,33 +57,38 @@ def render(sh):
         df_do_oplacenia = pd.DataFrame()
         df_aktywne = pd.DataFrame()
 
+    # 3. OBLICZANIE KART KPI
     brak_cmr = len(active_all[(active_all.get("CMR") == "NIE")]) if not active_all.empty and "CMR" in active_all.columns else 0
     brak_pod = len(active_all[(active_all.get("POD") == "NIE")]) if not active_all.empty and "POD" in active_all.columns else 0
     brak_fv = len(active_all[(active_all.get("Faktura") == "NIE")]) if not active_all.empty and "Faktura" in active_all.columns else 0
 
+    # 4. WYSWIETLANIE KART KPI NA SAMEJ GÓRZE WIDOKU
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
-            <div class="kpi-icon-bg">📄</div>
             <div class="kpi-header">DO WYSTAWIENIA CMR</div>
             <div class="kpi-sub-jp">CMRの発行待ち</div>
             <div class="kpi-value">{brak_cmr}</div>
+            <div class="kpi-icon-bg">📝</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-icon-bg">📋</div>
             <div class="kpi-header">BRAKUJĄCE ZWROTY POD</div>
             <div class="kpi-sub-jp">POD受領待ち</div>
             <div class="kpi-value">{brak_pod}</div>
+            <div class="kpi-icon-bg">📄</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-icon-bg">💰</div>
             <div class="kpi-header">NIEOPŁACONE FAKTURY</div>
             <div class="kpi-sub-jp">未払い請求書</div>
             <div class="kpi-value">{brak_fv}</div>
+            <div class="kpi-icon-bg">💰</div>
         </div>
     </div>
     <br>
     """, unsafe_allow_html=True)
+
+    # 5. DEKLARACJA ZAKŁADEK (Teraz pojawią się grzecznie POD kartami KPI)
+    tab1, tab_pay, tab2, tab3 = st.tabs(["📂 Aktywne Zlecenia", "💳 Do opłacenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
 
     # Funkcja generująca widok kafelków, używana w zakładkach "Aktywne" i "Do opłacenia"
     def render_order_list(df_subset, search_query, empty_msg):
@@ -247,6 +252,7 @@ def render(sh):
         st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
         st.info("🗄️ Zakończone zlecenia są wyizolowane do osobnej zakładki w chmurze, aby nie spowalniać pracy systemu. Załaduj je tylko w razie potrzeby.")
         
+        # Pamięć w sesji, żeby tabela nie znikała przy byle przeładowaniu, jeśli już ją pobrano
         if "arch_loaded_poboczne" not in st.session_state:
             st.session_state["arch_loaded_poboczne"] = False
 
