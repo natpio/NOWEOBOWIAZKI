@@ -24,7 +24,6 @@ def load_data(_sh, sheet_name):
     except gspread.exceptions.WorksheetNotFound:
         worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
-    # Bezpieczne pobieranie odporne na puste nagłówki (bez ingerencji w fizyczny układ)
     raw_data = worksheet.get_all_values()
     if raw_data and len(raw_data) > 0:
         headers = raw_data[0]
@@ -188,7 +187,17 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
             ws_arch.append_row(headers)
         
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data_list]
-        ws_arch.append_row(safe_list)
+        
+        # Ominięcie append_row - twardy zapis do kolumny A
+        col_a_values = ws_arch.col_values(1)
+        next_row = len(col_a_values) + 1
+        ostatnia_kolumna = get_col_letter(len(safe_list))
+        zakres = f"A{next_row}:{ostatnia_kolumna}{next_row}"
+        
+        try:
+            ws_arch.update(values=[safe_list], range_name=zakres)
+        except TypeError:
+            ws_arch.update(zakres, [safe_list])
         
         ws_source = sh.worksheet(source_sheet)
         ws_source.delete_rows(row_index)
@@ -216,7 +225,20 @@ def append_data(sheet_name, row_data):
     try:
         ws = sh.worksheet(sheet_name)
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
-        ws.append_row(safe_list)
+        
+        # --- PANCERNE ROZWIĄZANIE ---
+        # Zamiast ws.append_row() zmuszamy API do zapisu równo od kolumny A
+        col_a_values = ws.col_values(1)
+        next_row = len(col_a_values) + 1 # Pierwszy całkowicie pusty wiersz patrząc na Kolumnę A
+        
+        ostatnia_kolumna = get_col_letter(len(safe_list))
+        zakres = f"A{next_row}:{ostatnia_kolumna}{next_row}"
+        
+        try:
+            ws.update(values=[safe_list], range_name=zakres)
+        except TypeError:
+            ws.update(zakres, [safe_list])
+            
         st.cache_data.clear()
         return True
     except Exception as e:
@@ -229,7 +251,6 @@ def update_row(sheet_name, row_index, row_data):
         ws = sh.worksheet(sheet_name)
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
         
-        # POPRAWKA: Zmiana z chr(...) na użycie bezpiecznej funkcji get_col_letter
         ostatnia_kolumna = get_col_letter(len(safe_list))
         zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
         
