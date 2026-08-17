@@ -27,7 +27,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    # 1. POBIERANIE DANYCH Z ZAKŁADKI
+    # 1. POBIERANIE DANYCH Z ZAKŁADKI (Przed renderowaniem czegokolwiek)
     worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
     
     # Inicjalizacja pustej bazy, jeśli jeszcze nie ma nagłówków
@@ -44,6 +44,7 @@ def render(sh):
         pod = str(r.get('POD', 'NIE')).strip().upper()
         fv = str(r.get('Faktura', 'NIE')).strip().upper()
         nr_fv = str(r.get('Nr Faktury', '')).strip()
+        # Warunek przerzucenia: Jest POD + Jest podany numer Faktury + Faktura nie jest jeszcze opłacona
         if pod == 'TAK' and nr_fv and nr_fv.lower() not in ['nan', 'none'] and fv != 'TAK':
             return True
         return False
@@ -63,23 +64,26 @@ def render(sh):
     brak_pod = len(active_all[(active_all.get("POD") == "NIE")]) if not active_all.empty and "POD" in active_all.columns else 0
     brak_fv = len(active_all[(active_all.get("Faktura") == "NIE")]) if not active_all.empty and "Faktura" in active_all.columns else 0
 
-    # 4. WYSWIETLANIE KART KPI (Z klimatycznymi grafikami na tle)
+    # 4. WYSWIETLANIE KART KPI NA SAMEJ GÓRZE WIDOKU
     st.markdown(f"""
     <div class="kpi-container">
         <div class="kpi-card">
             <div class="kpi-header">DO WYSTAWIENIA CMR</div>
             <div class="kpi-sub-jp">CMRの発行待ち</div>
             <div class="kpi-value">{brak_cmr}</div>
+            <div class="kpi-icon-bg">📝</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-header">BRAKUJĄCE ZWROTY POD</div>
             <div class="kpi-sub-jp">POD受領待ち</div>
             <div class="kpi-value">{brak_pod}</div>
+            <div class="kpi-icon-bg">📄</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-header">NIEOPŁACONE FAKTURY</div>
             <div class="kpi-sub-jp">未払い請求書</div>
             <div class="kpi-value">{brak_fv}</div>
+            <div class="kpi-icon-bg">💰</div>
         </div>
     </div>
     <br>
@@ -117,10 +121,11 @@ def render(sh):
             nr_zlecenia_wyswietl = row.get('Nr Zlecenia', 'Brak nr')
             row_idx = int(row['sheet_row']) 
             
-            # Styl tła z sylwetką pałkarza po prawej stronie (jeśli asset istnieje)
-            bg_style = ""
+            # Styl tła z solidnym ecru i opcjonalną sylwetką pałkarza po prawej stronie
             if b64_batter:
-                bg_style = f"background-image: linear-gradient(90deg, rgba(245, 237, 224, 0.95) 60%, rgba(245, 237, 224, 0.4) 100%), url('data:image/png;base64,{b64_batter}'); background-size: 160px auto; background-position: right center; background-repeat: no-repeat;"
+                bg_style = f"background-color: #F7F3EC; background-image: url('washi_bg.jpg'), url('data:image/png;base64,{b64_batter}'); background-blend-mode: multiply, normal; background-size: cover, 140px auto; background-position: center, right center; background-repeat: no-repeat, no-repeat;"
+            else:
+                bg_style = "background-color: #F7F3EC; background-image: url('washi_bg.jpg'); background-blend-mode: multiply; background-size: cover; background-position: center;"
 
             st.markdown(f"""
             <div class="custom-row" style="{bg_style}">
@@ -242,7 +247,7 @@ def render(sh):
             submit_btn = st.form_submit_button("＋ Dodaj do Bazy", type="primary")
             
             if submit_btn:
-                if not nr_zlekcenia if 'nr_zlekcenia' in locals() else not nr_zlecenia or not przewoznik:
+                if not nr_zlecenia or not przewoznik:
                     st.error("Numer zlecenia i Przewoźnik są wymagane!")
                 else:
                     nowy_wiersz = [
