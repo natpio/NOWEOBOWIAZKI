@@ -29,7 +29,7 @@
 }
 
 .sidebar-logo-container {
-    border-bottom: 2px dashed rgba(186, 73, 73, 0.8); /* Czerwony szew imitacja */
+    border-bottom: 2px dashed rgba(186, 73, 73, 0.8);
     padding-bottom: 18px;
     margin-bottom: 25px;
     text-align: center;
@@ -42,7 +42,7 @@
     margin-bottom: -8px;
 }
 .sidebar-logo-text span {
-    color: #BA4949; /* Crimson Red */
+    color: #BA4949; 
     font-family: 'Bebas Neue', sans-serif;
     font-size: 32px;
     letter-spacing: 2px;
@@ -94,7 +94,7 @@
 ========================================= */
 .module-header-container {
     margin-bottom: 25px;
-    border-bottom: 2px dashed rgba(186, 73, 73, 0.6); /* Czerwony szew */
+    border-bottom: 2px dashed rgba(186, 73, 73, 0.6);
     padding-bottom: 15px;
 }
 .module-title {
@@ -115,7 +115,7 @@
 }
 
 /* =========================================
-   4. KARTY KPI (SOLIDNY VINTAGE PAPER / ECRU)
+   4. KARTY KPI (WASHI_BG.PNG + ECRU)
 ========================================= */
 .kpi-container {
     display: flex;
@@ -126,9 +126,9 @@
     flex: 1;
     padding: 20px 24px;
     border-radius: 6px;
-    background-color: #F7F3EC !important; /* Solidna, kryjąca baza ecru */
-    background-image: url('washi_bg.jpg'); 
-    background-blend-mode: multiply; /* Łączy teksturę z solidnym tłem */
+    background-color: #F3EFE6 !important; /* Solidna baza ecru */
+    background-image: url('washi_bg.png'); /* Poprawione rozszerzenie na PNG */
+    background-blend-mode: multiply; /* Prawidłowe nałożenie tekstury */
     background-size: cover;
     background-position: center;
     border: 1px solid #A39B8F;
@@ -163,15 +163,15 @@
 .kpi-icon-bg { display: none; }
 
 /* =========================================
-   5. KAFELKI ZLECEŃ / BILETY (SOLIDNY ECRU)
+   5. KAFELKI ZLECEŃ / BILETY (WASHI_BG.PNG + ECRU)
 ========================================= */
 .custom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: #F7F3EC !important; /* Solidna, kryjąca baza ecru */
-    background-image: url('washi_bg.jpg');
-    background-blend-mode: multiply;
+    background-color: #F3EFE6 !important; /* Solidna baza ecru */
+    background-image: url('washi_bg.png'); /* Poprawione rozszerzenie na PNG */
+    background-blend-mode: multiply; /* Prawidłowe nałożenie tekstury */
     background-size: cover;
     background-position: center;
     border: 1px solid #B08D5B;
@@ -183,7 +183,7 @@
     box-shadow: 4px 4px 12px rgba(0,0,0,0.6);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     position: relative;
-    overflow: hidden; /* Zabezpieczenie przed wychodzeniem elementów poza bilet */
+    overflow: hidden;
 }
 .custom-row:hover {
     transform: translateY(-2px);
@@ -244,7 +244,7 @@
     padding: 8px 15px;
     border-radius: 6px;
     border: 2px solid #0A192F; 
-    border-bottom: 2px dashed #BA4949; /* Efekt szwu */
+    border-bottom: 2px dashed #BA4949; 
     backdrop-filter: blur(8px);
 }
 [data-baseweb="tab"] {
