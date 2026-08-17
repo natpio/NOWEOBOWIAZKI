@@ -115,7 +115,7 @@
 }
 
 /* =========================================
-   4. KARTY KPI (VINTAGE PAPER)
+   4. KARTY KPI (SOLIDNY VINTAGE PAPER / ECRU)
 ========================================= */
 .kpi-container {
     display: flex;
@@ -126,11 +126,13 @@
     flex: 1;
     padding: 20px 24px;
     border-radius: 6px;
-    background-image: url('washi_bg.jpg'); /* Tekstura starego papieru */
+    background-color: #F7F3EC !important; /* Solidna, kryjąca baza ecru */
+    background-image: url('washi_bg.jpg'); 
+    background-blend-mode: multiply; /* Łączy teksturę z solidnym tłem */
     background-size: cover;
     background-position: center;
     border: 1px solid #A39B8F;
-    box-shadow: 5px 5px 15px rgba(0,0,0,0.6), inset 0 0 40px rgba(139, 69, 19, 0.15);
+    box-shadow: 5px 5px 15px rgba(0,0,0,0.6);
     position: relative;
     overflow: hidden;
 }
@@ -158,17 +160,18 @@
     font-family: 'Bebas Neue', sans-serif; 
     text-shadow: 1px 1px 0px rgba(255,255,255,0.8); 
 }
-/* Optyczne ukrycie starych szarych emoji na kartach KPI (zastąpimy je grafikami w Pythonie) */
 .kpi-icon-bg { display: none; }
 
 /* =========================================
-   5. KAFELKI ZLECEŃ (VINTAGE TICKETS)
+   5. KAFELKI ZLECEŃ / BILETY (SOLIDNY ECRU)
 ========================================= */
 .custom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-image: url('washi_bg.jpg'); /* Bilet z papieru */
+    background-color: #F7F3EC !important; /* Solidna, kryjąca baza ecru */
+    background-image: url('washi_bg.jpg');
+    background-blend-mode: multiply;
     background-size: cover;
     background-position: center;
     border: 1px solid #B08D5B;
@@ -190,7 +193,7 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
-    z-index: 2; /* Żeby tekst był nad obrazkiem pałkarza */
+    z-index: 2; 
 }
 .cr-title { 
     color: #0A192F; 
@@ -199,7 +202,6 @@
     font-family: 'Bebas Neue', sans-serif; 
     letter-spacing: 1px; 
 }
-/* Zmienione kolory tekstu na bardzo ciemne, bo tło jest teraz jasne */
 .cr-text { color: #2E2A26; font-weight: 600; font-size: 12px; }
 .cr-text strong { color: #BA4949; }
 
@@ -214,7 +216,6 @@
     letter-spacing: 1.5px;
     text-align: center;
 }
-/* Bardziej nasycone kolory na jasnym tle */
 .cr-badge.inicjacja { border: 1px solid #1D4ED8; color: #1D4ED8; background: rgba(29, 78, 216, 0.1); }
 .cr-badge.planowanie { border: 1px solid #6D28D9; color: #6D28D9; background: rgba(109, 40, 217, 0.1); }
 .cr-badge.zaladunek { border: 1px solid #B45309; color: #B45309; background: rgba(180, 83, 9, 0.1); }
