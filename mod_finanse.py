@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from db import load_data
 import datetime
 import io
+import gspread
 from fpdf import FPDF
 
 def pdf_sanitize(text):
@@ -235,7 +236,6 @@ def render(sh):
             df_raport['_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], format="%d.%m.%Y", errors='coerce')
             df_raport.loc[df_raport['_Data_DT'].isna(), '_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], errors='coerce')
             
-            # Obliczanie dni opóźnienia z nową logiką Statusu
             def oblicz_status(dt):
                 if pd.isna(dt): return "Brak daty płatności"
                 dni = (dzisiaj - dt).days
@@ -254,10 +254,41 @@ def render(sh):
             
             st.dataframe(df_widok, use_container_width=True, hide_index=True)
             
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("<p style='color: #8C8477; font-size: 13px; font-weight: bold;'>Pobierz zestawienie w wybranym formacie:</p>", unsafe_allow_html=True)
+            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 25px 0 15px 0;'>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #8C8477; font-size: 13px; font-weight: bold;'>☁️ Synchronizacja z arkuszem Księgowości:</p>", unsafe_allow_html=True)
             
-            # Generowanie plików
+            # --- ZUPEŁNIE NOWA FUNKCJA: WYSYŁKA BEZPOŚREDNIO DO GOOGLE SHEETS ---
+            if st.button("🔄 Zaktualizuj zakładkę 'Raport_Ksiegowy' w Google Sheets", type="primary", use_container_width=True):
+                with st.spinner("Przesyłanie najświeższych danych do chmury..."):
+                    try:
+                        # Szukanie lub tworzenie arkusza "Raport_Ksiegowy"
+                        try:
+                            ws = sh.worksheet("Raport_Ksiegowy")
+                        except gspread.exceptions.WorksheetNotFound:
+                            ws = sh.add_worksheet(title="Raport_Ksiegowy", rows="500", cols="15")
+                        
+                        # Zabezpieczanie danych dla API Google Sheets (zamiana NaN/NaT na puste stringi)
+                        df_to_gs = df_widok.fillna("")
+                        data_to_gs = [df_to_gs.columns.tolist()] + df_to_gs.values.tolist()
+                        data_to_gs = [[str(cell) for cell in row] for row in data_to_gs]
+                        
+                        ws.clear()
+                        ws.update('A1', data_to_gs)
+                        
+                        st.success("✅ Sukces! Najświeższy raport został zaktualizowany bezpośrednio w chmurze.")
+                        try:
+                            sheet_url = sh.url
+                            st.markdown(f"**[🔗 KLIKNIJ TUTAJ, ABY OTWORZYĆ TEN ARKUSZ W PRZEGLĄDARCE]({sheet_url})**", unsafe_allow_html=True)
+                        except:
+                            st.info("Otwórz swój plik 'NOWY PODZIAŁ OBOWIĄZKÓW' na dysku Google, aby zobaczyć nową zakładkę.")
+                            
+                    except Exception as e:
+                        st.error(f"Wystąpił błąd podczas synchronizacji z Google Sheets: {e}")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #8C8477; font-size: 13px; font-weight: bold;'>Pobierz klasyczne pliki na dysk:</p>", unsafe_allow_html=True)
+            
+            # Generowanie plików lokalnych
             csv_data = df_widok.to_csv(index=False).encode('utf-8')
             
             excel_buffer = io.BytesIO()
@@ -267,33 +298,13 @@ def render(sh):
             
             pdf_data = create_pdf_report(df_widok, dzisiaj)
             
-            # Przycisk pobierania
             c_csv, c_xls, c_pdf = st.columns(3)
             with c_csv:
-                st.download_button(
-                    label="📊 Pobierz jako CSV",
-                    data=csv_data,
-                    file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+                st.download_button(label="📊 Pobierz jako CSV", data=csv_data, file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.csv", mime="text/csv", use_container_width=True)
             with c_xls:
-                st.download_button(
-                    label="📈 Pobierz jako Excel (.xlsx)",
-                    data=excel_data,
-                    file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    type="primary",
-                    use_container_width=True
-                )
+                st.download_button(label="📈 Pobierz jako Excel", data=excel_data, file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
             with c_pdf:
-                st.download_button(
-                    label="📄 Pobierz jako PDF",
-                    data=pdf_data,
-                    file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
+                st.download_button(label="📄 Pobierz jako PDF", data=pdf_data, file_name=f"Raport_Ksiegowy_{dzisiaj.strftime('%Y-%m-%d')}.pdf", mime="application/pdf", use_container_width=True)
         else:
             st.success("🎉 Raport Księgowy jest pusty. Brak jakichkolwiek zaległych rozliczeń operacyjnych!")
 
