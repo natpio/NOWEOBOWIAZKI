@@ -219,6 +219,7 @@ iframe[title="streamlit_option_menu.option_menu"] {
 [data-baseweb="tab"] { height: 34px; background-color: transparent !important; border-radius: 4px !important; color: #A39B8F !important; font-family: 'Inter', sans-serif !important; font-size: 13px !important; font-weight: 600 !important; padding: 0 15px !important; }
 [data-baseweb="tab"]:hover { color: #FDFBF7 !important; }
 [aria-selected="true"] { background: #990000 !important; color: #FDFBF7 !important; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+
 [data-baseweb="input"] { background-color: rgba(10, 25, 47, 0.9) !important; border: 1px solid #1C2D4A !important; border-radius: 6px !important; }
 input[type="text"], input[type="number"], textarea { color: #FDFBF7 !important; }
 input[type="text"]::placeholder { color: #A39B8F !important; }
