@@ -62,7 +62,7 @@ def init_connection():
     client = gspread.authorize(creds)
     return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
-# 4. EKRAN LOGOWANIA (Styl Zen/Japandi)
+# 4. EKRAN LOGOWANIA
 def login_screen():
     st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.2, 1])
@@ -111,7 +111,6 @@ def main():
 
         aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
         
-        # PŁYWAJĄCE, W PEŁNI PRZEZROCZYSTE MENU KRAWĘDŹ W KRAWĘDŹ
         wybrany_modul = option_menu(
             menu_title=None,
             options=opcje_menu,
