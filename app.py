@@ -17,14 +17,14 @@ import mod_bazy_danych
 import mod_generator_pdf 
 
 # 1. KONFIGURACJA STRONY
-st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
+st.set_page_config(page_title="SQM HUB", page_icon="⚾", layout="wide")
 
 # 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA I CZCIONEK
 def local_css(file_name):
     st.markdown("""
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Playball&family=Bebas+Neue&family=Inter:wght@400;600&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Playball&family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">
     """, unsafe_allow_html=True)
 
     if os.path.exists(file_name):
@@ -69,7 +69,7 @@ def login_screen():
     with col2:
         st.markdown("""
             <div class='login-box'>
-                <div style='font-size: 40px; margin-bottom: 10px; color: #C5A880;'>✺</div>
+                <div style='font-size: 40px; margin-bottom: 10px; color: #C5A880;'>⚾</div>
                 <h2 style='color: #E2DCD3; letter-spacing: 2px; margin-bottom: 5px; font-weight: 600;'>SQM HUB</h2>
                 <p style='color: #8C8477; font-size: 11px; letter-spacing: 3px; margin-bottom: 30px;'>ヤスミ・ハブ</p>
         """, unsafe_allow_html=True)
@@ -99,115 +99,129 @@ def main():
         st.error(f"Błąd połączenia z bazą danych (Google Sheets): {e}")
         return
 
+    # Przygotowanie Base64 papieru dla Option Menu i awatara
+    b64_washi_inline = ""
+    if os.path.exists("washi_bg.png"):
+        with open("washi_bg.png", "rb") as f:
+            b64_washi_inline = base64.b64encode(f.read()).decode()
+    elif os.path.exists("washi_bg.jpg"):
+        with open("washi_bg.jpg", "rb") as f:
+            b64_washi_inline = base64.b64encode(f.read()).decode()
+
     # --- MENU BOCZNE (SIDEBAR) ---
     with st.sidebar:
+        # LOGO
         st.markdown('''
             <div class="sidebar-logo-container">
-                <div class="sidebar-logo-text">
-                    <span style="font-size: 24px; color: #C5A880; margin-right: 2px;">✺</span> SQM <span>HUB</span>
-                </div>
-                <div class="sidebar-logo-sub">ヤスミ・ハブ ✦ ロジスティクス</div>
+                <div style="font-size: 38px; color: #BA4949; margin-bottom: -15px; filter: drop-shadow(2px 2px 0px #050A15);">⚾</div>
+                <div class="sidebar-logo-text">SQM <span>HUB</span></div>
+                <div class="sidebar-logo-sub">Game Plan. Real Results.</div>
             </div>
         ''', unsafe_allow_html=True)
         
         opcje_menu = [
-            "COMMAND CENTER",
-            "HARMONOGRAM (GANTT)",
-            "GENERATOR ZLECEŃ PRO", 
-            "EVENTY / TARGI", 
-            "ZLECENIA POBOCZNE",
-            "SUBRENTY", 
-            "YESTECH EXPORT",
-            "BAZY DANYCH / SŁOWNIKI", 
-            "FINANSE I RAPORTY"
+            "COMMAND CENTER", "HARMONOGRAM (GANTT)", "GENERATOR ZLECEŃ PRO", 
+            "EVENTY / TARGI", "ZLECENIA POBOCZNE", "SUBRENTY", 
+            "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
         ]
 
-        ikony_menu = [
-            "cpu", "calendar-range", "file-earmark-pdf", "truck", 
-            "briefcase", "box", "globe", "database", "graph-up"
-        ]
+        ikony_menu = ["cpu", "calendar-range", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"]
 
-        if "menu_option" not in st.session_state:
-            st.session_state["menu_option"] = "COMMAND CENTER"
-            
+        if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
         st.session_state["menu_option"] = str(st.session_state["menu_option"]).upper()
         
         if st.session_state["menu_option"] not in opcje_menu:
-            if "PRO" in st.session_state["menu_option"]:
-                st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
-            elif "POBOCZNE" in st.session_state["menu_option"]:
-                st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
-            else:
-                st.session_state["menu_option"] = "COMMAND CENTER"
+            if "PRO" in st.session_state["menu_option"]: st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
+            elif "POBOCZNE" in st.session_state["menu_option"]: st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
+            else: st.session_state["menu_option"] = "COMMAND CENTER"
 
         aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
         
+        # PŁYWAJĄCE MENU Z PRZEZROCZYSTYM TŁEM
         wybrany_modul = option_menu(
             menu_title=None,
             options=opcje_menu,
             icons=ikony_menu, 
             default_index=aktualny_indeks,
             styles={
-                "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#C5A880", "font-size": "14px"},
+                "container": {
+                    "padding": "0!important", 
+                    "background-color": "transparent !important", /* Całkowita przezroczystość */
+                    "border": "none"
+                },
+                "icon": {"color": "#C5A880", "font-size": "15px"},
                 "nav-link": {
-                    "color": "#8C8477", 
-                    "font-size": "11px", 
+                    "color": "#E2DCD3", 
+                    "font-size": "12px", 
                     "font-weight": "600", 
-                    "letter-spacing": "1px", 
+                    "font-family": "'Inter', sans-serif",
+                    "letter-spacing": "0.5px", 
                     "text-align": "left", 
-                    "margin": "6px 0", 
-                    "border-radius": "6px",
+                    "margin": "2px 0", 
+                    "padding": "12px 15px",
+                    "border-radius": "0px",
                     "transition": "all 0.2s ease"
                 },
                 "nav-link-selected": {
-                    "background": "linear-gradient(135deg, rgba(197, 168, 128, 0.25) 0%, rgba(197, 168, 128, 0.08) 100%)", 
-                    "color": "#E2DCD3", 
-                    "border-left": "3px solid #C5A880",
-                    "box-shadow": "0 4px 15px rgba(0,0,0,0.2)"
+                    "background-color": "#F7F3EC", 
+                    "background-image": f"url('data:image/png;base64,{b64_washi_inline}')" if b64_washi_inline else "none",
+                    "color": "#0A192F", 
+                    "font-weight": "800",
+                    "border-left": "6px solid #C5A880",
+                    "border-radius": "6px 0 0 6px", /* Płaskie z prawej strony! */
+                    "box-shadow": "-4px 4px 15px rgba(0,0,0,0.4)"
                 },
             }
         )
-        
         st.session_state["menu_option"] = wybrany_modul
         
-        st.markdown('''
+        # KARTA PROFILU (Bejsbolowa)
+        st.markdown(f'''
             <div class="sidebar-profile-card">
-                <div style="font-size: 11px; color: #E2DCD3; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <span>👤</span> Piotr Dukiel
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div class="profile-avatar" style="background-image: url('data:image/png;base64,{b64_washi_inline}');">
+                        <span style="color: #0A192F; font-weight: 800; font-size: 20px; font-family: 'Bebas Neue', sans-serif;">P</span>
+                    </div>
+                    <div>
+                        <div style="color: #E2DCD3; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">Piotr Dukiel</div>
+                        <div style="color: #C5A880; font-family: 'Inter', sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Logistics Manager</div>
+                        <div style="color: #8C8477; font-size: 10px; font-style: italic; margin-top: 4px;">Let's hit it out of the park.<br><span style="color:#BA4949; font-weight:bold;">Szef!</span></div>
+                        <div style="color: #BA4949; font-size: 14px; margin-top: 2px;">★ ★ ★</div>
+                    </div>
                 </div>
-                <div style="font-size: 10px; color: #C5A880; letter-spacing: 0.5px; margin-bottom: 4px;">Logistics Manager</div>
-                <div style="font-size: 9px; color: #5C554D; letter-spacing: 1px;">ロジスティクスマネージャー</div>
             </div>
         ''', unsafe_allow_html=True)
         
-        if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True, type="primary"):
+        # REFRESH THE LINEUP GRAPHIC
+        st.markdown('''
+            <div class="refresh-graphic">
+                <div class="rg-title">REFRESH</div>
+                <div class="rg-subtitle">THE LINEUP</div>
+                <div class="rg-icon">🏏⚾🏏</div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+        # STYLIZOWANE PRZYCISKI
+        st.markdown('<div class="sidebar-buttons">', unsafe_allow_html=True)
+        if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 
-        if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True, type="secondary"):
+        if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True):
             st.session_state["zalogowany"] = False
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ROUTING MODUŁÓW ---
-    if wybrany_modul == "COMMAND CENTER":
-        mod_command_center.render(sh)
-    elif wybrany_modul == "HARMONOGRAM (GANTT)":
-        mod_harmonogram.render(sh)
-    elif wybrany_modul == "GENERATOR ZLECEŃ PRO":
-        mod_generator_pdf.render(sh) 
-    elif wybrany_modul == "EVENTY / TARGI":
-        mod_eventy.render(sh)
-    elif wybrany_modul == "ZLECENIA POBOCZNE":
-        mod_zlecenia_poboczne.render(sh)
-    elif wybrany_modul == "SUBRENTY":
-        mod_subrenty.render(sh)
-    elif wybrany_modul == "YESTECH EXPORT":
-        mod_yestech.render(sh)
-    elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI":
-        mod_bazy_danych.render(sh)
-    elif wybrany_modul == "FINANSE I RAPORTY":
-        mod_finanse.render(sh)
+    if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
+    elif wybrany_modul == "HARMONOGRAM (GANTT)": mod_harmonogram.render(sh)
+    elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
+    elif wybrany_modul == "EVENTY / TARGI": mod_eventy.render(sh)
+    elif wybrany_modul == "ZLECENIA POBOCZNE": mod_zlecenia_poboczne.render(sh)
+    elif wybrany_modul == "SUBRENTY": mod_subrenty.render(sh)
+    elif wybrany_modul == "YESTECH EXPORT": mod_yestech.render(sh)
+    elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI": mod_bazy_danych.render(sh)
+    elif wybrany_modul == "FINANSE I RAPORTY": mod_finanse.render(sh)
 
 if __name__ == "__main__":
     main()
