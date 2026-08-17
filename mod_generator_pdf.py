@@ -888,32 +888,10 @@ def render(sh):
                 if df_pro.empty: st.info("Brak aktywnych zleceń PRO w bazie danych.")
                 else:
                     for index, row in df_pro.iterrows():
-                        nr = str(row.get("Numer zlecenia", "Brak numeru"))
-                        projekt = str(row.get("ID Projektu", "---"))
-                        data_zal = str(row.get("Data załadunku", "---"))
-                        miejsce_zal = str(row.get("Miejsce Zaladunku", "---"))
-                        miejsce_roz = str(row.get("Miejsce Rozladunku", "---"))
-                        przewoznik = str(row.get("Zleceniobiorca", "---"))
-                        
-                        data_wystawienia = str(row.get("Data/Czas Operacji", "---"))
-                        
+                        nr, projekt, data_zal, miejsce_zal, miejsce_roz, przewoznik = str(row.get("Numer zlecenia", "Brak numeru")), str(row.get("ID Projektu", "---")), str(row.get("Data załadunku", "---")), str(row.get("Miejsce Zaladunku", "---")), str(row.get("Miejsce Rozladunku", "---")), str(row.get("Zleceniobiorca", "---"))
                         row_idx, idx_pd = int(row['sheet_row']), int(row.name)
                         
-                        st.markdown(f"""
-                        <div class="custom-row" style="margin-bottom: 5px;">
-                            <div class="cr-col" style="flex: 2.5;">
-                                <div class="cr-text" style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">🕒 Wystawiono: {data_wystawienia}</div>
-                                <div class="cr-title">🚚 {nr}</div>
-                                <div class="cr-text" style="color: #C5A880;">📦 Projekt: <strong>{projekt}</strong></div>
-                                <div class="cr-text">👤 Przewoźnik: <strong>{przewoznik}</strong></div>
-                            </div>
-                            <div class="cr-col" style="flex: 2;">
-                                <div class="cr-text">📅 Załadunek: {data_zal}</div>
-                                <div class="cr-text">📍 Skąd: {miejsce_zal}</div>
-                                <div class="cr-text">🏁 Dokąd: {miejsce_roz}</div>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(f"""<div class="custom-row" style="margin-bottom: 5px;"><div class="cr-col" style="flex: 2.5;"><div class="cr-title">🚚 {nr}</div><div class="cr-text" style="color: #C5A880;">📦 Projekt: <strong>{projekt}</strong></div><div class="cr-text">👤 Przewoźnik: <strong>{przewoznik}</strong></div></div><div class="cr-col" style="flex: 2;"><div class="cr-text">📅 Załadunek: {data_zal}</div><div class="cr-text">📍 Skąd: {miejsce_zal}</div><div class="cr-text">🏁 Dokąd: {miejsce_roz}</div></div></div>""", unsafe_allow_html=True)
                         
                         c_info, c_docs, c_del = st.columns([3, 1.5, 1])
                         with c_docs:
