@@ -131,7 +131,7 @@
     padding: 15px 20px;
     border-radius: 6px;
     background-color: #F7F3EC !important; /* Baza ecru */
-    background-image: url('washi_bg.jpg') !important; /* Tekstura papieru */
+    background-image: url('washi_bg.png') !important; /* POPRAWIONE: Tekstura papieru PNG */
     background-blend-mode: multiply;
     background-size: cover;
     background-position: center;
@@ -173,7 +173,7 @@
     justify-content: space-between;
     align-items: center;
     background-color: #F7F3EC !important; /* Baza ecru */
-    background-image: url('washi_bg.jpg') !important; /* Tekstura papieru */
+    background-image: url('washi_bg.png') !important; /* POPRAWIONE: Tekstura papieru PNG */
     background-blend-mode: multiply;
     background-size: cover;
     background-position: center;
