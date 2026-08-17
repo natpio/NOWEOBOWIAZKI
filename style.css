@@ -3,11 +3,11 @@
 ========================================= */
 .stApp {
     background-color: #050A15; 
-    background-image: url('fuji_bg.png'); /* Nocny stadion */
+    background-image: url('fuji_bg.png'); /* Nocny stadion w tle całej aplikacji */
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
-    color: #0A192F; /* Domyślny tekst wewnątrz papieru na granatowy */
+    color: #E2DCD3;
     font-family: 'Inter', sans-serif;
 }
 
@@ -15,38 +15,13 @@
 [data-testid="stHeader"] { background-color: transparent !important; }
 
 /* =========================================
-   2. GŁÓWNY KONTENER (WIELKA KARTKA PAPIERU)
-========================================= */
-[data-testid="stAppViewBlockContainer"] {
-    background-color: #EFE9DB !important; /* Ciepły Ecru */
-    background-image: url('washi_bg.png') !important; /* Tekstura na CAŁYM tle */
-    background-blend-mode: multiply;
-    background-size: cover;
-    background-position: center;
-    border-radius: 8px;
-    box-shadow: 0px 15px 50px rgba(0,0,0,0.9);
-    padding: 3rem !important;
-    margin-top: 2rem;
-    margin-bottom: 2rem;
-    max-width: 92% !important; /* Odstęp od krawędzi ekranu */
-    border: 1px solid #C5A880;
-}
-
-/* Wymuszamy ciemny tekst dla wszystkich standardowych elementów wewnątrz papieru */
-[data-testid="stAppViewBlockContainer"] p, 
-[data-testid="stAppViewBlockContainer"] span, 
-[data-testid="stAppViewBlockContainer"] label {
-    color: #0A192F !important;
-}
-
-/* =========================================
-   3. PASEK BOCZNY (GRANATOWA SKÓRA + SZEW)
+   2. PASEK BOCZNY (SKÓRA + CZERWONY SZEW)
 ========================================= */
 [data-testid="stSidebar"] {
     background-color: #0B1120 !important; /* Głębszy granat */
     background-image: url('lantern_bg.png'); 
     background-size: cover;
-    background-position: right top; /* Ustawia czerwony szew idealnie na prawej krawędzi! */
+    background-position: right top; /* Czerwony szew na prawej krawędzi */
     border-right: none;
     box-shadow: 5px 0 25px rgba(0,0,0,0.9);
 }
@@ -88,33 +63,40 @@
     text-transform: uppercase;
     color: #8C8477 !important;
 }
-.nav-link:hover {
-    color: #FDFBF7 !important;
-}
-/* Aktywna zakładka jako jasny, papierowy wycinek */
+.nav-link:hover { color: #FDFBF7 !important; }
 .nav-link-selected {
-    background: #EFE9DB !important; 
+    background: #F7F3EC !important; /* Washi jasny ecru dla aktywnej zakładki */
     color: #990000 !important; 
     border-left: none !important;
-    border-right: 6px solid #990000 !important; /* Czerwony akcent z prawej */
-    border-radius: 4px 0 0 4px !important; /* Płaskie po prawej stronie */
+    border-right: 6px solid #990000 !important; 
+    border-radius: 4px 0 0 4px !important; 
     box-shadow: -4px 4px 15px rgba(0,0,0,0.4);
 }
 
+.sidebar-profile-card {
+    background: rgba(5, 10, 21, 0.8);
+    border: 1px solid rgba(197, 168, 128, 0.2);
+    border-radius: 8px;
+    padding: 12px 15px;
+    margin-top: 35px;
+    margin-bottom: 15px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
 /* =========================================
-   4. TYPOGRAFIA NAGŁÓWKÓW (EFEKT NASZYWKI)
+   3. TYPOGRAFIA NAGŁÓWKÓW (EFEKT NASZYWKI 3D)
 ========================================= */
 .module-header-container {
     margin-bottom: 30px;
-    border-bottom: 3px dashed #BA4949; /* Zastępuje grafikę szwu poziomego */
+    border-bottom: 3px dashed #BA4949; 
     padding-bottom: 5px;
 }
-
 .module-title, h1 {
     color: #EFE9DB !important;
     font-size: 64px !important;
     font-family: 'Playball', cursive !important;
-    /* Efekt jasnego tekstu z ciemnogranatowym obrysem i czerwonym cieniem (jak na makiecie) */
+    /* Trójwymiarowy, bejsbolowy efekt cienia (granatowy obrys + czerwony cień) */
     text-shadow: 
         -2px -2px 0 #0A192F,  
          2px -2px 0 #0A192F,
@@ -127,7 +109,6 @@
     margin: 0 0 -5px 0 !important;
     line-height: 1.1 !important;
 }
-
 .module-subtitle {
     color: #BA4949;
     font-size: 12px;
@@ -138,7 +119,7 @@
 }
 
 /* =========================================
-   5. KARTY KPI (MINIMALISTYCZNE + SZEW)
+   4. KARTY KPI (PAPIER WASHI Z TEKSTURĄ)
 ========================================= */
 .kpi-container {
     display: flex;
@@ -148,16 +129,20 @@
 .kpi-card {
     flex: 1;
     padding: 15px 20px;
-    border-radius: 4px;
-    background-color: transparent !important; /* Dziedziczy papier z tła */
-    border: 1px solid #A39B8F;
-    border-right: 4px dashed #BA4949; /* Czerwony szew po prawej! */
-    box-shadow: 2px 2px 8px rgba(0,0,0,0.05);
+    border-radius: 6px;
+    background-color: #F7F3EC !important; /* Baza ecru */
+    background-image: url('washi_bg.jpg') !important; /* Tekstura papieru */
+    background-blend-mode: multiply;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid #C5A880;
+    border-right: 5px dashed #BA4949; /* Czerwony szew perforacji po prawej */
+    box-shadow: 4px 4px 15px rgba(0,0,0,0.6);
     position: relative;
     overflow: hidden;
 }
 .kpi-header { 
-    color: #0A192F; 
+    color: #0A192F !important; 
     font-size: 16px; 
     font-weight: 600; 
     font-family: 'Inter', sans-serif; 
@@ -166,13 +151,13 @@
     text-transform: uppercase;
 }
 .kpi-sub-jp { 
-    color: #0A192F; 
+    color: #0A192F !important; 
     font-size: 11px; 
     margin-bottom: 8px; 
     font-weight: 500;
 }
 .kpi-value { 
-    color: #990000; 
+    color: #990000 !important; 
     font-size: 60px; 
     line-height: 1;
     font-weight: 400; 
@@ -181,24 +166,30 @@
 .kpi-icon-bg { display: none; }
 
 /* =========================================
-   6. BILETY ZLECEŃ (NOWY UKŁAD)
+   5. BILETY ZLECEŃ (PAPIER WASHI Z TEKSTURĄ)
 ========================================= */
 .custom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background-color: transparent !important; /* Dziedziczy papier */
-    border: 1px solid #A39B8F;
-    border-bottom: 2px solid #0A192F; /* Mocniejsza linia dolna */
+    background-color: #F7F3EC !important; /* Baza ecru */
+    background-image: url('washi_bg.jpg') !important; /* Tekstura papieru */
+    background-blend-mode: multiply;
+    background-size: cover;
+    background-position: center;
+    border: 1px solid #C5A880;
+    border-left: 5px solid #BA4949; /* Gruby czerwony pasek po lewej */
     padding: 12px 18px;
     border-radius: 4px;
     margin-bottom: 15px;
-    color: #0A192F;
+    box-shadow: 4px 4px 12px rgba(0,0,0,0.6);
     position: relative;
-    transition: background-color 0.2s;
+    overflow: hidden;
+    transition: transform 0.2s ease;
 }
 .custom-row:hover {
-    background-color: rgba(197, 168, 128, 0.15) !important;
+    transform: translateY(-2px);
+    box-shadow: 6px 6px 16px rgba(0,0,0,0.8);
 }
 .cr-col {
     display: flex;
@@ -207,23 +198,32 @@
     z-index: 2; 
 }
 .cr-title { 
-    color: #0A192F; 
-    font-weight: 600; 
+    color: #0A192F !important; 
+    font-weight: 700; 
     font-size: 20px; 
-    font-family: 'Inter', sans-serif; /* Zmiana na nowoczesny font */
+    font-family: 'Inter', sans-serif; 
     letter-spacing: 0.5px; 
 }
-.cr-text { color: #0A192F; font-weight: 500; font-size: 12px; }
+.cr-text { color: #0A192F !important; font-weight: 500; font-size: 12px; }
+.cr-text strong { color: #990000 !important; }
+
+/* Kolor tekstu nagłówka w rozwinięciu edycji */
+.streamlit-expanderHeader {
+    color: #BA4949 !important;
+    font-weight: 700 !important;
+    background-color: transparent !important;
+}
 
 /* =========================================
-   7. ZAKŁADKI (GRANATOWE TŁO)
+   6. ZAKŁADKI (GRANATOWE TŁO)
 ========================================= */
 [data-baseweb="tab-list"] {
     gap: 5px;
-    background-color: #0A192F; /* Granatowe tło paska */
+    background-color: rgba(10, 25, 47, 0.95); /* Granatowe tło paska z zakładkami */
     padding: 6px;
     border-radius: 6px;
     border: none; 
+    backdrop-filter: blur(5px);
 }
 [data-baseweb="tab"] {
     height: 34px;
@@ -235,47 +235,60 @@
     font-weight: 600 !important;
     padding: 0 15px !important;
 }
-[data-baseweb="tab"]:hover {
-    color: #FDFBF7 !important;
-}
+[data-baseweb="tab"]:hover { color: #FDFBF7 !important; }
 [aria-selected="true"] {
-    background: #990000 !important; /* Czerwony przycisk aktywnej zakładki */
+    background: #990000 !important; /* Aktywna zakładka na czerwono */
     color: #FDFBF7 !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
 
 /* =========================================
-   8. INPUTY I WYSZUKIWARKA (GRANATOWE)
+   7. INPUTY I WYSZUKIWARKA (GRANATOWE)
 ========================================= */
 [data-baseweb="input"] {
-    background-color: #0A192F !important; /* Granatowe pole wyszukiwania */
+    background-color: rgba(10, 25, 47, 0.9) !important; 
     border: 1px solid #1C2D4A !important;
     border-radius: 6px !important;
 }
-input[type="text"] {
-    color: #FDFBF7 !important; /* Jasny tekst wpisywany */
+input[type="text"], input[type="number"], textarea { 
+    color: #FDFBF7 !important; 
 }
-input[type="text"]::placeholder {
-    color: #A39B8F !important;
+input[type="text"]::placeholder { 
+    color: #A39B8F !important; 
 }
 
-/* Przyciski operacyjne (np. Do opłacenia) */
-.btn-action-blue {
-    background-color: #0A192F;
-    color: #FDFBF7;
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-size: 10px;
-    font-weight: bold;
+/* Przyciski standardowe Streamlita */
+.stButton>button[kind="primary"] {
+    background: #0A192F;
+    color: #C5A880;
+    border: 1px solid #C5A880;
+    font-family: 'Inter', sans-serif;
     text-transform: uppercase;
-    border: 1px solid #0A192F;
+    font-weight: 600;
+}
+.stButton>button[kind="primary"]:hover {
+    background: #BA4949;
+    color: #FDFBF7;
+    border-color: #990000;
+}
+
+/* Przyciski operacyjne wewnątrz biletów (HTML) */
+.btn-action-blue {
+    background-color: #0A192F; color: #FDFBF7; border-radius: 4px; padding: 6px 14px;
+    font-size: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid #050A15;
 }
 .btn-action-red {
-    background-color: #990000;
-    color: #FDFBF7;
-    border-radius: 4px;
-    padding: 6px 14px;
-    font-size: 10px;
-    font-weight: bold;
-    text-transform: uppercase;
-    border: 1px solid #7A0000;
+    background-color: #990000; color: #FDFBF7; border-radius: 4px; padding: 6px 14px;
+    font-size: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid #7A0000;
+}
+
+/* Ekran Logowania */
+.login-box {
+    background-color: rgba(5, 10, 21, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 8px;
+    border: 2px dashed #BA4949;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.8);
 }
