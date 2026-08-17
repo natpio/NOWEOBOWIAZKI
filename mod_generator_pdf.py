@@ -481,6 +481,8 @@ def render(sh):
         st.markdown("<br>", unsafe_allow_html=True)
 
         wybrane_zlecenie_nr, gs_row_index = None, None
+        nr_cmr_do_zapisu = None
+        
         val_typ_zlecenia, val_waga, val_postoj = "Tylko dostawa", 1000, 0.0
         val_data_zal, val_data_roz_1, val_data_roz_2 = datetime.now().date(), datetime.now().date(), None
         val_data_emp_in_1, val_data_emp_in_2, val_data_dostawa_pustych, val_data_odbior_pelnych = datetime.now().date(), None, datetime.now().date(), datetime.now().date()
@@ -499,8 +501,11 @@ def render(sh):
                 r_edit = df_zlecenia.iloc[idx_pd]
                 gs_row_index = int(idx_pd) + 2 
                 
+                # Zabezpieczenie przed pobieraniem nr CMR na żywo w oknie
                 nr_cmr_zapisany = str(r_edit.get('Nr_CMR', r_edit.iloc[18] if len(r_edit)>18 else ''))
-                if not nr_cmr_zapisany.strip() or nr_cmr_zapisany in ["nan", "None"]: nr_cmr_zapisany = db.get_next_cmr_number()
+                if nr_cmr_zapisany.strip() and nr_cmr_zapisany not in ["nan", "None"]: 
+                    nr_cmr_do_zapisu = nr_cmr_zapisany
+                
                 val_typ_zlecenia = "Pełny event" if "TARGI" in str(r_edit.get('Typ', '')) or "CYKL:" in str(r_edit.get('Uwagi / Instrukcje', '')) else "Tylko dostawa"
                 
                 try: val_data_zal = datetime.strptime(str(r_edit.get('Data załadunku', r_edit.iloc[6])), "%Y-%m-%d").date()
@@ -607,8 +612,6 @@ def render(sh):
                         val_detale_przewoznika = "Zweryfikuj dane adresowe z giełdy..."
             else:
                 st.warning("Baza zleceń jest pusta - brak danych do edycji."); st.stop()
-        else:
-            nr_cmr_zapisany = db.get_next_cmr_number()
 
         with st.expander("🔍 Przeglądaj i wyszukaj miejsca z Bazy Lokalizacji"):
             wyszukiwana_fraza = st.text_input("Wpisz szukaną frazę (nazwa, miasto, ulica, kod):", placeholder="np. Messe Berlin...")
@@ -794,6 +797,12 @@ def render(sh):
                         prefix = "ZLP" if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)" else "EVT"
                         nr_zlecenia = f"{prefix}{datetime.now().strftime('%y/%m%d')}/{podpis}{idx:02d}"
                     
+                    # --- KLUCZOWA POPRAWKA ZAPOBIEGAJĄCA BŁĘDOM RATE LIMIT (429) ---
+                    if nr_cmr_do_zapisu:
+                        nr_cmr_zapisany = nr_cmr_do_zapisu
+                    else:
+                        nr_cmr_zapisany = str(db.get_next_cmr_number())
+                    
                     paczka_pdf = {
                         "typ_zlecenia": typ_zlecenia, "nr": nr_zlecenia, 
                         "przewoznik_nazwa": nazwa_przewoznika, "przewoznik_detale": detale_przewoznika,
@@ -888,10 +897,32 @@ def render(sh):
                 if df_pro.empty: st.info("Brak aktywnych zleceń PRO w bazie danych.")
                 else:
                     for index, row in df_pro.iterrows():
-                        nr, projekt, data_zal, miejsce_zal, miejsce_roz, przewoznik = str(row.get("Numer zlecenia", "Brak numeru")), str(row.get("ID Projektu", "---")), str(row.get("Data załadunku", "---")), str(row.get("Miejsce Zaladunku", "---")), str(row.get("Miejsce Rozladunku", "---")), str(row.get("Zleceniobiorca", "---"))
+                        nr = str(row.get("Numer zlecenia", "Brak numeru"))
+                        projekt = str(row.get("ID Projektu", "---"))
+                        data_zal = str(row.get("Data załadunku", "---"))
+                        miejsce_zal = str(row.get("Miejsce Zaladunku", "---"))
+                        miejsce_roz = str(row.get("Miejsce Rozladunku", "---"))
+                        przewoznik = str(row.get("Zleceniobiorca", "---"))
+                        
+                        data_wystawienia = str(row.get("Data/Czas Operacji", "---"))
+                        
                         row_idx, idx_pd = int(row['sheet_row']), int(row.name)
                         
-                        st.markdown(f"""<div class="custom-row" style="margin-bottom: 5px;"><div class="cr-col" style="flex: 2.5;"><div class="cr-title">🚚 {nr}</div><div class="cr-text" style="color: #C5A880;">📦 Projekt: <strong>{projekt}</strong></div><div class="cr-text">👤 Przewoźnik: <strong>{przewoznik}</strong></div></div><div class="cr-col" style="flex: 2;"><div class="cr-text">📅 Załadunek: {data_zal}</div><div class="cr-text">📍 Skąd: {miejsce_zal}</div><div class="cr-text">🏁 Dokąd: {miejsce_roz}</div></div></div>""", unsafe_allow_html=True)
+                        st.markdown(f"""
+                        <div class="custom-row" style="margin-bottom: 5px;">
+                            <div class="cr-col" style="flex: 2.5;">
+                                <div class="cr-text" style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">🕒 Wystawiono: {data_wystawienia}</div>
+                                <div class="cr-title">🚚 {nr}</div>
+                                <div class="cr-text" style="color: #C5A880;">📦 Projekt: <strong>{projekt}</strong></div>
+                                <div class="cr-text">👤 Przewoźnik: <strong>{przewoznik}</strong></div>
+                            </div>
+                            <div class="cr-col" style="flex: 2;">
+                                <div class="cr-text">📅 Załadunek: {data_zal}</div>
+                                <div class="cr-text">📍 Skąd: {miejsce_zal}</div>
+                                <div class="cr-text">🏁 Dokąd: {miejsce_roz}</div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                         c_info, c_docs, c_del = st.columns([3, 1.5, 1])
                         with c_docs:
