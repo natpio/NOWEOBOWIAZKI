@@ -228,7 +228,9 @@ def update_row(sheet_name, row_index, row_data):
     try:
         ws = sh.worksheet(sheet_name)
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
-        ostatnia_kolumna = chr(65 + len(safe_list) - 1) 
+        
+        # POPRAWKA: Zmiana z chr(...) na użycie bezpiecznej funkcji get_col_letter
+        ostatnia_kolumna = get_col_letter(len(safe_list))
         zakres = f"A{row_index}:{ostatnia_kolumna}{row_index}"
         
         try:
