@@ -105,20 +105,17 @@ def render(sh):
             <div class="custom-row">
                 {img_html}
                 <div style="display: flex; width: 100%; position: relative; z-index: 2;">
-                    
                     <div class="cr-col" style="flex: 2.5; padding-right: 15px;">
                         <div class="cr-title">{nr_zlecenia_wyswietl}</div>
                         <div class="cr-text" style="margin-top: 5px;">🚛 Przewoźnik: <strong>{row.get('Przewoźnik', 'Brak')}</strong></div>
                         <div class="cr-text">👤 Opis: <i>{row.get('Opis Ładunku / Trasy', '---')}</i></div>
                     </div>
-                    
                     <div class="cr-col" style="flex: 1.5; border-left: 1px dashed rgba(10, 25, 47, 0.3); padding-left: 20px; justify-content: center;">
                         <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
                         <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
                         <div class="cr-text">💲 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div>
                         <div style="font-size: 10px; font-weight: 700; margin-top: 5px; color: #0A192F;">{status_val}</div>
                     </div>
-                    
                     <div class="cr-col" style="flex: 1.2; align-items: flex-end; justify-content: center; flex-direction: row; gap: 5px; padding-right: 80px;">
                         {action_buttons}
                     </div>
