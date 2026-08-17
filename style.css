@@ -175,7 +175,7 @@
     background-size: cover;
     background-position: center;
     border: 1px solid #B08D5B;
-    border-left: 6px dashed #BA4949; /* Perforacja biletu z czerwonym szwem */
+    border-left: 5px solid #BA4949; /* Czysta, solidna czerwona linia szwu */
     padding: 16px 22px;
     border-radius: 4px;
     margin-bottom: 12px;
@@ -183,6 +183,7 @@
     box-shadow: 4px 4px 12px rgba(0,0,0,0.6);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     position: relative;
+    overflow: hidden; /* Zabezpieczenie przed wychodzeniem elementów poza bilet */
 }
 .custom-row:hover {
     transform: translateY(-2px);
