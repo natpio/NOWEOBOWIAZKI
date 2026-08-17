@@ -1,11 +1,13 @@
+@import url('https://fonts.googleapis.com/css2?family=Playball&family=Bebas+Neue&family=Inter:wght@400;600&family=Shippori+Mincho:wght@700&display=swap');
+
 /* =========================================
    1. GLOBALNE TŁO I UKRYWANIE ELEMENTÓW
 ========================================= */
 .stApp {
-    background-color: #12100E;
-    background-image: url('fuji_bg.png'); 
+    background-color: #050A15; 
+    background-image: url('fuji_bg.png'); /* Nocny stadion */
     background-size: cover;
-    background-position: center right;
+    background-position: center;
     background-attachment: fixed;
     color: #E2DCD3;
     font-family: 'Inter', sans-serif;
@@ -18,71 +20,103 @@
    2. PASEK BOCZNY (SIDEBAR) I LOGO
 ========================================= */
 [data-testid="stSidebar"] {
-    background-color: rgba(18, 16, 14, 0.92) !important;
-    border-right: 1px solid rgba(197, 168, 128, 0.12);
-    background-image: url('lantern_bg.png'); 
-    background-size: 85% auto;
-    background-position: bottom center;
-    background-repeat: no-repeat;
+    background-color: rgba(5, 10, 21, 0.9) !important;
+    background-image: url('lantern_bg.png'); /* Skóra z czerwonym szwem */
+    background-size: cover;
+    background-position: right center;
+    border-right: 3px solid #050A15;
     padding-top: 1rem;
 }
 
 .sidebar-logo-container {
-    border-bottom: 1px solid rgba(197, 168, 128, 0.15);
+    border-bottom: 2px dashed rgba(186, 73, 73, 0.8); /* Czerwony szew imitacja */
     padding-bottom: 18px;
     margin-bottom: 25px;
+    text-align: center;
 }
 .sidebar-logo-text {
-    font-size: 20px;
-    font-weight: 800;
-    margin-bottom: 4px;
-    color: #E2DCD3;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.sidebar-logo-sub {
-    font-size: 9px;
-    color: #8C8477;
-    letter-spacing: 3px;
-    text-transform: uppercase;
+    font-family: 'Playball', cursive;
+    font-size: 42px;
+    color: #FDFBF7;
+    text-shadow: 2px 2px 6px rgba(0,0,0,0.9);
+    margin-bottom: -8px;
 }
 .sidebar-logo-text span {
-    color: #C5A880; 
+    color: #BA4949; /* Crimson Red */
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 32px;
+    letter-spacing: 2px;
+}
+.sidebar-logo-sub {
+    font-size: 10px;
+    color: #C5A880;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
 }
 
 /* Menu Boczne (Option Menu) */
 .nav-link { 
     font-weight: 600 !important; 
-    font-size: 11px !important; 
+    font-size: 12px !important; 
     border-radius: 6px !important; 
     letter-spacing: 1px;
     transition: all 0.2s ease !important;
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    color: #A39B8F !important;
 }
 .nav-link:hover {
-    background-color: rgba(197, 168, 128, 0.08) !important;
-    color: #C5A880 !important;
+    background-color: rgba(186, 73, 73, 0.15) !important;
+    color: #FDFBF7 !important;
+}
+.nav-link-selected {
+    background: rgba(5, 10, 21, 0.85) !important;
+    border-left: 4px solid #BA4949 !important;
+    color: #FDFBF7 !important;
+    box-shadow: inset 5px 0px 15px rgba(0,0,0,0.5);
 }
 
-/* Karta profilu w sidebarze */
 .sidebar-profile-card {
-    background: rgba(28, 26, 24, 0.8);
+    background: rgba(5, 10, 21, 0.8);
     border: 1px solid rgba(197, 168, 128, 0.2);
     border-radius: 8px;
     padding: 12px 15px;
     margin-top: 35px;
     margin-bottom: 15px;
     backdrop-filter: blur(10px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
 }
 
 /* =========================================
-   3. KARTY KPI (WASHI PARCHMENT & YUJI BOKU / ZEN OLD MINCHO)
+   3. TYPOGRAFIA NAGŁÓWKÓW (BASEBALL SCRIPT)
 ========================================= */
-@import url('https://fonts.googleapis.com/css2?family=Yuji+Boku&family=Zen+Old+Mincho:wght@700&display=swap');
+.module-header-container {
+    margin-bottom: 25px;
+    border-bottom: 2px dashed rgba(186, 73, 73, 0.6); /* Czerwony szew */
+    padding-bottom: 15px;
+}
+.module-title {
+    color: #FDFBF7;
+    font-size: 54px;
+    font-family: 'Playball', cursive;
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+    margin: 0 0 5px 0;
+    line-height: 1.1;
+}
+.module-subtitle {
+    color: #C5A880;
+    font-size: 12px;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
 
+/* =========================================
+   4. KARTY KPI (VINTAGE PAPER)
+========================================= */
 .kpi-container {
     display: flex;
     gap: 18px;
@@ -90,268 +124,189 @@
 }
 .kpi-card {
     flex: 1;
-    padding: 24px 28px;
-    border-radius: 8px;
-    background-image: url('washi_bg.jpg');
+    padding: 20px 24px;
+    border-radius: 6px;
+    background-image: url('washi_bg.jpg'); /* Tekstura starego papieru */
     background-size: cover;
     background-position: center;
-    border: 1px solid rgba(197, 168, 128, 0.45);
-    box-shadow: 6px 6px 20px rgba(0,0,0,0.5), inset 0 0 20px rgba(212, 180, 137, 0.15);
+    border: 1px solid #A39B8F;
+    box-shadow: 5px 5px 15px rgba(0,0,0,0.6), inset 0 0 40px rgba(139, 69, 19, 0.15);
     position: relative;
     overflow: hidden;
 }
-.kpi-card::before {
-    content: "";
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(30, 26, 21, 0.35);
-    backdrop-filter: blur(0.5px);
-    pointer-events: none;
-    z-index: 1;
+.kpi-header { 
+    color: #0A192F; 
+    font-size: 18px; 
+    font-weight: 400; 
+    font-family: 'Bebas Neue', sans-serif; 
+    z-index: 2; 
+    position: relative; 
+    letter-spacing: 1.5px; 
 }
-
-.kpi-header { color: #2E2319; font-size: 16px; font-weight: 400; font-family: 'Yuji Boku', serif; z-index: 2; position: relative; text-shadow: 0 1px 2px rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 1.5px; }
-.kpi-sub-jp { color: #4A3A2C; font-size: 11px; margin-bottom: 12px; letter-spacing: 1.5px; font-family: 'Zen Old Mincho', serif; z-index: 2; position: relative; font-weight: 700; text-shadow: 0 1px 1px rgba(255,255,255,0.2); }
-.kpi-value { color: #17110C; font-size: 60px; font-weight: 400; z-index: 2; position: relative; font-family: 'Yuji Boku', serif; letter-spacing: 2px; text-shadow: 0 2px 4px rgba(255,255,255,0.3); }
-.kpi-icon-bg { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); font-size: 48px; opacity: 0.18; filter: grayscale(100%); z-index: 1; }
+.kpi-sub-jp { 
+    color: #BA4949; 
+    font-size: 11px; 
+    margin-bottom: 8px; 
+    letter-spacing: 1px; 
+    font-weight: 600;
+}
+.kpi-value { 
+    color: #990000; 
+    font-size: 65px; 
+    line-height: 1;
+    font-weight: 400; 
+    font-family: 'Bebas Neue', sans-serif; 
+    text-shadow: 1px 1px 0px rgba(255,255,255,0.8); 
+}
+/* Optyczne ukrycie starych szarych emoji na kartach KPI (zastąpimy je grafikami w Pythonie) */
+.kpi-icon-bg { display: none; }
 
 /* =========================================
-   4. KAFELKI ZLECEŃ (CUSTOM ROW)
+   5. KAFELKI ZLECEŃ (VINTAGE TICKETS)
 ========================================= */
 .custom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(28, 26, 24, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    padding: 12px 20px;
-    border-radius: 6px;
-    margin-bottom: -15px;
-    color: #A39B8F;
-    font-size: 12px;
-    transition: all 0.2s ease;
+    background-image: url('washi_bg.jpg'); /* Bilet z papieru */
+    background-size: cover;
+    background-position: center;
+    border: 1px solid #B08D5B;
+    border-left: 6px dashed #BA4949; /* Perforacja biletu z czerwonym szwem */
+    padding: 16px 22px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+    color: #0A192F;
+    box-shadow: 4px 4px 12px rgba(0,0,0,0.6);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    position: relative;
 }
 .custom-row:hover {
-    background: rgba(35, 32, 28, 0.9);
-    border-left: 3px solid #C5A880;
+    transform: translateY(-2px);
+    box-shadow: 6px 6px 16px rgba(0,0,0,0.8);
+    border-color: #8C8477;
 }
 .cr-col {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    z-index: 2; /* Żeby tekst był nad obrazkiem pałkarza */
 }
-.cr-title { color: #E2DCD3; font-weight: 600; font-size: 14px; letter-spacing: 0.5px; }
-.cr-text { color: #8C8477; font-weight: 400; font-size: 11px; }
+.cr-title { 
+    color: #0A192F; 
+    font-weight: 400; 
+    font-size: 22px; 
+    font-family: 'Bebas Neue', sans-serif; 
+    letter-spacing: 1px; 
+}
+/* Zmienione kolory tekstu na bardzo ciemne, bo tło jest teraz jasne */
+.cr-text { color: #2E2A26; font-weight: 600; font-size: 12px; }
+.cr-text strong { color: #BA4949; }
 
-/* Pigułki Statusów (Badges) - Zgaszone kolory */
+/* Pigułki Statusów i Tagi w stylu baseballowym */
 .cr-badge {
-    padding: 5px 12px;
-    border-radius: 4px;
-    font-size: 11px; /* Powiększone z 9px na 11px */
-    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-weight: 400;
+    font-family: 'Bebas Neue', sans-serif;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    text-align: center;
-}
-.cr-badge.inicjacja { border: 1px solid rgba(131, 165, 219, 0.3); color: #83A5DB; background: rgba(131, 165, 219, 0.05); }
-.cr-badge.planowanie { border: 1px solid rgba(175, 143, 201, 0.3); color: #AF8FC9; background: rgba(175, 143, 201, 0.05); }
-.cr-badge.zaladunek { border: 1px solid rgba(201, 164, 113, 0.3); color: #C9A471; background: rgba(201, 164, 113, 0.05); }
-.cr-badge.trasa { border: 1px solid rgba(197, 168, 128, 0.5); color: #C5A880; background: rgba(197, 168, 128, 0.1); }
-.cr-badge.zamkniete { border: 1px solid rgba(119, 163, 133, 0.3); color: #77A385; background: rgba(119, 163, 133, 0.05); }
-.cr-badge.domyslny { border: 1px solid rgba(255, 255, 255, 0.1); color: #8C8477; background: rgba(255, 255, 255, 0.02); }
-
-/* Tagi braków i płatności (DO OPŁACENIA / FV: ...) */
-/* Czcionka powiększona z 9px na 13px, dodano większe marginesy wewnętrzne */
-.tag-zen-red { background: rgba(186, 73, 73, 0.1); color: #BA4949; border: 1px solid rgba(186, 73, 73, 0.3); padding: 5px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
-.tag-zen-orange { background: rgba(199, 127, 74, 0.1); color: #C77F4A; border: 1px solid rgba(199, 127, 74, 0.3); padding: 5px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
-.tag-zen-blue { background: rgba(85, 122, 166, 0.1); color: #557AA6; border: 1px solid rgba(85, 122, 166, 0.3); padding: 5px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px; }
-
-div[data-testid="column"] button { margin-top: 15px; border-radius: 4px; font-weight: 600; }
-
-/* =========================================
-   5. ELEMENTY FORMULARZY I PRZYCISKI GŁÓWNE
-========================================= */
-/* Ekran Logowania */
-.login-box {
-    background-color: rgba(28, 26, 24, 0.8);
-    backdrop-filter: blur(10px);
-    padding: 40px;
-    border-radius: 8px;
-    border: 1px solid rgba(197, 168, 128, 0.2);
-    text-align: center;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-}
-
-/* Przyciski typu Primary (Złote zgaszone) */
-.stButton>button[kind="primary"] {
-    background: transparent;
-    color: #C5A880;
-    border: 1px solid #C5A880;
-    font-weight: 600;
-    font-size: 11px;
-    letter-spacing: 1px;
-    border-radius: 4px;
-    transition: all 0.3s ease;
-}
-.stButton>button[kind="primary"]:hover {
-    background: rgba(197, 168, 128, 0.1);
-    box-shadow: none;
-}
-.stButton>button[kind="secondary"] {
-    background: transparent;
-    color: #8C8477;
-    border: 1px solid rgba(140, 132, 119, 0.3);
-    font-weight: 600;
-    font-size: 11px;
-    border-radius: 4px;
-}
-
-/* =========================================
-   6. COMMAND CENTER DASHBOARD
-========================================= */
-.dash-card {
-    background: rgba(28, 26, 24, 0.85);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 4px 4px 10px rgba(0,0,0,0.4);
-    height: 100%;
-}
-
-.dash-title {
-    color: #E2DCD3;
-    font-size: 14px;
-    font-weight: 600;
-    margin-top: 0;
-    margin-bottom: 15px;
-    letter-spacing: 1px;
-}
-
-/* Advanced KPI Cards */
-.kpi-advanced {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-.kpi-adv-header {
-    color: #8C8477;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    letter-spacing: 1px;
-}
-.kpi-adv-header .icon { font-size: 20px; opacity: 0.5;}
-.kpi-adv-value {
-    color: #E2DCD3;
-    font-size: 34px;
-    font-weight: 600;
-    margin: 10px 0;
-    font-family: 'Courier New', monospace;
-}
-.kpi-progress-bar {
-    width: 100%;
-    height: 2px;
-    background: rgba(255,255,255,0.05);
-    border-radius: 2px;
-    margin-bottom: 5px;
-    overflow: hidden;
-}
-.kpi-progress {
-    height: 100%;
-    background: #C5A880;
-    border-radius: 2px;
-}
-
-/* Issue Inbox / Alerts */
-.alert-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-bottom: 10px;
-    font-size: 12px;
-    background: rgba(255,255,255,0.02) !important;
-    border: 1px solid rgba(255,255,255,0.05);
-}
-.alert-warning { border-left: 3px solid #C77F4A !important; }
-.alert-danger { border-left: 3px solid #BA4949 !important; }
-.alert-icon { font-size: 16px; }
-.alert-content strong { color: #E2DCD3; display: block; margin-bottom: 2px;}
-.alert-content { color: #8C8477; line-height: 1.3; }
-
-/* =========================================
-   7. STYLIZACJA ZAKŁADEK I PÓL WYSZUKIWANIA (JAPANDI UI)
-========================================= */
-.module-header-container {
-    margin-bottom: 25px;
-    border-bottom: 1px solid rgba(197, 168, 128, 0.15);
-    padding-bottom: 12px;
-}
-.module-title {
-    color: #E2DCD3;
-    font-size: 24px;
-    font-weight: 700;
-    font-family: 'Shippori Mincho', 'Noto Serif JP', serif;
     letter-spacing: 1.5px;
-    margin: 0 0 4px 0;
+    text-align: center;
 }
-.module-subtitle {
-    color: #C5A880;
-    font-size: 11px;
-    font-family: 'Noto Serif JP', serif;
-    letter-spacing: 2px;
-    text-transform: uppercase;
+/* Bardziej nasycone kolory na jasnym tle */
+.cr-badge.inicjacja { border: 1px solid #1D4ED8; color: #1D4ED8; background: rgba(29, 78, 216, 0.1); }
+.cr-badge.planowanie { border: 1px solid #6D28D9; color: #6D28D9; background: rgba(109, 40, 217, 0.1); }
+.cr-badge.zaladunek { border: 1px solid #B45309; color: #B45309; background: rgba(180, 83, 9, 0.1); }
+.cr-badge.trasa { border: 1px solid #047857; color: #047857; background: rgba(4, 120, 87, 0.1); }
+.cr-badge.zamkniete { border: 1px solid #0F172A; color: #0F172A; background: rgba(15, 23, 42, 0.1); }
+.cr-badge.domyslny { border: 1px solid #475569; color: #475569; background: rgba(71, 85, 105, 0.1); }
+
+.tag-zen-red { background: #990000; color: #FDFBF7; border: 1px solid #7A0000; padding: 6px 12px; border-radius: 3px; font-size: 14px; font-weight: 400; letter-spacing: 1px; font-family: 'Bebas Neue', sans-serif;}
+.tag-zen-orange { background: #C5A880; color: #0A192F; border: 1px solid #B08D5B; padding: 6px 12px; border-radius: 3px; font-size: 14px; font-weight: 400; letter-spacing: 1px; font-family: 'Bebas Neue', sans-serif;}
+.tag-zen-blue { background: #0A192F; color: #FDFBF7; border: 1px solid #050D1A; padding: 6px 12px; border-radius: 3px; font-size: 14px; font-weight: 400; letter-spacing: 1px; font-family: 'Bebas Neue', sans-serif;}
+
+/* Kolor tekstu dla "Edytuj zlec." na biletach */
+.streamlit-expanderHeader {
+    color: #BA4949 !important;
+    font-weight: 700 !important;
+    background-color: transparent !important;
 }
 
+/* =========================================
+   6. ZAKŁADKI (TABS) Z CZERWONYM SZYCIEM
+========================================= */
 [data-baseweb="tab-list"] {
-    gap: 15px;
-    background-color: rgba(28, 26, 24, 0.6);
+    gap: 10px;
+    background-color: rgba(5, 10, 21, 0.85);
     padding: 8px 15px;
-    border-radius: 8px;
-    border: 1px solid rgba(197, 168, 128, 0.2);
+    border-radius: 6px;
+    border: 2px solid #0A192F; 
+    border-bottom: 2px dashed #BA4949; /* Efekt szwu */
     backdrop-filter: blur(8px);
 }
 [data-baseweb="tab"] {
-    height: 36px;
+    height: 38px;
     background-color: transparent !important;
-    border-radius: 6px !important;
-    color: #A39B8F !important;
-    font-family: 'Shippori Mincho', 'Noto Serif JP', serif !important;
-    font-weight: 600 !important;
-    font-size: 12px !important;
-    letter-spacing: 1px !important;
+    border-radius: 4px !important;
+    color: #C5A880 !important;
+    font-family: 'Bebas Neue', sans-serif !important;
+    font-size: 16px !important;
+    letter-spacing: 1.5px !important;
     padding: 0 20px !important;
     transition: all 0.2s ease !important;
 }
 [data-baseweb="tab"]:hover {
-    color: #C5A880 !important;
-    background-color: rgba(197, 168, 128, 0.08) !important;
+    color: #FDFBF7 !important;
+    background-color: rgba(186, 73, 73, 0.2) !important;
 }
 [aria-selected="true"] {
-    background: linear-gradient(135deg, rgba(197, 168, 128, 0.25) 0%, rgba(197, 168, 128, 0.08) 100%) !important;
+    background: #990000 !important;
     color: #FDFBF7 !important;
-    border: 1px solid rgba(197, 168, 128, 0.4) !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    border: none !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
 
+/* =========================================
+   7. FORMULARZE I INPUTY
+========================================= */
 [data-baseweb="input"] {
-    background-color: rgba(28, 26, 24, 0.75) !important;
+    background-color: rgba(5, 10, 21, 0.75) !important;
     border: 1px solid rgba(197, 168, 128, 0.25) !important;
-    border-radius: 6px !important;
+    border-radius: 4px !important;
     color: #E2DCD3 !important;
-    transition: all 0.3s ease !important;
 }
 [data-baseweb="input"]:hover, [data-baseweb="input"]:focus-within {
-    border-color: #C5A880 !important;
-    box-shadow: 0 0 10px rgba(197, 168, 128, 0.15) !important;
-    background-color: rgba(35, 32, 28, 0.9) !important;
+    border-color: #BA4949 !important;
+    box-shadow: 0 0 10px rgba(186, 73, 73, 0.2) !important;
+    background-color: rgba(10, 25, 47, 0.9) !important;
 }
 input[type="text"] {
     color: #E2DCD3 !important;
-    font-family: 'Inter', sans-serif !important;
-    font-size: 12px !important;
+}
+
+/* Przyciski */
+.stButton>button[kind="primary"] {
+    background: #0A192F;
+    color: #C5A880;
+    border: 1px solid #C5A880;
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+.stButton>button[kind="primary"]:hover {
+    background: #BA4949;
+    color: #FDFBF7;
+    border-color: #990000;
+}
+
+/* Ekran Logowania */
+.login-box {
+    background-color: rgba(5, 10, 21, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 8px;
+    border: 2px dashed #BA4949;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.8);
 }
