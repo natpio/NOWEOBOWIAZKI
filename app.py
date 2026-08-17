@@ -7,7 +7,7 @@ import base64
 
 # Import modułów aplikacji
 import mod_command_center
-import mod_harmonogram  # <--- ZAIMPORTOWANY NOWY MODUŁ GANTT
+import mod_harmonogram
 import mod_eventy
 import mod_zlecenia_poboczne
 import mod_subrenty
@@ -19,8 +19,14 @@ import mod_generator_pdf
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="✺", layout="wide")
 
-# 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA
+# 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA I CZCIONEK
 def local_css(file_name):
+    st.markdown("""
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Playball&family=Bebas+Neue&family=Inter:wght@400;600&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">
+    """, unsafe_allow_html=True)
+
     if os.path.exists(file_name):
         with open(file_name, "r", encoding="utf-8") as f:
             css_content = f.read()
@@ -35,7 +41,11 @@ def local_css(file_name):
                 b64_lantern = base64.b64encode(img_l.read()).decode()
             css_content = css_content.replace("url('lantern_bg.png')", f"url('data:image/png;base64,{b64_lantern}')")
 
-        if os.path.exists("washi_bg.jpg"):
+        if os.path.exists("washi_bg.png"):
+            with open("washi_bg.png", "rb") as img_w:
+                b64_washi = base64.b64encode(img_w.read()).decode()
+            css_content = css_content.replace("url('washi_bg.png')", f"url('data:image/png;base64,{b64_washi}')")
+        elif os.path.exists("washi_bg.jpg"):
             with open("washi_bg.jpg", "rb") as img_w:
                 b64_washi = base64.b64encode(img_w.read()).decode()
             css_content = css_content.replace("url('washi_bg.jpg')", f"url('data:image/jpeg;base64,{b64_washi}')")
