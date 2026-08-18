@@ -199,21 +199,20 @@ iframe[title="streamlit_option_menu.option_menu"] {
 .kpi-icon-bg { display: none; }
 
 /* =========================================
-   5. BILETY ZLECEŃ I EVENTÓW (CZYTELNE, Z MLEKOWĄ NAKŁADKĄ)
+   5. BILETY ZLECEŃ I EVENTÓW (MLEKOWA NAKŁADKA)
 ========================================= */
 .custom-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
     background-color: #F7F3EC !important; 
-    /* Mleczna nakładka (88% bieli/ecru) na teksturę, by wzmocnić kontrast tekstu! */
     background-image: linear-gradient(rgba(247, 243, 236, 0.88), rgba(247, 243, 236, 0.88)), url('washi_bg.png') !important; 
     background-blend-mode: normal; 
     background-size: cover;
     background-position: center;
     border: 1px solid #C5A880;
-    border-left: 6px solid #BA4949; /* Gruby czerwony pasek */
-    padding: 18px 24px; /* Więcej przestrzeni (oddechu) dla tekstu */
+    border-left: 6px solid #BA4949; 
+    padding: 18px 24px; 
     border-radius: 6px;
     margin-bottom: 15px;
     box-shadow: 4px 4px 12px rgba(0,0,0,0.15);
@@ -228,7 +227,7 @@ iframe[title="streamlit_option_menu.option_menu"] {
 .cr-col {
     display: flex;
     flex-direction: column;
-    gap: 8px; /* Zwiększony odstęp wierszy dla czytelności */
+    gap: 8px; 
     z-index: 2; 
 }
 .cr-title { 
@@ -250,8 +249,16 @@ iframe[title="streamlit_option_menu.option_menu"] {
     font-weight: 700; 
     font-size: 15px; 
 }
+.streamlit-expanderHeader { 
+    color: #BA4949 !important; 
+    font-weight: 700 !important; 
+    font-size: 14px !important; 
+    background-color: transparent !important; 
+}
 
-/* Nowa pigułka statusu dla pełnej czytelności na biletach */
+/* =========================================
+   6. PIGUŁKI STATUSÓW I TAGI Z MODUŁÓW (PRZYWRÓCONE!)
+========================================= */
 .status-badge {
     display: inline-block;
     padding: 4px 12px;
@@ -267,15 +274,29 @@ iframe[title="streamlit_option_menu.option_menu"] {
     box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
 }
 
-.streamlit-expanderHeader { 
-    color: #BA4949 !important; 
-    font-weight: 700 !important; 
-    font-size: 14px !important; 
-    background-color: transparent !important; 
+.cr-badge {
+    padding: 4px 12px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-weight: 400;
+    font-family: 'Bebas Neue', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    text-align: center;
 }
+.cr-badge.inicjacja { border: 1px solid #1D4ED8; color: #1D4ED8; background: rgba(29, 78, 216, 0.1); }
+.cr-badge.planowanie { border: 1px solid #6D28D9; color: #6D28D9; background: rgba(109, 40, 217, 0.1); }
+.cr-badge.zaladunek { border: 1px solid #B45309; color: #B45309; background: rgba(180, 83, 9, 0.1); }
+.cr-badge.trasa { border: 1px solid #047857; color: #047857; background: rgba(4, 120, 87, 0.1); }
+.cr-badge.zamkniete { border: 1px solid #0F172A; color: #0F172A; background: rgba(15, 23, 42, 0.1); }
+.cr-badge.domyslny { border: 1px solid #475569; color: #475569; background: rgba(71, 85, 105, 0.1); }
+
+.tag-zen-red { background: #990000; color: #FDFBF7; border: 1px solid #7A0000; padding: 6px 12px; border-radius: 3px; font-size: 14px; font-weight: 400; letter-spacing: 1px; font-family: 'Bebas Neue', sans-serif;}
+.tag-zen-orange { background: #C5A880; color: #0A192F; border: 1px solid #B08D5B; padding: 6px 12px; border-radius: 3px; font-size: 14px; font-weight: 400; letter-spacing: 1px; font-family: 'Bebas Neue', sans-serif;}
+.tag-zen-blue { background: #0A192F; color: #FDFBF7; border: 1px solid #050D1A; padding: 6px 12px; border-radius: 3px; font-size: 14px; font-weight: 400; letter-spacing: 1px; font-family: 'Bebas Neue', sans-serif;}
 
 /* =========================================
-   6. ZAKŁADKI I INPUTY
+   7. ZAKŁADKI I INPUTY
 ========================================= */
 [data-baseweb="tab-list"] { gap: 5px; background-color: rgba(10, 25, 47, 0.95); padding: 6px; border-radius: 6px; border: none; backdrop-filter: blur(5px); }
 [data-baseweb="tab"] { height: 34px; background-color: transparent !important; border-radius: 4px !important; color: #A39B8F !important; font-family: 'Inter', sans-serif !important; font-size: 13px !important; font-weight: 600 !important; padding: 0 15px !important; }
@@ -287,9 +308,19 @@ input[type="text"], input[type="number"], textarea { color: #FDFBF7 !important; 
 input[type="text"]::placeholder { color: #A39B8F !important; }
 
 /* =========================================
-   7. PRZYCISKI OPERACYJNE I EKRAN LOGOWANIA
+   8. PRZYCISKI OPERACYJNE I EKRAN LOGOWANIA
 ========================================= */
 .stButton>button[kind="primary"] { background: #0A192F; color: #C5A880; border: 1px solid #C5A880; font-family: 'Inter', sans-serif; text-transform: uppercase; font-weight: 600; }
 .stButton>button[kind="primary"]:hover { background: #BA4949; color: #FDFBF7; border-color: #990000; }
 .btn-action-blue { background-color: #0A192F; color: #FDFBF7; border-radius: 4px; padding: 6px 14px; font-size: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid #050A15; }
 .btn-action-red { background-color: #990000; color: #FDFBF7; border-radius: 4px; padding: 6px 14px; font-size: 10px; font-weight: bold; text-transform: uppercase; border: 1px solid #7A0000; }
+
+.login-box {
+    background-color: rgba(5, 10, 21, 0.9);
+    backdrop-filter: blur(10px);
+    padding: 40px;
+    border-radius: 8px;
+    border: 2px dashed #BA4949;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.8);
+}
