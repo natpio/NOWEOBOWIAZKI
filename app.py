@@ -15,6 +15,7 @@ import mod_yestech
 import mod_finanse
 import mod_bazy_danych
 import mod_generator_pdf 
+import mod_empties
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="⚾", layout="wide")
@@ -108,10 +109,10 @@ def main():
         
         opcje_menu = [
             "COMMAND CENTER", "HARMONOGRAM (GANTT)", "GENERATOR ZLECEŃ PRO", 
-            "EVENTY / TARGI", "ZLECENIA POBOCZNE", "SUBRENTY", 
+            "EVENTY / TARGI", "EMPTIES TOWER", "ZLECENIA POBOCZNE", "SUBRENTY", 
             "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
         ]
-        ikony_menu = ["cpu", "calendar-range", "file-earmark-pdf", "truck", "briefcase", "box", "globe", "database", "graph-up"]
+        ikony_menu = ["cpu", "calendar-range", "file-earmark-pdf", "truck", "box-seam", "briefcase", "box", "globe", "database", "graph-up"]
 
         if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
         st.session_state["menu_option"] = str(st.session_state["menu_option"]).upper()
@@ -200,6 +201,7 @@ def main():
     elif wybrany_modul == "HARMONOGRAM (GANTT)": mod_harmonogram.render(sh)
     elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
     elif wybrany_modul == "EVENTY / TARGI": mod_eventy.render(sh)
+    elif wybrany_modul == "EMPTIES TOWER": mod_empties.render(sh)
     elif wybrany_modul == "ZLECENIA POBOCZNE": mod_zlecenia_poboczne.render(sh)
     elif wybrany_modul == "SUBRENTY": mod_subrenty.render(sh)
     elif wybrany_modul == "YESTECH EXPORT": mod_yestech.render(sh)
