@@ -21,10 +21,11 @@ def get_full_address(place_name, df_miejsca):
     return place_name
 
 def render(sh):
-    st.markdown("""
+    header_html = """
         <h2 style='color: #E2DCD3; margin-bottom: 0px; font-weight: 400; font-size: 24px;'>Moduł Operacyjny: Eventy & Flota</h2>
         <div style='color: #8C8477; font-size: 11px; letter-spacing: 2px; margin-bottom: 25px;'>オペレーションモジュール: イベント & フリート</div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(header_html.replace('\n', ''), unsafe_allow_html=True)
     
     worksheet, df = load_data(sh, "DB_Eventy")
     
@@ -58,7 +59,7 @@ def render(sh):
     braki_pod = len(df_aktywne[df_aktywne.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     braki_faktury = len(df_aktywne[df_aktywne.get("Faktura_Oplacona", pd.Series()) == "NIE"]) if not df_aktywne.empty else 0
     
-    st.markdown(f"""
+    kpi_html = f"""
         <div class="kpi-container">
             <div class="kpi-card">
                 <div class="kpi-header">Do wystawienia CMR</div>
@@ -79,7 +80,8 @@ def render(sh):
                 <div class="kpi-icon-bg">💰</div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(kpi_html.replace('\n', ''), unsafe_allow_html=True)
 
     tab_podglad, tab_formularz, tab_archiwum = st.tabs([
         "🗂️ Aktywne Zlecenia", "➕ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"
@@ -112,48 +114,52 @@ def render(sh):
                     return "background: rgba(28, 26, 24, 0.75); border: 1px solid rgba(197, 168, 128, 0.15); box-shadow: 0 2px 8px rgba(0,0,0,0.2);"
 
             with f_col1:
-                st.markdown(f"""
+                f1_html = f"""
                 <div style="{get_filter_style(active_filter == 'Wszystkie')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
                     <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Wszystkie</div>
                     <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">すべて</div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(f1_html.replace('\n', ''), unsafe_allow_html=True)
                 if st.button("Filtruj Wszystkie", use_container_width=True, key="btn_f_all"):
                     st.session_state["filtr_eventow"] = "Wszystkie"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
 
             with f_col2:
-                st.markdown(f"""
+                f2_html = f"""
                 <div style="{get_filter_style(active_filter == 'BrakCMR')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
                     <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak CMR ({braki_cmr})</div>
                     <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">CMRなし</div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(f2_html.replace('\n', ''), unsafe_allow_html=True)
                 if st.button("Filtruj Brak CMR", use_container_width=True, key="btn_f_cmr"):
                     st.session_state["filtr_eventow"] = "BrakCMR"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
 
             with f_col3:
-                st.markdown(f"""
+                f3_html = f"""
                 <div style="{get_filter_style(active_filter == 'BrakPOD')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
                     <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak POD ({braki_pod})</div>
                     <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">POD受領待ち</div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(f3_html.replace('\n', ''), unsafe_allow_html=True)
                 if st.button("Filtruj Brak POD", use_container_width=True, key="btn_f_pod"):
                     st.session_state["filtr_eventow"] = "BrakPOD"
                     st.session_state["wybrany_event_id"] = None
                     st.rerun()
 
             with f_col4:
-                st.markdown(f"""
+                f4_html = f"""
                 <div style="{get_filter_style(active_filter == 'BrakFaktury')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);">
                     <div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Nieopłacone ({braki_faktury})</div>
                     <div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">未払い請求書</div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(f4_html.replace('\n', ''), unsafe_allow_html=True)
                 if st.button("Filtruj Nieopłacone", use_container_width=True, key="btn_f_fak"):
                     st.session_state["filtr_eventow"] = "BrakFaktury"
                     st.session_state["wybrany_event_id"] = None
@@ -238,26 +244,26 @@ def render(sh):
                         
                         with c_karta:
                             html_karta = f"""
-<div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
-    <div style="display: flex; width: 100%; justify-content: space-between;">
-        <div class="cr-col" style="width: 40%;">
-            <span class="cr-title" style="font-size: 15px;">{row.get('Nazwa_Targow', '-')}</span>
-            <span style="font-size: 11px;">📍 {row.get('ID_Zlecenia', '-')}</span>
-        </div>
-        <div class="cr-col" style="width: 25%;">
-            <span class="cr-text">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-            <span class="cr-text">👤 {row.get('Przewoznik', '-')}</span>
-        </div>
-        <div class="cr-col" style="width: 35%; align-items: flex-end;">
-            <span class="cr-text" style="margin-bottom: 2px; font-size: 12px;">📅 Załadunek: <b style="color: #C5A880;">{data_zal_lista}</b></span>
-            <span class="cr-text" style="margin-bottom: 6px; font-size: 12px;">🔙 Powrót: <b style="color: #83A5DB;">{powrot_lista}</b></span>
-            <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
-        </div>
-    </div>
-    {tags_div}
-</div>
-"""
-                            st.markdown(html_karta, unsafe_allow_html=True)
+                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
+                                <div style="display: flex; width: 100%; justify-content: space-between;">
+                                    <div class="cr-col" style="width: 40%;">
+                                        <span class="cr-title" style="font-size: 18px; color: #050A15 !important; font-weight: 800;">{row.get('Nazwa_Targow', '-')}</span>
+                                        <span style="font-size: 12px; font-weight: 600; color: #1A2530 !important; margin-top: 2px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+                                    </div>
+                                    <div class="cr-col" style="width: 25%;">
+                                        <span class="cr-text" style="color: #1A2530 !important; font-weight: 600;">🚛 {row.get('Typ_Pojazdu', '-')}</span>
+                                        <span class="cr-text" style="color: #1A2530 !important; font-weight: 600;">👤 <strong style="color: #990000 !important;">{row.get('Przewoznik', '-')}</strong></span>
+                                    </div>
+                                    <div class="cr-col" style="width: 35%; align-items: flex-end;">
+                                        <span class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">📅 Załadunek: <b style="color: #050A15 !important;">{data_zal_lista}</b></span>
+                                        <span class="cr-text" style="color: #1A2530 !important; margin-bottom: 6px; font-size: 13px;">🔙 Powrót: <b style="color: #050A15 !important;">{powrot_lista}</b></span>
+                                        <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                                    </div>
+                                </div>
+                                {tags_div}
+                            </div>
+                            """
+                            st.markdown(html_karta.replace('\n', ''), unsafe_allow_html=True)
                             
                         with c_btn:
                             is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
@@ -272,10 +278,11 @@ def render(sh):
                     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].iloc[0]
                     is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
                     
-                    st.markdown("""
+                    detale_html = """
                         <div style="background: rgba(28, 26, 24, 0.85); padding: 25px; border-radius: 8px; border: 1px solid rgba(197, 168, 128, 0.3);">
                             <p style="color: #8C8477; font-size: 11px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;">Szczegóły Operacji</p>
-                    """, unsafe_allow_html=True)
+                    """
+                    st.markdown(detale_html.replace('\n', ''), unsafe_allow_html=True)
                     
                     st.markdown(f"<h3 style='color: #E2DCD3; margin-top: 0;'>{dane_eventu['Nazwa_Targow']}</h3>", unsafe_allow_html=True)
                     
@@ -326,9 +333,6 @@ def render(sh):
                                     use_container_width=True
                                 )
                                 
-                                # ==========================================
-                                # LOGIKA ZWROTNEGO CMR W MODULE EVENTÓW
-                                # ==========================================
                                 st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
                                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🔙 Dokument na drogę powrotną</p>", unsafe_allow_html=True)
                                 data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{dane_eventu['ID_Zlecenia']}")
@@ -412,17 +416,19 @@ def render(sh):
                     if os.path.exists(plik_img):
                         with open(plik_img, "rb") as f:
                             b64_img = base64.b64encode(f.read()).decode()
-                        st.markdown(f"""
+                        img_h = f"""
                         <div style="width: 100%; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin: 15px 0; border: 1px solid rgba(197, 168, 128, 0.2);">
                             <img src="data:image/png;base64,{b64_img}" style="width: 100%; height: auto; display: block; object-fit: cover;">
                         </div>
-                        """, unsafe_allow_html=True)
+                        """
+                        st.markdown(img_h.replace('\n', ''), unsafe_allow_html=True)
                     else:
-                        st.markdown(f"""
+                        no_img_h = f"""
                         <div style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; margin: 15px 0;">
                             <span style="color: rgba(255,255,255,0.3); font-size: 13px;">Brak grafiki ({plik_img})</span>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """
+                        st.markdown(no_img_h.replace('\n', ''), unsafe_allow_html=True)
 
                     braki_zlecenia = []
                     if wymaga_cmr(dane_eventu):
@@ -440,21 +446,23 @@ def render(sh):
 
                     if braki_zlecenia:
                         lista_brakow = "".join([f"<li style='margin-bottom: 5px;'>{b}</li>" for b in braki_zlecenia])
-                        st.markdown(f"""
+                        brak_h = f"""
                         <div style="background: rgba(186, 73, 73, 0.05); border: 1px solid rgba(186, 73, 73, 0.3); padding: 15px 20px; border-radius: 8px; margin: 15px 0;">
                             <h4 style="color: #BA4949; margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">⚠️ Wymagane Akcje:</h4>
                             <ul style="color: #E2DCD3; font-size: 13px; margin: 0; padding-left: 20px;">
                                 {lista_brakow}
                             </ul>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """
+                        st.markdown(brak_h.replace('\n', ''), unsafe_allow_html=True)
                     else:
-                        st.markdown(f"""
+                        ok_h = """
                         <div style="background: rgba(119, 163, 133, 0.05); border: 1px solid rgba(119, 163, 133, 0.3); padding: 12px 15px; border-radius: 8px; margin: 15px 0; display: flex; align-items: center; gap: 10px;">
                             <span style="font-size: 18px;">✅</span>
                             <span style="color: #77A385; font-size: 13px; font-weight: 600;">Wszystkie dokumenty i rozliczenia są kompletne.</span>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """
+                        st.markdown(ok_h.replace('\n', ''), unsafe_allow_html=True)
 
                     det_info, det_har, det_fin, det_arch = st.tabs(["📝 EDYCJA", "⏱️ HARMONOGRAM", "💼 FINANSE", "🏁 ZAKOŃCZ"])
                     
@@ -559,7 +567,7 @@ def render(sh):
                         
                         if not sloty_eventu.empty:
                             for idx, slot in sloty_eventu.iterrows():
-                                st.markdown(f"""
+                                slot_h = f"""
                                 <div style="background: rgba(255,255,255,0.02); border-left: 3px solid #C5A880; padding: 10px 15px; border-radius: 4px; margin-bottom: 10px;">
                                     <div style="display: flex; justify-content: space-between; align-items: center;">
                                         <div>
@@ -572,7 +580,8 @@ def render(sh):
                                     </div>
                                     <div style="color: #8C8477; font-size: 12px; margin-top: 5px;">{slot.get('Notatki', '')}</div>
                                 </div>
-                                """, unsafe_allow_html=True)
+                                """
+                                st.markdown(slot_h.replace('\n', ''), unsafe_allow_html=True)
                         else:
                             st.info("Brak przypisanych slotów dla tego transportu.")
 
@@ -690,11 +699,12 @@ def render(sh):
                             
                     st.markdown('</div>', unsafe_allow_html=True)
                 else:
-                    st.markdown("""
+                    brak_detali = """
                         <div style="height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(28, 26, 24, 0.5); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); padding: 40px; text-align: center;">
                             <span style="color: #8C8477; line-height: 1.6;">Wybierz zlecenie z listy po lewej stronie,<br>aby wyświetlić panel szczegółów i edycję.</span>
                         </div>
-                    """, unsafe_allow_html=True)
+                    """
+                    st.markdown(brak_detali.replace('\n', ''), unsafe_allow_html=True)
 
         else:
             st.info("Brak aktywnych transportów w bazie danych.")
