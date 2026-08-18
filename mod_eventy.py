@@ -191,86 +191,103 @@ def render(sh):
             col_lista, col_detale = st.columns([65, 35], gap="large")
             
             with col_lista:
-                if df_widok.empty:
-                    if wyszukiwarka:
-                        st.warning(f"Brak zleceń pasujących do frazy: **{wyszukiwarka}** w wybranym filtrze.")
-                    else:
-                        st.info("Brak zleceń spełniających wybrane kryteria filtra.")
-                else:
-                    for index, row in df_widok.iterrows():
-                        faza = str(row.get('Faza_Procesu', '')).lower()
-                        badge_class = "cr-badge"
-                        if "inicjacja" in faza: badge_class += " inicjacja"
-                        elif "planowanie" in faza: badge_class += " planowanie"
-                        elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
-                        elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
-                        else: badge_class += " domyslny"
-                        
-                        is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
-                        braki_tagi_html = ""
-                        
-                        if wymaga_cmr(row):
-                            braki_tagi_html += f"<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
-                        
-                        if not is_sqm_row:
-                            if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
-                                braki_tagi_html += f"<span class='tag-zen-orange'>📄 BRAK POD</span>"
-                            if str(row.get('Faktura_Oplacona', '')) == 'NIE':
-                                braki_tagi_html += f"<span class='tag-zen-red'>💰 NIEOPŁACONE</span>"
-                            if str(row.get('PP_Otrzymane', '')) == 'NIE':
-                                braki_tagi_html += f"<span class='tag-zen-blue'>💳 BRAK PP</span>"
-
-                        if braki_tagi_html:
-                            tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
+                # --- NOWE ZAKŁADKI: FAZY PROCESU ---
+                t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
+                
+                def render_list(df_subset, tab_container):
+                    with tab_container:
+                        if df_subset.empty:
+                            if wyszukiwarka:
+                                st.warning(f"Brak zleceń pasujących do frazy w tej fazie procesu.")
+                            else:
+                                st.info("Brak aktywnych zleceń w tej fazie procesu.")
                         else:
-                            tags_div = ""
+                            for index, row in df_subset.iterrows():
+                                faza = str(row.get('Faza_Procesu', '')).lower()
+                                badge_class = "cr-badge"
+                                if "inicjacja" in faza: badge_class += " inicjacja"
+                                elif "planowanie" in faza: badge_class += " planowanie"
+                                elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
+                                elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
+                                else: badge_class += " domyslny"
+                                
+                                is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
+                                braki_tagi_html = ""
+                                
+                                if wymaga_cmr(row):
+                                    braki_tagi_html += f"<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
+                                
+                                if not is_sqm_row:
+                                    if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
+                                        braki_tagi_html += f"<span class='tag-zen-orange'>📄 BRAK POD</span>"
+                                    if str(row.get('Faktura_Oplacona', '')) == 'NIE':
+                                        braki_tagi_html += f"<span class='tag-zen-red'>💰 NIEOPŁACONE</span>"
+                                    if str(row.get('PP_Otrzymane', '')) == 'NIE':
+                                        braki_tagi_html += f"<span class='tag-zen-blue'>💳 BRAK PP</span>"
 
-                        data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
-                        if data_zal_lista in ['', 'None', 'nan', 'NaT']:
-                            data_zal_lista = 'Brak danych'
-                            
-                        notatki_str = str(row.get('Notatki', ''))
-                        data_roz_lista = "Brak danych"
-                        if "[Rozładunki:" in notatki_str:
-                            try: data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
-                            except: pass
+                                if braki_tagi_html:
+                                    tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
+                                else:
+                                    tags_div = ""
 
-                        powrot_lista = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
-                        if powrot_lista in ['', 'None', 'nan', 'NaT']:
-                            powrot_lista = "Brak danych"
+                                data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
+                                if data_zal_lista in ['', 'None', 'nan', 'NaT']:
+                                    data_zal_lista = 'Brak danych'
+                                    
+                                notatki_str = str(row.get('Notatki', ''))
+                                data_roz_lista = "Brak danych"
+                                if "[Rozładunki:" in notatki_str:
+                                    try: data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
+                                    except: pass
 
-                        c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
-                        
-                        with c_karta:
-                            html_karta = f"""
-                            <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
-                                <div style="display: flex; width: 100%; justify-content: space-between;">
-                                    <div class="cr-col" style="width: 40%;">
-                                        <div class="cr-title" style="font-size: 18px; color: #050A15 !important; font-weight: 800; margin-bottom: 2px;">{row.get('Nazwa_Targow', '-')}</div>
-                                        <div class="cr-text" style="font-size: 13px; font-weight: 700; color: #1A2530 !important;">📍 {row.get('ID_Zlecenia', '-')}</div>
+                                powrot_lista = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
+                                if powrot_lista in ['', 'None', 'nan', 'NaT']:
+                                    powrot_lista = "Brak danych"
+
+                                c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
+                                
+                                with c_karta:
+                                    html_karta = f"""
+                                    <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
+                                        <div style="display: flex; width: 100%; justify-content: space-between;">
+                                            <div class="cr-col" style="width: 40%;">
+                                                <div class="cr-title" style="font-size: 18px; color: #050A15 !important; font-weight: 800; margin-bottom: 2px;">{row.get('Nazwa_Targow', '-')}</div>
+                                                <div class="cr-text" style="font-size: 13px; font-weight: 700; color: #1A2530 !important;">📍 {row.get('ID_Zlecenia', '-')}</div>
+                                            </div>
+                                            <div class="cr-col" style="width: 25%;">
+                                                <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">🚛 {row.get('Typ_Pojazdu', '-')}</div>
+                                                <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">👤 <strong style="color: #990000 !important;">{row.get('Przewoznik', '-')}</strong></div>
+                                            </div>
+                                            <div class="cr-col" style="width: 35%; align-items: flex-end;">
+                                                <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">📅 Załadunek: <b style="color: #050A15 !important;">{data_zal_lista}</b></div>
+                                                <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">🏁 Rozładunek: <b style="color: #050A15 !important;">{data_roz_lista}</b></div>
+                                                <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 6px; font-size: 13px;">🔙 Powrót: <b style="color: #050A15 !important;">{powrot_lista}</b></div>
+                                                <div class="{badge_class}">{row.get('Faza_Procesu', '-')}</div>
+                                            </div>
+                                        </div>
+                                        {tags_div}
                                     </div>
-                                    <div class="cr-col" style="width: 25%;">
-                                        <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">🚛 {row.get('Typ_Pojazdu', '-')}</div>
-                                        <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">👤 <strong style="color: #990000 !important;">{row.get('Przewoznik', '-')}</strong></div>
-                                    </div>
-                                    <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                        <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">📅 Załadunek: <b style="color: #050A15 !important;">{data_zal_lista}</b></div>
-                                        <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 6px; font-size: 13px;">🔙 Powrót: <b style="color: #050A15 !important;">{powrot_lista}</b></div>
-                                        <div class="{badge_class}">{row.get('Faza_Procesu', '-')}</div>
-                                    </div>
-                                </div>
-                                {tags_div}
-                            </div>
-                            """
-                            st.markdown(html_karta.replace('\n', ''), unsafe_allow_html=True)
-                            
-                        with c_btn:
-                            is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
-                            btn_type = "primary" if is_primary else "secondary"
-                            
-                            if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
-                                st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
-                                st.rerun()
+                                    """
+                                    st.markdown(html_karta.replace('\n', ''), unsafe_allow_html=True)
+                                    
+                                with c_btn:
+                                    is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
+                                    btn_type = "primary" if is_primary else "secondary"
+                                    
+                                    if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
+                                        st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
+                                        st.rerun()
+
+                # Generowanie podzbiorów dla konkretnych faz
+                df_plan = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja", na=False)]
+                df_zal = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("załadunek", na=False)]
+                df_tra = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("trasa", na=False)]
+                df_zam = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("zamknięte", na=False)]
+
+                render_list(df_plan, t_plan)
+                render_list(df_zal, t_zal)
+                render_list(df_tra, t_tra)
+                render_list(df_zam, t_zam)
 
             with col_detale:
                 if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
@@ -376,7 +393,7 @@ def render(sh):
                         if st.button("📋 Klonuj", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
                             nowy_wiersz = dane_eventu.copy().to_dict()
                             nowy_wiersz['ID_Zlecenia'] = "" 
-                            nowy_wiersz['Faza_Procesu'] = "Inicjacja"
+                            nowy_wiersz['Faza_Procesu'] = "Planowanie"
                             nowy_wiersz['Status_Magazyn'] = "Brak gotowości"
                             nowy_wiersz['CMR_Gotowe'] = "NIE"
                             nowy_wiersz['Nr_CMR'] = "" 
@@ -489,8 +506,8 @@ def render(sh):
                                 u_przewoznik = st.text_input("Przewoźnik / Firma Transportowa", value=str(dane_eventu.get('Przewoznik', '')))
                                 u_typ_transp = st.selectbox("Typ Transportu", ["Zewnętrzny", "Własny SQM"], index=0 if str(dane_eventu.get('Typ_Transportu', '')) == "Zewnętrzny" else 1)
                                 
-                                fazy_lista = ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"]
-                                akt_faza = dane_eventu.get("Faza_Procesu", "Inicjacja")
+                                fazy_lista = ["Planowanie", "Załadunek", "Trasa", "Zamknięte"]
+                                akt_faza = dane_eventu.get("Faza_Procesu", "Planowanie")
                                 idx_fazy = fazy_lista.index(akt_faza) if akt_faza in fazy_lista else 0
                                 u_faza = st.selectbox("Faza Procesu", fazy_lista, index=idx_fazy)
                                 
@@ -700,7 +717,7 @@ def render(sh):
                 else:
                     brak_detali = """
                         <div style="height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(28, 26, 24, 0.5); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.1); padding: 40px; text-align: center;">
-                            <span style="color: #8C8477; line-height: 1.6;">Wybierz zlecenie z listy po lewej stronie,<br>aby wyświetlić panel szczegółów i edycję.</span>
+                            <span style="color: #8C8477; line-height: 1.6;">Wybierz zlecenie z list faz procesu po lewej stronie,<br>aby wyświetlić panel szczegółów i edycję.</span>
                         </div>
                     """
                     st.markdown(brak_detali.replace('\n', ''), unsafe_allow_html=True)
@@ -767,7 +784,7 @@ def render(sh):
                 nr_rejestracyjny = st.text_input("Nr Rejestracyjny Pojazdu (do CMR)")
                 waga = st.number_input("Waga (kg)", min_value=0, step=100)
                 
-                faza_procesu = st.selectbox("Faza Procesu", ["Inicjacja", "Planowanie", "Załadunek", "Trasa", "Zamknięte"])
+                faza_procesu = st.selectbox("Faza Procesu", ["Planowanie", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
             notatki = st.text_area("Notatki Dodatkowe")
