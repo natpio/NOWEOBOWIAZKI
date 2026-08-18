@@ -235,7 +235,6 @@ def render(sh):
                             try: data_roz_lista = notatki_str.split("[Rozładunki:")[1].split("]")[0].strip()
                             except: pass
 
-                        # Wyciąganie daty powrotu dla widoku listy (żeby było czytelnie)
                         powrot_lista = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
                         if powrot_lista in ['', 'None', 'nan', 'NaT']:
                             powrot_lista = "Brak danych"
@@ -247,17 +246,17 @@ def render(sh):
                             <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
                                 <div style="display: flex; width: 100%; justify-content: space-between;">
                                     <div class="cr-col" style="width: 40%;">
-                                        <span class="cr-title" style="font-size: 18px; color: #050A15 !important; font-weight: 800;">{row.get('Nazwa_Targow', '-')}</span>
-                                        <span style="font-size: 12px; font-weight: 600; color: #1A2530 !important; margin-top: 2px;">📍 {row.get('ID_Zlecenia', '-')}</span>
+                                        <div class="cr-title" style="font-size: 18px; color: #050A15 !important; font-weight: 800; margin-bottom: 2px;">{row.get('Nazwa_Targow', '-')}</div>
+                                        <div class="cr-text" style="font-size: 13px; font-weight: 700; color: #1A2530 !important;">📍 {row.get('ID_Zlecenia', '-')}</div>
                                     </div>
                                     <div class="cr-col" style="width: 25%;">
-                                        <span class="cr-text" style="color: #1A2530 !important; font-weight: 600;">🚛 {row.get('Typ_Pojazdu', '-')}</span>
-                                        <span class="cr-text" style="color: #1A2530 !important; font-weight: 600;">👤 <strong style="color: #990000 !important;">{row.get('Przewoznik', '-')}</strong></span>
+                                        <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">🚛 {row.get('Typ_Pojazdu', '-')}</div>
+                                        <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">👤 <strong style="color: #990000 !important;">{row.get('Przewoznik', '-')}</strong></div>
                                     </div>
                                     <div class="cr-col" style="width: 35%; align-items: flex-end;">
-                                        <span class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">📅 Załadunek: <b style="color: #050A15 !important;">{data_zal_lista}</b></span>
-                                        <span class="cr-text" style="color: #1A2530 !important; margin-bottom: 6px; font-size: 13px;">🔙 Powrót: <b style="color: #050A15 !important;">{powrot_lista}</b></span>
-                                        <span class="{badge_class}">{row.get('Faza_Procesu', '-')}</span>
+                                        <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">📅 Załadunek: <b style="color: #050A15 !important;">{data_zal_lista}</b></div>
+                                        <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 6px; font-size: 13px;">🔙 Powrót: <b style="color: #050A15 !important;">{powrot_lista}</b></div>
+                                        <div class="{badge_class}">{row.get('Faza_Procesu', '-')}</div>
                                     </div>
                                 </div>
                                 {tags_div}
