@@ -13,12 +13,7 @@ def parse_date(d_str):
         return datetime.today().date()
 
 def render(sh):
-    st.markdown('''
-        <div class="module-header-container">
-            <h1 class="module-title">Zlecenia Poboczne</h1>
-            <div class="module-subtitle">サブオーダー ✦ SECONDARY ORDERS</div>
-        </div>
-    ''', unsafe_allow_html=True)
+    st.markdown('''<div class="module-header-container"><h1 class="module-title">Zlecenia Poboczne</h1><div class="module-subtitle">サブオーダー ✦ SECONDARY ORDERS</div></div>''', unsafe_allow_html=True)
 
     worksheet, df = db.load_data(sh, "Zlecenia Poboczne")
     
@@ -50,26 +45,7 @@ def render(sh):
     brak_pod = len(active_all[(active_all.get("POD") == "NIE")]) if not active_all.empty and "POD" in active_all.columns else 0
     brak_fv = len(active_all[(active_all.get("Faktura") == "NIE")]) if not active_all.empty and "Faktura" in active_all.columns else 0
 
-    st.markdown(f"""
-    <div class="kpi-container">
-        <div class="kpi-card">
-            <div class="kpi-header">DO WYSTAWIENIA CMR</div>
-            <div class="kpi-sub-jp">CMRの発行待ち</div>
-            <div class="kpi-value">{brak_cmr}</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-header">BRAKUJĄCE ZWROTY POD</div>
-            <div class="kpi-sub-jp">POD返却待ち</div>
-            <div class="kpi-value">{brak_pod}</div>
-        </div>
-        <div class="kpi-card">
-            <div class="kpi-header">NIEOPŁACONE FAKTURY</div>
-            <div class="kpi-sub-jp">未払い請求書</div>
-            <div class="kpi-value">{brak_fv}</div>
-        </div>
-    </div>
-    <br>
-    """, unsafe_allow_html=True)
+    st.markdown(f"""<div class="kpi-container"><div class="kpi-card"><div class="kpi-header">DO WYSTAWIENIA CMR</div><div class="kpi-sub-jp">CMRの発行待ち</div><div class="kpi-value">{brak_cmr}</div></div><div class="kpi-card"><div class="kpi-header">BRAKUJĄCE ZWROTY POD</div><div class="kpi-sub-jp">POD返却待ち</div><div class="kpi-value">{brak_pod}</div></div><div class="kpi-card"><div class="kpi-header">NIEOPŁACONE FAKTURY</div><div class="kpi-sub-jp">未払い請求書</div><div class="kpi-value">{brak_fv}</div></div></div><br>""", unsafe_allow_html=True)
 
     tab1, tab_pay, tab2, tab3 = st.tabs(["⚾ Aktywne Zlecenia", "💳 Do opłacenia", "＋ Utwórz Nowe Zlecenie", "📦 Archiwum (Cold Storage)"])
 
@@ -99,29 +75,11 @@ def render(sh):
             
             img_html = ""
             if b64_batter:
-                img_html = f'<div style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); opacity: 0.15; z-index: 1;"><img src="data:image/png;base64,{b64_batter}" height="80"></div>'
+                # Półprzezroczysty bejsbolista w tle (8% krycia dla lepszej czytelności)
+                img_html = f'<div style="position: absolute; right: 20px; top: 50%; transform: translateY(-50%); opacity: 0.08; z-index: 1;"><img src="data:image/png;base64,{b64_batter}" height="100"></div>'
 
-            st.markdown(f"""
-            <div class="custom-row">
-                {img_html}
-                <div style="display: flex; width: 100%; position: relative; z-index: 2;">
-                    <div class="cr-col" style="flex: 2.5; padding-right: 15px;">
-                        <div class="cr-title">{nr_zlecenia_wyswietl}</div>
-                        <div class="cr-text" style="margin-top: 5px;">🚛 Przewoźnik: <strong>{row.get('Przewoźnik', 'Brak')}</strong></div>
-                        <div class="cr-text">👤 Opis: <i>{row.get('Opis Ładunku / Trasy', '---')}</i></div>
-                    </div>
-                    <div class="cr-col" style="flex: 1.5; border-left: 1px dashed rgba(10, 25, 47, 0.3); padding-left: 20px; justify-content: center;">
-                        <div class="cr-text">📅 Zał: {row.get('Data Załadunku', '---')}</div>
-                        <div class="cr-text">🏁 Rozł: {row.get('Data Rozładunku', '---')}</div>
-                        <div class="cr-text">💲 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div>
-                        <div style="font-size: 10px; font-weight: 700; margin-top: 5px; color: #0A192F;">{status_val}</div>
-                    </div>
-                    <div class="cr-col" style="flex: 1.2; align-items: flex-end; justify-content: center; flex-direction: row; gap: 5px; padding-right: 80px;">
-                        {action_buttons}
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            # Bezpieczny HTML wygenerowany bez pustych linii
+            st.markdown(f"""<div class="custom-row">{img_html}<div style="display: flex; width: 100%; position: relative; z-index: 2;"><div class="cr-col" style="flex: 2.5; padding-right: 20px;"><div class="cr-title">{nr_zlecenia_wyswietl}</div><div class="cr-text">🚛 <b>Przewoźnik:</b> <strong>{row.get('Przewoźnik', 'Brak')}</strong></div><div class="cr-text" style="color: #4A5568 !important;">👤 <b>Opis:</b> <i>{row.get('Opis Ładunku / Trasy', '---')}</i></div></div><div class="cr-col" style="flex: 1.5; border-left: 2px dashed rgba(186, 73, 73, 0.25); padding-left: 25px; justify-content: center;"><div class="cr-text">📅 Zał: <span style="font-weight: 700; color: #0A192F;">{row.get('Data Załadunku', '---')}</span></div><div class="cr-text">🏁 Rozł: <span style="font-weight: 700; color: #0A192F;">{row.get('Data Rozładunku', '---')}</span></div><div class="cr-text">💲 Płatność: <strong>{row.get('Data Płatności', '---')}</strong></div><div class="status-badge">{status_val}</div></div><div class="cr-col" style="flex: 1.2; align-items: flex-end; justify-content: center; flex-direction: row; gap: 8px; padding-right: 80px;">{action_buttons}</div></div></div>""", unsafe_allow_html=True)
             
             with st.expander(f"✏️ Edytuj / Archiwizuj zlec. {nr_zlecenia_wyswietl}"):
                 with st.form(key=f"edit_form_{row_idx}", clear_on_submit=False):
