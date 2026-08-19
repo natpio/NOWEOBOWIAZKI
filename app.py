@@ -175,7 +175,7 @@ def main():
 <div style="color: #E2DCD3; font-family: 'Inter', sans-serif; font-weight: 700; font-size: 14px; letter-spacing: 0.5px;">Piotr Dukiel</div>
 <div style="color: #C5A880; font-family: 'Inter', sans-serif; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Logistics Manager</div>
 <div style="color: #8C8477; font-size: 10px; font-style: italic; margin-top: 4px;">Let's hit it out of the park.<br><span style="color:#BA4949; font-weight:bold;">Chicago Cubs</span></div>
-<div style="color: #BA4949; font-size: 14px; margin-top: 2px;">★ ★ ★</div>
+<div style="color: #BA4949; font-size: 14px; margin-top: 2px;">★ ★ ★ ★</div>
 </div>
 </div>
 </div>
