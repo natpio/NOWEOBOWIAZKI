@@ -177,485 +177,435 @@ def update_status(worksheet, row, new_status):
 # ============================================================
 
 def inject_css():
-    st.markdown(
-        """
-        <style>
-
-        /* =====================================================
-           GOOGLE FONTS
-        ===================================================== */
-
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Playball&family=Roboto+Condensed:wght@300;400;500;600;700;800&display=swap');
-
-
-        /* =====================================================
-           SCOREBOARD HEADER
-        ===================================================== */
-
-        .scoreboard {
-            position: relative;
-            overflow: hidden;
-            background:
-                linear-gradient(
-                    135deg,
-                    rgba(17, 25, 39, 0.98),
-                    rgba(8, 12, 19, 0.98)
-                );
-            border: 1px solid rgba(197,168,128,0.35);
-            border-top: 4px solid #BA4949;
-            border-radius: 10px;
-            padding: 25px 28px 22px 28px;
-            margin-bottom: 18px;
-            box-shadow:
-                0 18px 45px rgba(0,0,0,0.45),
-                inset 0 1px 0 rgba(255,255,255,0.03);
-        }
-
-        .scoreboard::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            opacity: 0.035;
-            background-image:
-                repeating-linear-gradient(
-                    0deg,
-                    transparent,
-                    transparent 4px,
-                    #ffffff 5px
-                );
-            pointer-events: none;
-        }
-
-        .scoreboard-title {
-            position: relative;
-            z-index: 2;
-            font-family: 'Playball', cursive;
-            color: #F4EFE5;
-            font-size: 52px;
-            line-height: 1;
-            text-shadow:
-                3px 3px 0 #8B3038,
-                0 7px 25px rgba(0,0,0,0.55);
-            margin: 0;
-        }
-
-        .scoreboard-subtitle {
-            position: relative;
-            z-index: 2;
-            margin-top: 7px;
-            color: #BFAF97;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 13px;
-            letter-spacing: 4px;
-        }
-
-        .live-indicator {
-            position: absolute;
-            right: 25px;
-            top: 25px;
-            font-family: 'Bebas Neue', sans-serif;
-            letter-spacing: 2px;
-            font-size: 13px;
-            color: #E7E0D4;
-            border: 1px solid rgba(255,255,255,0.15);
-            padding: 5px 11px;
-            border-radius: 4px;
-            background: rgba(0,0,0,0.25);
-        }
-
-        .live-dot {
-            color: #D54A4A;
-            margin-right: 5px;
-        }
-
-
-        /* =====================================================
-           KPI
-        ===================================================== */
-
-        .kpi-card {
-            background: rgba(12,16,23,0.94);
-            border: 1px solid rgba(197,168,128,0.22);
-            border-radius: 6px;
-            padding: 10px 13px;
-            min-height: 62px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            box-shadow:
-                inset 0 1px 0 rgba(255,255,255,0.025),
-                0 5px 15px rgba(0,0,0,0.25);
-        }
-
-        .kpi-label {
-            color: #8E8A83;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 10px;
-            letter-spacing: 1.8px;
-        }
-
-        .kpi-number {
-            color: #EFE8DB;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 28px;
-            line-height: 1;
-        }
-
-
-        /* =====================================================
-           SEARCH
-        ===================================================== */
-
-        .search-label {
-            color: #C5A880;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 11px;
-            letter-spacing: 2px;
-            margin-bottom: 4px;
-        }
-
-        div[data-testid="stTextInput"] input {
-            background: #0B1017 !important;
-            border: 1px solid rgba(197,168,128,0.30) !important;
-            border-radius: 5px !important;
-            color: #F3EEE5 !important;
-            font-family: 'Roboto Condensed', sans-serif !important;
-            font-size: 14px !important;
-        }
-
-        div[data-testid="stTextInput"] input:focus {
-            border-color: #C5A880 !important;
-            box-shadow: 0 0 0 1px rgba(197,168,128,0.25) !important;
-        }
-
-
-        /* =====================================================
-           SELECTBOX
-        ===================================================== */
-
-        div[data-testid="stSelectbox"] label {
-            color: #C5A880 !important;
-            font-family: 'Bebas Neue', sans-serif !important;
-            letter-spacing: 1.5px;
-            font-size: 11px !important;
-        }
-
-        div[data-baseweb="select"] > div {
-            background: #0B1017 !important;
-            border-color: rgba(197,168,128,0.30) !important;
-        }
-
-
-        /* =====================================================
-           INNING HEADER
-        ===================================================== */
-
-        .inning-header {
-            position: relative;
-            overflow: hidden;
-            min-height: 92px;
-            padding: 15px 17px;
-            margin-top: 10px;
-            margin-bottom: 11px;
-            border-radius: 7px;
-            border: 1px solid rgba(255,255,255,0.18);
-            box-shadow:
-                0 7px 20px rgba(0,0,0,0.35),
-                inset 0 1px 0 rgba(255,255,255,0.08);
-        }
-
-        .inning-header::after {
-            content: "";
-            position: absolute;
-            right: -45px;
-            top: -65px;
-            width: 210px;
-            height: 210px;
-            border: 1px solid rgba(255,255,255,0.10);
-            border-radius: 50%;
-        }
-
-        .inning-number {
-            position: absolute;
-            left: 14px;
-            top: 10px;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 11px;
-            letter-spacing: 2px;
-            opacity: 0.65;
-        }
-
-        .inning-team {
-            position: relative;
-            z-index: 2;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 11px;
-            letter-spacing: 3px;
-            opacity: 0.75;
-            margin-top: 12px;
-        }
-
-        .inning-title {
-            position: relative;
-            z-index: 2;
-            font-size: 25px;
-            line-height: 1;
-            margin-top: 4px;
-            text-shadow: 2px 2px 5px rgba(0,0,0,0.5);
-        }
-
-        .inning-subtitle {
-            position: relative;
-            z-index: 2;
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 11px;
-            margin-top: 6px;
-            opacity: 0.78;
-        }
-
-        .inning-count {
-            position: absolute;
-            z-index: 3;
-            right: 14px;
-            bottom: 13px;
-            min-width: 38px;
-            text-align: center;
-            padding: 3px 8px;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 18px;
-            color: #080B10;
-            border-radius: 4px;
-        }
-
-
-        /* =====================================================
-           PROJECT CARD
-        ===================================================== */
-
-        .project-card {
-            position: relative;
-            background:
-                linear-gradient(
-                    145deg,
-                    rgba(29,31,34,0.98),
-                    rgba(17,19,22,0.98)
-                );
-            border: 1px solid rgba(197,168,128,0.16);
-            border-radius: 6px;
-            padding: 13px;
-            margin-bottom: 5px;
-            overflow: hidden;
-            box-shadow:
-                0 5px 13px rgba(0,0,0,0.30);
-        }
-
-        .project-card::after {
-            content: "";
-            position: absolute;
-            right: -25px;
-            bottom: -45px;
-            width: 120px;
-            height: 120px;
-            border: 1px solid rgba(255,255,255,0.035);
-            border-radius: 50%;
-        }
-
-        .card-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(255,255,255,0.055);
-        }
-
-        .project-number {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 24px;
-            letter-spacing: 1.8px;
-        }
-
-        .project-date {
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 10px;
-            letter-spacing: 1px;
-            color: #C7C0B4;
-            background: rgba(197,168,128,0.10);
-            border: 1px solid rgba(197,168,128,0.13);
-            padding: 3px 6px;
-            border-radius: 3px;
-        }
-
-        .event-name {
-            margin-top: 9px;
-            color: #EDE7DC;
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .card-info {
-            color: #C8C2B8;
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 11px;
-            margin-top: 5px;
-        }
-
-        .card-driver {
-            color: #BDA889;
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 11px;
-            font-weight: 700;
-            margin-top: 5px;
-        }
-
-        .card-notes {
-            background: rgba(0,0,0,0.28);
-            border-left: 2px solid #A88962;
-            padding: 6px 7px;
-            margin-top: 9px;
-            color: #A8A197;
-            font-family: 'Roboto Condensed', sans-serif;
-            font-size: 10px;
-            font-style: italic;
-        }
-
-
-        /* =====================================================
-           PROGRESS
-        ===================================================== */
-
-        .progress-wrap {
-            margin-top: 12px;
-            margin-bottom: 4px;
-        }
-
-        .progress-label {
-            color: #706B64;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 8px;
-            letter-spacing: 1.5px;
-            margin-bottom: 4px;
-        }
-
-        .progress-line {
-            display: flex;
-            gap: 3px;
-            height: 5px;
-        }
-
-        .progress-segment {
-            flex: 1;
-            border-radius: 2px;
-            background: #292B2E;
-        }
-
-        .progress-segment.active {
-            background: #BFA274;
-            box-shadow: 0 0 5px rgba(191,162,116,0.35);
-        }
-
-
-        /* =====================================================
-           EMPTY STATE
-        ===================================================== */
-
-        .empty-state {
-            text-align: center;
-            background: rgba(0,0,0,0.18);
-            border: 1px dashed rgba(197,168,128,0.18);
-            border-radius: 6px;
-            padding: 20px 10px;
-            margin-bottom: 15px;
-            color: #69665F;
-            font-family: 'Bebas Neue', sans-serif;
-            letter-spacing: 1.5px;
-            font-size: 11px;
-        }
-
-
-        /* =====================================================
-           BUTTONS
-        ===================================================== */
-
-        div[data-testid="stButton"] button {
-            background: #111318 !important;
-            color: #BCA989 !important;
-            border: 1px solid rgba(197,168,128,0.20) !important;
-            border-radius: 4px !important;
-            min-height: 29px !important;
-            padding: 0 4px !important;
-            font-family: 'Bebas Neue', sans-serif !important;
-            font-size: 10px !important;
-            letter-spacing: 1px !important;
-        }
-
-        div[data-testid="stButton"] button:hover {
-            background: #C5A880 !important;
-            color: #080B11 !important;
-            border-color: #F4EFE5 !important;
-        }
-
-        div[data-testid="stButton"] button[kind="primary"] {
-            background: #8B3038 !important;
-            color: #F9F3E9 !important;
-            border-color: #BA4949 !important;
-        }
-
-        div[data-testid="stButton"] button[kind="primary"]:hover {
-            background: #BA4949 !important;
-        }
-
-
-        /* =====================================================
-           POPOVER
-        ===================================================== */
-
-        div[data-testid="stPopoverBody"] {
-            background: #10141B !important;
-            border: 1px solid #A88962 !important;
-            box-shadow: 0 15px 45px rgba(0,0,0,0.75) !important;
-        }
-
-
-        /* =====================================================
-           FORM
-        ===================================================== */
-
-        .form-title {
-            color: #C5A880;
-            font-family: 'Playball', cursive;
-            font-size: 32px;
-            margin-bottom: 3px;
-        }
-
-        .form-subtitle {
-            color: #77736B;
-            font-family: 'Bebas Neue', sans-serif;
-            font-size: 11px;
-            letter-spacing: 2px;
-            margin-bottom: 20px;
-        }
-
-
-        /* =====================================================
-           MOBILE
-        ===================================================== */
-
-        @media (max-width: 900px) {
-
-            .scoreboard-title {
-                font-size: 40px;
-            }
-
-            .live-indicator {
-                display: none;
-            }
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    css = """
+    <style>
+
+    /* =====================================================
+       GOOGLE FONTS
+    ===================================================== */
+
+    @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Playball&family=Roboto+Condensed:wght@300;400;500;600;700;800&display=swap');
+
+    /* =====================================================
+       SCOREBOARD HEADER
+    ===================================================== */
+
+    .scoreboard {
+        position: relative;
+        overflow: hidden;
+        background:
+            linear-gradient(
+                135deg,
+                rgba(17, 25, 39, 0.98),
+                rgba(8, 12, 19, 0.98)
+            );
+        border: 1px solid rgba(197,168,128,0.35);
+        border-top: 4px solid #BA4949;
+        border-radius: 10px;
+        padding: 25px 28px 22px 28px;
+        margin-bottom: 18px;
+        box-shadow:
+            0 18px 45px rgba(0,0,0,0.45),
+            inset 0 1px 0 rgba(255,255,255,0.03);
+    }
+
+    .scoreboard::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0.035;
+        background-image:
+            repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 4px,
+                #ffffff 5px
+            );
+        pointer-events: none;
+    }
+
+    .scoreboard-title {
+        position: relative;
+        z-index: 2;
+        font-family: 'Playball', cursive;
+        color: #F4EFE5;
+        font-size: 52px;
+        line-height: 1;
+        text-shadow:
+            3px 3px 0 #8B3038,
+            0 7px 25px rgba(0,0,0,0.55);
+        margin: 0;
+    }
+
+    .scoreboard-subtitle {
+        position: relative;
+        z-index: 2;
+        margin-top: 7px;
+        color: #BFAF97;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 13px;
+        letter-spacing: 4px;
+    }
+
+    .live-indicator {
+        position: absolute;
+        right: 25px;
+        top: 25px;
+        font-family: 'Bebas Neue', sans-serif;
+        letter-spacing: 2px;
+        font-size: 13px;
+        color: #E7E0D4;
+        border: 1px solid rgba(255,255,255,0.15);
+        padding: 5px 11px;
+        border-radius: 4px;
+        background: rgba(0,0,0,0.25);
+    }
+
+    .live-dot {
+        color: #D54A4A;
+        margin-right: 5px;
+    }
+
+
+    /* =====================================================
+       KPI
+    ===================================================== */
+
+    .mlb-kpi-card {
+        background: rgba(12,16,23,0.94);
+        border: 1px solid rgba(197,168,128,0.22);
+        border-radius: 6px;
+        padding: 10px 13px;
+        min-height: 62px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow:
+            inset 0 1px 0 rgba(255,255,255,0.025),
+            0 5px 15px rgba(0,0,0,0.25);
+    }
+
+    .mlb-kpi-label {
+        color: #8E8A83;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 10px;
+        letter-spacing: 1.8px;
+    }
+
+    .mlb-kpi-number {
+        color: #EFE8DB;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 28px;
+        line-height: 1;
+    }
+
+
+    /* =====================================================
+       SEARCH
+    ===================================================== */
+
+    .search-label {
+        color: #C5A880;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 11px;
+        letter-spacing: 2px;
+        margin-bottom: 4px;
+    }
+
+
+    /* =====================================================
+       INNING HEADER
+    ===================================================== */
+
+    .inning-header {
+        position: relative;
+        overflow: hidden;
+        min-height: 92px;
+        padding: 15px 17px;
+        margin-top: 10px;
+        margin-bottom: 11px;
+        border-radius: 7px;
+        border: 1px solid rgba(255,255,255,0.18);
+        box-shadow:
+            0 7px 20px rgba(0,0,0,0.35),
+            inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .inning-header::after {
+        content: "";
+        position: absolute;
+        right: -45px;
+        top: -65px;
+        width: 210px;
+        height: 210px;
+        border: 1px solid rgba(255,255,255,0.10);
+        border-radius: 50%;
+    }
+
+    .inning-number {
+        position: absolute;
+        left: 14px;
+        top: 10px;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 11px;
+        letter-spacing: 2px;
+        opacity: 0.65;
+    }
+
+    .inning-team {
+        position: relative;
+        z-index: 2;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 11px;
+        letter-spacing: 3px;
+        opacity: 0.75;
+        margin-top: 12px;
+    }
+
+    .inning-title {
+        position: relative;
+        z-index: 2;
+        font-size: 25px;
+        line-height: 1;
+        margin-top: 4px;
+        text-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+    }
+
+    .inning-subtitle {
+        position: relative;
+        z-index: 2;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 11px;
+        margin-top: 6px;
+        opacity: 0.78;
+    }
+
+    .inning-count {
+        position: absolute;
+        z-index: 3;
+        right: 14px;
+        bottom: 13px;
+        min-width: 38px;
+        text-align: center;
+        padding: 3px 8px;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 18px;
+        color: #080B10;
+        border-radius: 4px;
+    }
+
+
+    /* =====================================================
+       PROJECT CARD
+    ===================================================== */
+
+    .project-card {
+        position: relative;
+        background:
+            linear-gradient(
+                145deg,
+                rgba(29,31,34,0.98),
+                rgba(17,19,22,0.98)
+            );
+        border: 1px solid rgba(197,168,128,0.16);
+        border-radius: 6px;
+        padding: 13px;
+        margin-bottom: 5px;
+        overflow: hidden;
+        box-shadow:
+            0 5px 13px rgba(0,0,0,0.30);
+    }
+
+    .project-card::after {
+        content: "";
+        position: absolute;
+        right: -25px;
+        bottom: -45px;
+        width: 120px;
+        height: 120px;
+        border: 1px solid rgba(255,255,255,0.035);
+        border-radius: 50%;
+    }
+
+    .card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255,255,255,0.055);
+    }
+
+    .project-number {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 24px;
+        letter-spacing: 1.8px;
+    }
+
+    .project-date {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 10px;
+        letter-spacing: 1px;
+        color: #C7C0B4;
+        background: rgba(197,168,128,0.10);
+        border: 1px solid rgba(197,168,128,0.13);
+        padding: 3px 6px;
+        border-radius: 3px;
+    }
+
+    .event-name {
+        margin-top: 9px;
+        color: #EDE7DC;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .card-info {
+        color: #C8C2B8;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 11px;
+        margin-top: 5px;
+    }
+
+    .card-driver {
+        color: #BDA889;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 11px;
+        font-weight: 700;
+        margin-top: 5px;
+    }
+
+    .card-notes {
+        background: rgba(0,0,0,0.28);
+        border-left: 2px solid #A88962;
+        padding: 6px 7px;
+        margin-top: 9px;
+        color: #A8A197;
+        font-family: 'Roboto Condensed', sans-serif;
+        font-size: 10px;
+        font-style: italic;
+    }
+
+
+    /* =====================================================
+       PROGRESS
+    ===================================================== */
+
+    .progress-wrap {
+        margin-top: 12px;
+        margin-bottom: 4px;
+    }
+
+    .progress-label {
+        color: #706B64;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 8px;
+        letter-spacing: 1.5px;
+        margin-bottom: 4px;
+    }
+
+    .progress-line {
+        display: flex;
+        gap: 3px;
+        height: 5px;
+    }
+
+    .progress-segment {
+        flex: 1;
+        border-radius: 2px;
+        background: #292B2E;
+    }
+
+    .progress-segment.active {
+        background: #BFA274;
+        box-shadow: 0 0 5px rgba(191,162,116,0.35);
+    }
+
+
+    /* =====================================================
+       EMPTY STATE
+    ===================================================== */
+
+    .empty-state {
+        text-align: center;
+        background: rgba(0,0,0,0.18);
+        border: 1px dashed rgba(197,168,128,0.18);
+        border-radius: 6px;
+        padding: 20px 10px;
+        margin-bottom: 15px;
+        color: #69665F;
+        font-family: 'Bebas Neue', sans-serif;
+        letter-spacing: 1.5px;
+        font-size: 11px;
+    }
+
+
+    /* =====================================================
+       BUTTONS
+    ===================================================== */
+
+    div[data-testid="stButton"] button {
+        background: #111318 !important;
+        color: #BCA989 !important;
+        border: 1px solid rgba(197,168,128,0.20) !important;
+        border-radius: 4px !important;
+        min-height: 29px !important;
+        padding: 0 4px !important;
+        font-family: 'Bebas Neue', sans-serif !important;
+        font-size: 10px !important;
+        letter-spacing: 1px !important;
+    }
+
+    div[data-testid="stButton"] button:hover {
+        background: #C5A880 !important;
+        color: #080B11 !important;
+        border-color: #F4EFE5 !important;
+    }
+
+    div[data-testid="stButton"] button[kind="primary"] {
+        background: #8B3038 !important;
+        color: #F9F3E9 !important;
+        border-color: #BA4949 !important;
+    }
+
+    div[data-testid="stButton"] button[kind="primary"]:hover {
+        background: #BA4949 !important;
+    }
+
+
+    /* =====================================================
+       POPOVER
+    ===================================================== */
+
+    div[data-testid="stPopoverBody"] {
+        background: #10141B !important;
+        border: 1px solid #A88962 !important;
+        box-shadow: 0 15px 45px rgba(0,0,0,0.75) !important;
+    }
+
+
+    /* =====================================================
+       FORM
+    ===================================================== */
+
+    .form-title {
+        color: #C5A880;
+        font-family: 'Playball', cursive;
+        font-size: 32px;
+        margin-bottom: 3px;
+    }
+
+    .form-subtitle {
+        color: #77736B;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 11px;
+        letter-spacing: 2px;
+        margin-bottom: 20px;
+    }
+
+    </style>
+    """
+    st.markdown(css.replace('\n', ''), unsafe_allow_html=True)
 
 
 # ============================================================
@@ -684,26 +634,20 @@ def render_scoreboard(df_event, search_query):
         ]
     )
 
-    st.markdown(
-        """
-        <div class="scoreboard">
-
-            <div class="live-indicator">
-                <span class="live-dot">●</span> LIVE CONTROL
-            </div>
-
-            <div class="scoreboard-title">
-                EMPTIES CONTROL CENTER
-            </div>
-
-            <div class="scoreboard-subtitle">
-                MAJOR LEAGUE LOGISTICS · PROJECT ROSTER · OPERATIONS
-            </div>
-
+    html_scoreboard = """
+    <div class="scoreboard">
+        <div class="live-indicator">
+            <span class="live-dot">●</span> LIVE CONTROL
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        <div class="scoreboard-title">
+            EMPTIES CONTROL CENTER
+        </div>
+        <div class="scoreboard-subtitle">
+            MAJOR LEAGUE LOGISTICS · PROJECT ROSTER · OPERATIONS
+        </div>
+    </div>
+    """
+    st.markdown(html_scoreboard.replace('\n', ''), unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns(4, gap="small")
 
@@ -716,15 +660,13 @@ def render_scoreboard(df_event, search_query):
 
     for col, (label, value) in zip([c1, c2, c3, c4], cards):
 
-        col.markdown(
-            f"""
-            <div class="kpi-card">
-                <div class="kpi-label">{label}</div>
-                <div class="kpi-number">{value}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        html_kpi = f"""
+        <div class="mlb-kpi-card">
+            <div class="mlb-kpi-label">{label}</div>
+            <div class="mlb-kpi-number">{value}</div>
+        </div>
+        """
+        col.markdown(html_kpi.replace('\n', ''), unsafe_allow_html=True)
 
 
 # ============================================================
@@ -793,22 +735,17 @@ def render_progress(current_index):
             f'<div class="progress-segment {active}"></div>'
         )
 
-    st.markdown(
-        f"""
-        <div class="progress-wrap">
-
-            <div class="progress-label">
-                PROJECT JOURNEY · BASE {current_index + 1}/7
-            </div>
-
-            <div class="progress-line">
-                {segments}
-            </div>
-
+    html_prog = f"""
+    <div class="progress-wrap">
+        <div class="progress-label">
+            PROJECT JOURNEY · BASE {current_index + 1}/7
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        <div class="progress-line">
+            {segments}
+        </div>
+    </div>
+    """
+    st.markdown(html_prog.replace('\n', ''), unsafe_allow_html=True)
 
 
 # ============================================================
@@ -860,43 +797,29 @@ def render_project_card(
             </div>
         """
 
-    st.markdown(
-        f"""
-        <div class="project-card">
-
-            <div class="card-top">
-
-                <div
-                    class="project-number"
-                    style="color:{style['accent']};"
-                >
-                    #{project_number}
-                </div>
-
-                <div class="project-date">
-                    📅 {date}
-                </div>
-
+    card_html = f"""
+    <div class="project-card">
+        <div class="card-top">
+            <div class="project-number" style="color:{style['accent']};">
+                #{project_number}
             </div>
-
-            <div class="event-name">
-                {event_name}
+            <div class="project-date">
+                📅 {date}
             </div>
-
-            <div class="card-info">
-                📍 {location}
-            </div>
-
-            <div class="card-driver">
-                🚚 {driver}
-            </div>
-
-            {notes_html}
-
         </div>
-        """,
-        unsafe_allow_html=True,
-    )
+        <div class="event-name">
+            {event_name}
+        </div>
+        <div class="card-info">
+            📍 {location}
+        </div>
+        <div class="card-driver">
+            🚚 {driver}
+        </div>
+        {notes_html}
+    </div>
+    """
+    st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
 
     render_progress(idx)
 
@@ -937,19 +860,12 @@ def render_project_card(
             use_container_width=True,
         ):
 
-            st.markdown(
-                """
-                <div style="
-                    font-family:'Playball';
-                    color:#C5A880;
-                    font-size:25px;
-                    margin-bottom:12px;
-                ">
-                    Project Correction
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            html_edit = """
+            <div style="font-family:'Playball'; color:#C5A880; font-size:25px; margin-bottom:12px;">
+                Project Correction
+            </div>
+            """
+            st.markdown(html_edit.replace('\n', ''), unsafe_allow_html=True)
 
             e_loc = st.text_input(
                 "📍 Lokalizacja",
@@ -1031,19 +947,12 @@ def render_project_card(
             use_container_width=True,
         ):
 
-            st.markdown(
-                """
-                <div style="
-                    color:#D85B5B;
-                    font-family:'Bebas Neue';
-                    font-size:18px;
-                    letter-spacing:1px;
-                ">
-                    REMOVE PROJECT?
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            html_del = """
+            <div style="color:#D85B5B; font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px;">
+                REMOVE PROJECT?
+            </div>
+            """
+            st.markdown(html_del.replace('\n', ''), unsafe_allow_html=True)
 
             st.caption(
                 f"Projekt #{project_number} zostanie usunięty."
@@ -1118,78 +1027,30 @@ def render_inning(
     if batter_b64:
 
         batter_style = f"""
-            background-image:
-                url("data:image/png;base64,{batter_b64}");
-            background-size: contain;
-            background-position: right center;
-            background-repeat: no-repeat;
+            background-image: url("data:image/png;base64,{batter_b64}"); background-size: contain; background-position: right center; background-repeat: no-repeat;
         """
 
     with container:
 
-        st.markdown(
-            f"""
-            <div
-                class="inning-header"
-                style="
-                    background:
-                        linear-gradient(
-                            135deg,
-                            {config['bg']},
-                            {config['bg2']}
-                        );
-                    color:{config['accent']};
-                    border-color:{config['border']};
-                    {batter_style}
-                "
-            >
-
-                <div class="inning-number">
-                    INNING {config['number']}
-                </div>
-
-                <div class="inning-team">
-                    {config['team']}
-                </div>
-
-                <div
-                    class="inning-title"
-                    style="
-                        font-family:{config['font']};
-                        color:{config['accent']};
-                    "
-                >
-                    {config['title']}
-                </div>
-
-                <div class="inning-subtitle">
-                    {config['subtitle']}
-                </div>
-
-                <div
-                    class="inning-count"
-                    style="
-                        background:{config['accent']};
-                    "
-                >
-                    {count}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        html_header = f"""
+        <div class="inning-header" style="background: linear-gradient(135deg, {config['bg']}, {config['bg2']}); color:{config['accent']}; border-color:{config['border']}; {batter_style}">
+            <div class="inning-number">INNING {config['number']}</div>
+            <div class="inning-team">{config['team']}</div>
+            <div class="inning-title" style="font-family:{config['font']}; color:{config['accent']};">{config['title']}</div>
+            <div class="inning-subtitle">{config['subtitle']}</div>
+            <div class="inning-count" style="background:{config['accent']};">{count}</div>
+        </div>
+        """
+        st.markdown(html_header.replace('\n', ''), unsafe_allow_html=True)
 
         if df_status.empty:
 
-            st.markdown(
-                """
-                <div class="empty-state">
-                    NO PLAYERS ON BASE
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            html_empty = """
+            <div class="empty-state">
+                NO PLAYERS ON BASE
+            </div>
+            """
+            st.markdown(html_empty.replace('\n', ''), unsafe_allow_html=True)
 
         else:
 
@@ -1211,18 +1072,11 @@ def render_add_form(
     df,
 ):
 
-    st.markdown(
-        """
-        <div class="form-title">
-            Add Project to Roster
-        </div>
-
-        <div class="form-subtitle">
-            REGISTER NEW LOGISTICS PROJECT
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    html_form_title = """
+    <div class="form-title">Add Project to Roster</div>
+    <div class="form-subtitle">REGISTER NEW LOGISTICS PROJECT</div>
+    """
+    st.markdown(html_form_title.replace('\n', ''), unsafe_allow_html=True)
 
     with st.form(
         "form_add_empties",
@@ -1515,33 +1369,13 @@ def render(sh):
                 "",
             )
 
-            st.markdown(
-                """
-                <div style="
-                    text-align:center;
-                    padding:70px 20px;
-                    color:#716D66;
-                    font-family:'Bebas Neue';
-                    letter-spacing:2px;
-                ">
-                    <div style="
-                        font-family:'Playball';
-                        font-size:42px;
-                        color:#A88962;
-                    ">
-                        No Players on the Field
-                    </div>
-
-                    <div style="
-                        margin-top:8px;
-                        font-size:12px;
-                    ">
-                        DODAJ PIERWSZY PROJEKT DO ROSTERU
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            html_no_players = """
+            <div style="text-align:center; padding:70px 20px; color:#716D66; font-family:'Bebas Neue'; letter-spacing:2px;">
+                <div style="font-family:'Playball'; font-size:42px; color:#A88962;">No Players on the Field</div>
+                <div style="margin-top:8px; font-size:12px;">DODAJ PIERWSZY PROJEKT DO ROSTERU</div>
+            </div>
+            """
+            st.markdown(html_no_players.replace('\n', ''), unsafe_allow_html=True)
 
         else:
 
@@ -1605,14 +1439,8 @@ def render(sh):
 
             with f2:
 
-                st.markdown(
-                    """
-                    <div class="search-label">
-                        🔎 SEARCH THE ROSTER
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                html_search_label = """<div class="search-label">🔎 SEARCH THE ROSTER</div>"""
+                st.markdown(html_search_label.replace('\n', ''), unsafe_allow_html=True)
 
                 search_query = st.text_input(
                     "Search",
@@ -1664,41 +1492,19 @@ def render(sh):
 
             if search_query:
 
-                st.markdown(
-                    f"""
-                    <div style="
-                        color:#8E897F;
-                        font-family:'Bebas Neue';
-                        font-size:11px;
-                        letter-spacing:1.5px;
-                        margin:13px 0 4px 0;
-                    ">
-                        SEARCH RESULTS FOR
-                        <span style="
-                            color:#C5A880;
-                        ">
-                            "{esc(search_query)}"
-                        </span>
-                        · {len(df_event)} MATCHES
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                html_results = f"""
+                <div style="color:#8E897F; font-family:'Bebas Neue'; font-size:11px; letter-spacing:1.5px; margin:13px 0 4px 0;">
+                    SEARCH RESULTS FOR <span style="color:#C5A880;">"{esc(search_query)}"</span> · {len(df_event)} MATCHES
+                </div>
+                """
+                st.markdown(html_results.replace('\n', ''), unsafe_allow_html=True)
 
             # ------------------------------------------------
             # DIVIDER
             # ------------------------------------------------
 
-            st.markdown(
-                """
-                <div style="
-                    margin:17px 0 20px 0;
-                    border-top:1px dashed
-                        rgba(186,73,73,0.45);
-                "></div>
-                """,
-                unsafe_allow_html=True,
-            )
+            html_divider = """<div style="margin:17px 0 20px 0; border-top:1px dashed rgba(186,73,73,0.45);"></div>"""
+            st.markdown(html_divider.replace('\n', ''), unsafe_allow_html=True)
 
             # ------------------------------------------------
             # KANBAN
