@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import os
 import base64
+import time
 import db
 from db import load_data, generuj_smart_id
 from mod_generator_pdf import generate_cmr_excel, get_cmr_city_format
@@ -191,7 +192,6 @@ def render(sh):
             col_lista, col_detale = st.columns([65, 35], gap="large")
             
             with col_lista:
-                # --- NOWE ZAKŁADKI: FAZY PROCESU ---
                 t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
                 
                 def render_list(df_subset, tab_container):
@@ -274,11 +274,11 @@ def render(sh):
                                     is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
                                     btn_type = "primary" if is_primary else "secondary"
                                     
-                                    if st.button("🔍 Szczegóły", key=f"det_{row['ID_Zlecenia']}", type=btn_type, use_container_width=True):
+                                    # KLUCZOWE ZABEZPIECZENIE (unikalny index DataFrame zapobiega duplikatom)
+                                    if st.button("🔍 Szczegóły", key=f"det_{index}_{row.get('ID_Zlecenia', '')}", type=btn_type, use_container_width=True):
                                         st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
                                         st.rerun()
 
-                # Generowanie podzbiorów dla konkretnych faz
                 df_plan = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja", na=False)]
                 df_zal = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("załadunek", na=False)]
                 df_tra = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("trasa", na=False)]
@@ -313,7 +313,7 @@ def render(sh):
                         nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
                         
                         if not nr_cmr_zapisany or nr_cmr_zapisany.strip() in ["", "nan", "None"]:
-                            if st.button("📝 Wygeneruj Nr CMR", use_container_width=True):
+                            if st.button("📝 Wygeneruj Nr CMR", use_container_width=True, key=f"btn_cmr_gen_{dane_eventu.get('ID_Zlecenia', '')}"):
                                 with st.spinner("Pobieranie numeru CMR z puli..."):
                                     nowy_nr = db.get_next_cmr_number()
                                     idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
@@ -390,7 +390,7 @@ def render(sh):
                                 st.error("Szablon CMR niedostępny.")
 
                     with c_dup:
-                        if st.button("📋 Klonuj", key=f"clone_{dane_eventu['ID_Zlecenia']}", use_container_width=True):
+                        if st.button("📋 Klonuj", key=f"clone_{dane_eventu.get('ID_Zlecenia', '')}", use_container_width=True):
                             nowy_wiersz = dane_eventu.copy().to_dict()
                             nowy_wiersz['ID_Zlecenia'] = "" 
                             nowy_wiersz['Faza_Procesu'] = "Planowanie"
@@ -405,14 +405,20 @@ def render(sh):
                             nowy_wiersz['Nr_Faktury'] = "N/A" if is_sqm_clone else ""
                             nowy_wiersz['Data_Platnosci'] = "N/A" if is_sqm_clone else ""
                             nowy_wiersz['Zakonczone_Arch'] = "NIE"
-                            nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu['ID_Zlecenia']) + " - " + str(nowy_wiersz.get('Notatki', ''))
+                            nowy_wiersz['Notatki'] = "Klon zlecenia " + str(dane_eventu.get('ID_Zlecenia', '')) + " - " + str(nowy_wiersz.get('Notatki', ''))
                             
                             if 'sheet_row' in nowy_wiersz:
                                 del nowy_wiersz['sheet_row']
                                 
                             df_temp = pd.concat([df, pd.DataFrame([nowy_wiersz])], ignore_index=True)
                             df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
-                            nowy_wiersz_z_id = df_temp.iloc[-1]
+                            nowy_wiersz_z_id = df_temp.iloc[-1].copy()
+                            
+                            # --- ZABEZPIECZENIE PRZED DUPLIKATEM ID W BAZIE ---
+                            base_id = str(nowy_wiersz_z_id.get('ID_Zlecenia', '')).strip()
+                            if not base_id or base_id in df['ID_Zlecenia'].values:
+                                suffix = str(int(time.time()))[-4:]
+                                nowy_wiersz_z_id['ID_Zlecenia'] = f"{base_id}-{suffix}" if base_id else f"EVT-{suffix}"
                             
                             kolumny = [k for k in df.columns if k != 'sheet_row']
                             wiersz_lista = [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny]
