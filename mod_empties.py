@@ -18,10 +18,14 @@ def render(sh):
     # --- INICJALIZACJA BAZY ---
     worksheet, df = load_data(sh, "DB_Empties")
     
-    if df.empty and not worksheet.row_values(1):
+    # Zabezpieczenie przed utratą sesji HTTP w cache'u Streamlit
+    # Sprawdzamy liczbę kolumn z lokalnego DataFrame zamiast uderzać do API
+    if df.empty and len(df.columns) <= 1:
         headers = ["ID_Empties", "Nazwa_Eventu", "Numery_Projektow", "Status", 
                    "Lokalizacja_Aktualna", "Auto_Kierowca", "Data_Akcji", "Notatki"]
-        worksheet.append_row(headers)
+        # Pobieramy całkowicie nową sesję dla arkusza (chroni przed AttributeError)
+        fresh_ws = sh.worksheet("DB_Empties")
+        fresh_ws.append_row(headers)
         st.cache_data.clear()
         worksheet, df = load_data(sh, "DB_Empties")
 
@@ -158,9 +162,11 @@ def render(sh):
             edited_df = st.data_editor(df_do_edycji, use_container_width=True, hide_index=True)
             
             if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
-                worksheet.clear()
+                # Pobieramy całkowicie nową sesję dla arkusza (chroni przed AttributeError)
+                fresh_ws = sh.worksheet("DB_Empties")
+                fresh_ws.clear()
                 df_str = edited_df.astype(str).replace('nan', '')
-                worksheet.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
+                fresh_ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
                 st.cache_data.clear()
                 st.success("Tabela zaktualizowana!")
                 st.rerun()
