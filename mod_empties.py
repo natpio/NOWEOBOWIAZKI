@@ -151,7 +151,7 @@ def get_status_index(status):
         return 0
 
 
-def update_status(worksheet, row, new_status):
+def update_status(row, new_status):
     """Bezpieczna zmiana statusu."""
     db.update_single_row_safe(
         "DB_Empties",
@@ -756,7 +756,6 @@ def render_project_card(
     row,
     idx,
     style,
-    worksheet,
 ):
 
     proj_id = safe_text(row.get("ID_Empties"))
@@ -844,7 +843,6 @@ def render_project_card(
             ):
 
                 update_status(
-                    worksheet,
                     row,
                     STATUSY[idx - 1],
                 )
@@ -989,7 +987,6 @@ def render_project_card(
             ):
 
                 update_status(
-                    worksheet,
                     row,
                     STATUSY[idx + 1],
                 )
@@ -1009,7 +1006,6 @@ def render_inning(
     status_index,
     container,
     batter_b64,
-    worksheet,
 ):
 
     config = INNINGS[status_index]
@@ -1060,7 +1056,6 @@ def render_inning(
                     row=row,
                     idx=status_index,
                     style=config,
-                    worksheet=worksheet,
                 )
 
 
@@ -1070,6 +1065,7 @@ def render_inning(
 
 def render_add_form(
     df,
+    sh,
 ):
 
     html_form_title = """
@@ -1233,9 +1229,7 @@ def render_add_form(
                         columns=["sheet_row"]
                     )
 
-                fresh_ws = st.session_state[
-                    "_empties_worksheet"
-                ]
+                fresh_ws = sh.worksheet("DB_Empties")
 
                 fresh_ws.clear()
 
@@ -1309,8 +1303,6 @@ def render(sh):
         "DB_Empties",
     )
 
-    st.session_state["_empties_worksheet"] = worksheet
-
     # --------------------------------------------------------
     # INITIALIZE DATABASE
     # --------------------------------------------------------
@@ -1340,10 +1332,6 @@ def render(sh):
             sh,
             "DB_Empties",
         )
-
-        st.session_state[
-            "_empties_worksheet"
-        ] = worksheet
 
     # --------------------------------------------------------
     # TABS
@@ -1520,7 +1508,6 @@ def render(sh):
                 0,
                 col1,
                 batter_b64,
-                worksheet,
             )
 
             render_inning(
@@ -1528,7 +1515,6 @@ def render(sh):
                 1,
                 col1,
                 batter_b64,
-                worksheet,
             )
 
             render_inning(
@@ -1536,7 +1522,6 @@ def render(sh):
                 2,
                 col1,
                 batter_b64,
-                worksheet,
             )
 
             render_inning(
@@ -1544,7 +1529,6 @@ def render(sh):
                 3,
                 col2,
                 batter_b64,
-                worksheet,
             )
 
             render_inning(
@@ -1552,7 +1536,6 @@ def render(sh):
                 4,
                 col2,
                 batter_b64,
-                worksheet,
             )
 
             render_inning(
@@ -1560,7 +1543,6 @@ def render(sh):
                 5,
                 col3,
                 batter_b64,
-                worksheet,
             )
 
             render_inning(
@@ -1568,7 +1550,6 @@ def render(sh):
                 6,
                 col3,
                 batter_b64,
-                worksheet,
             )
 
     # ========================================================
@@ -1579,4 +1560,5 @@ def render(sh):
 
         render_add_form(
             df,
+            sh,
         )
