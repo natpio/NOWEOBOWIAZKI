@@ -9,16 +9,13 @@ def render(sh):
     st.markdown("""
         <div class="module-header-container">
             <h1 class="module-title">Zarządzanie Empties</h1>
-            <div class="module-subtitle">エンプティーズ ✦ EMPTY CASES TRACKING</div>
+            <div class="module-subtitle" style="color: #C5A880; letter-spacing: 3px;">エンプティーズ ✦ ADVANCED TRACKING TOWER</div>
         </div>
     """, unsafe_allow_html=True)
-    
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 25px;'>Zarządzaj przepływem opakowań targowych. System poprowadzi Cię od momentu dostarczenia sprzętu, przez magazynowanie pustych skrzyń, aż po ich powrót na bazę.</p>", unsafe_allow_html=True)
 
     # --- INICJALIZACJA BAZY ---
     worksheet, df = load_data(sh, "DB_Empties")
     
-    # Zabezpieczenie przed utratą sesji HTTP w cache'u
     if df.empty and len(df.columns) <= 1:
         headers = ["ID_Empties", "Nazwa_Eventu", "Numery_Projektow", "Status", 
                    "Lokalizacja_Aktualna", "Auto_Kierowca", "Data_Akcji", "Notatki"]
@@ -27,7 +24,7 @@ def render(sh):
         st.cache_data.clear()
         worksheet, df = load_data(sh, "DB_Empties")
 
-    # --- DEFINICJA STATUSÓW I KOLORÓW ---
+    # --- DEFINICJA STATUSÓW I KOLORÓW (NEON ZEN) ---
     statusy = [
         "0. 🚚 Dostarczone na targi (Pełne)",
         "1. 🔴 Puste do odebrania (Hala)",
@@ -38,101 +35,159 @@ def render(sh):
         "6. ✅ Pełne zabrane (W drodze)"
     ]
     
-    # Kolory przypisane do każdego statusu (wizualna kategoryzacja)
-    kolory_statusow = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#BA4949", "#047857"]
+    kolory_statusow = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#E11D48", "#059669"]
 
-    tab_kanban, tab_formularz = st.tabs(["🛹 Tablica Live (Kanban)", "➕ Dodaj / Zarządzaj Rejestrem"])
+    tab_kanban, tab_formularz = st.tabs(["🚀 Tablica Operacyjna Live", "➕ Nowa Rejestracja (Start)"])
 
     # ==========================================
-    # ZAKŁADKA 1: TABLICA KANBAN
+    # ZAKŁADKA 1: TABLICA KANBAN (PRO 999)
     # ==========================================
     with tab_kanban:
         if df.empty:
-            st.info("Brak wpisów w bazie Empties. Przejdź do zakładki obok, aby zgłosić pierwsze zrzuty sprzętu na targach.")
+            st.info("Baza jest pusta. Rozpocznij od zarejestrowania zrzutu w zakładce obok.")
         else:
             lista_eventow = df["Nazwa_Eventu"].dropna().unique().tolist()
             if "filtr_event_empties" not in st.session_state:
                 st.session_state.filtr_event_empties = lista_eventow[0] if lista_eventow else ""
                 
-            c_filtr, _ = st.columns([1, 2])
+            c_filtr, c_kpi1, c_kpi2, c_kpi3 = st.columns([1.5, 1, 1, 1])
             wybrany_event = c_filtr.selectbox("🎯 Wybierz Imprezę Targową:", lista_eventow, 
-                                              index=lista_eventow.index(st.session_state.filtr_event_empties) if st.session_state.filtr_event_empties in lista_eventow else 0)
+                                              index=lista_eventow.index(st.session_state.filtr_event_empties) if st.session_state.filtr_event_empties in lista_eventow else 0,
+                                              label_visibility="collapsed")
             st.session_state.filtr_event_empties = wybrany_event
             
             df_event = df[df["Nazwa_Eventu"] == wybrany_event].copy()
             
-            st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.2); margin: 15px 0 25px 0;'>", unsafe_allow_html=True)
+            # --- RADAR TARGOWY (KPIs) ---
+            l_zmagazynowane = len(df_event[df_event["Status"].str.contains("2. ")])
+            l_na_hali = len(df_event[df_event["Status"].str.contains("4. |5. ")])
+            l_zakonczone = len(df_event[df_event["Status"].str.contains("6. ")])
             
-            # --- UKŁAD KANBAN (3 KOLUMNY) ---
+            c_kpi1.markdown(f"<div style='background: rgba(16, 185, 129, 0.1); border: 1px solid #10B981; border-radius: 6px; padding: 5px 10px; text-align: center;'><div style='color:#10B981; font-size:10px; font-weight:bold; text-transform:uppercase;'>W magazynie/buforze</div><div style='color:#E2DCD3; font-size:18px; font-weight:900;'>{l_zmagazynowane}</div></div>", unsafe_allow_html=True)
+            c_kpi2.markdown(f"<div style='background: rgba(139, 92, 246, 0.1); border: 1px solid #8B5CF6; border-radius: 6px; padding: 5px 10px; text-align: center;'><div style='color:#8B5CF6; font-size:10px; font-weight:bold; text-transform:uppercase;'>Puste na stoisku</div><div style='color:#E2DCD3; font-size:18px; font-weight:900;'>{l_na_hali}</div></div>", unsafe_allow_html=True)
+            c_kpi3.markdown(f"<div style='background: rgba(5, 150, 105, 0.1); border: 1px solid #059669; border-radius: 6px; padding: 5px 10px; text-align: center;'><div style='color:#059669; font-size:10px; font-weight:bold; text-transform:uppercase;'>Zamknięte (Powroty)</div><div style='color:#E2DCD3; font-size:18px; font-weight:900;'>{l_zakonczone}</div></div>", unsafe_allow_html=True)
+            
+            st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.15); margin: 15px 0 20px 0;'>", unsafe_allow_html=True)
+            
+            # --- UKŁAD KANBAN (3 KOLUMNY STRUMIENIOWE) ---
             kol_1, kol_2, kol_3 = st.columns(3, gap="medium")
             
             def draw_kanban_cards(df_subset, status_index, column_container):
                 status_name = statusy[status_index]
                 b_color = kolory_statusow[status_index]
-                next_status_name = statusy[status_index + 1] if status_index + 1 < len(statusy) else None
                 
                 with column_container:
                     df_status = df_subset[df_subset["Status"] == status_name]
                     liczba_elementow = len(df_status)
                     
-                    # Nowy, czytelny nagłówek kolumny statusu
+                    # Nagłówek statusu z licznikiem
                     header_html = f"""
-                    <div style='background: linear-gradient(90deg, rgba(10,25,47,0.8) 0%, rgba(10,25,47,0.3) 100%); border-left: 4px solid {b_color}; padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; margin-top: 5px; display: flex; justify-content: space-between; align-items: center;'>
+                    <div style='background: linear-gradient(90deg, rgba(10,25,47,0.8) 0%, rgba(10,25,47,0.2) 100%); border-left: 4px solid {b_color}; padding: 10px 15px; border-radius: 4px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;'>
                         <span style='color: #E2DCD3; font-weight: 700; font-size: 13px; letter-spacing: 0.5px;'>{status_name[3:]}</span>
-                        <span style='background: rgba(0,0,0,0.5); color: {b_color}; font-weight: 800; font-size: 12px; padding: 2px 8px; border-radius: 12px;'>{liczba_elementow}</span>
+                        <span style='background: rgba(0,0,0,0.6); color: {b_color}; font-weight: 800; font-size: 12px; padding: 2px 8px; border-radius: 12px; border: 1px solid {b_color}40;'>{liczba_elementow}</span>
                     </div>
                     """
                     st.markdown(header_html.replace('\n', ''), unsafe_allow_html=True)
                     
                     if df_status.empty:
-                        st.markdown("<div style='text-align: center; color: #8C8477; font-size: 11px; padding: 15px 0; border: 1px dashed rgba(197, 168, 128, 0.15); border-radius: 6px;'>Brak skrzyń</div>", unsafe_allow_html=True)
+                        st.markdown("<div style='text-align: center; color: #8C8477; font-size: 11px; padding: 15px 0; border: 1px dashed rgba(197, 168, 128, 0.15); border-radius: 6px;'>Brak projektów na tym etapie</div><br>", unsafe_allow_html=True)
                     else:
                         for idx, row in df_status.iterrows():
-                            notatki_val = row.get('Notatki', '')
-                            notatki_html = f"<div style='color: #A39B8F; font-size: 11px; font-style: italic; background: rgba(0,0,0,0.2); padding: 5px 8px; border-radius: 4px; margin-bottom: 8px;'>📝 {notatki_val}</div>" if notatki_val else ""
+                            # Właściwości karty
+                            proj_id = row['ID_Empties']
+                            gs_row = int(row['sheet_row'])
+                            notatki_val = str(row.get('Notatki', '')).strip()
                             
-                            # Ciemny, elegancki styl kafelka (Zen)
+                            notatki_html = f"<div style='color: #A39B8F; font-size: 11px; font-style: italic; background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 4px; margin-top: 8px; border-left: 2px solid #C5A880;'>📝 {notatki_val}</div>" if notatki_val else ""
+                            
+                            # Karta HTML (Design PRO)
                             card_html = f"""
-                            <div style="background-color: rgba(28, 26, 24, 0.85); border: 1px solid rgba(197, 168, 128, 0.15); border-left: 4px solid {b_color}; padding: 15px; border-radius: 6px; margin-bottom: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                            <div style="background: rgba(20, 20, 25, 0.95); border: 1px solid rgba(197, 168, 128, 0.2); border-top: 3px solid {b_color}; padding: 15px; border-radius: 8px; margin-bottom: 5px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);">
                                 <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                                    <div style="color: #C5A880; font-size: 16px; font-weight: 800; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px;">PROJEKT: {row.get('Numery_Projektow', '-')}</div>
-                                    <div style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-size: 10px; color: #A39B8F;">📅 {row.get('Data_Akcji', '-')}</div>
+                                    <div style="color: {b_color}; font-size: 18px; font-weight: 800; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; text-shadow: 0 0 10px {b_color}40;">#{row.get('Numery_Projektow', '-')}</div>
+                                    <div style="background: rgba(197, 168, 128, 0.1); border: 1px solid rgba(197, 168, 128, 0.3); padding: 3px 8px; border-radius: 4px; font-size: 10px; color: #C5A880; font-weight: 600;">📅 {row.get('Data_Akcji', '-')}</div>
                                 </div>
-                                <div style="color: #E2DCD3; font-size: 13px; font-weight: 600; margin-bottom: 6px;">📍 {row.get('Lokalizacja_Aktualna', 'Brak lokalizacji')}</div>
-                                <div style="color: #8C8477; font-size: 11px; margin-bottom: 8px;">🚚 Auto/Kier: <span style="color:#A39B8F;">{row.get('Auto_Kierowca', '-')}</span></div>
+                                <div style="color: #E2DCD3; font-size: 13px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 5px;"><span>📍</span> {row.get('Lokalizacja_Aktualna', 'Brak lokalizacji')}</div>
+                                <div style="color: #8C8477; font-size: 12px; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;"><span>🚚</span> {row.get('Auto_Kierowca', '-')}</div>
                                 {notatki_html}
                             </div>
                             """
                             st.markdown(card_html.replace('\n', ''), unsafe_allow_html=True)
                             
-                            if next_status_name:
-                                if st.button(f"➔ Dalej ({next_status_name[3:12]}...)", key=f"btn_next_{row['ID_Empties']}", use_container_width=True, type="secondary"):
-                                    db.update_single_row_safe(
-                                        "DB_Empties", 
-                                        int(row['sheet_row']), 
-                                        pd.Series([
-                                            row['ID_Empties'], row['Nazwa_Eventu'], row['Numery_Projektow'], 
-                                            next_status_name, row['Lokalizacja_Aktualna'], row['Auto_Kierowca'], 
-                                            row['Data_Akcji'], row['Notatki']
-                                        ])
-                                    )
-                                    st.cache_data.clear()
-                                    st.rerun()
-                            st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
+                            # PANEL OPERACYJNY (4 Przyciski zagnieżdżone w kolumnach pod kartą)
+                            b_prev, b_edit, b_del, b_next = st.columns([1, 1, 1, 1])
+                            
+                            # 1. AKCJA: COFNIJ
+                            with b_prev:
+                                if status_index > 0:
+                                    if st.button("⬅️", key=f"prev_{proj_id}", help="Cofnij do poprzedniego etapu", use_container_width=True):
+                                        db.update_single_row_safe("DB_Empties", gs_row, pd.Series([
+                                            proj_id, row['Nazwa_Eventu'], row['Numery_Projektow'], statusy[status_index - 1], 
+                                            row['Lokalizacja_Aktualna'], row['Auto_Kierowca'], row['Data_Akcji'], row['Notatki']
+                                        ]))
+                                        st.cache_data.clear()
+                                        st.rerun()
 
-            # Rozmieszczenie statusów (pojemność tablicy dopasowana do ilości etapów)
+                            # 2. AKCJA: EDYCJA W LOCIE (Popover)
+                            with b_edit:
+                                with st.popover("✏️", use_container_width=True):
+                                    st.markdown(f"**Edycja Projektu: {row['Numery_Projektow']}**")
+                                    e_loc = st.text_input("📍 Zmień lokalizację:", value=row['Lokalizacja_Aktualna'], key=f"e_loc_{proj_id}")
+                                    e_auto = st.text_input("🚚 Zmień Auto/Kierowcę:", value=row['Auto_Kierowca'], key=f"e_auto_{proj_id}")
+                                    
+                                    # Parsowanie daty do obiektu date
+                                    try: parsed_date = datetime.datetime.strptime(row['Data_Akcji'], "%Y-%m-%d").date()
+                                    except: parsed_date = datetime.datetime.now().date()
+                                    e_date = st.date_input("📅 Aktualizuj Datę:", value=parsed_date, key=f"e_date_{proj_id}")
+                                    
+                                    e_notatki = st.text_area("📝 Dodaj Notatkę:", value=row['Notatki'], key=f"e_not_{proj_id}")
+                                    
+                                    if st.button("💾 Zapisz Zmiany", key=f"save_{proj_id}", type="primary", use_container_width=True):
+                                        db.update_single_row_safe("DB_Empties", gs_row, pd.Series([
+                                            proj_id, row['Nazwa_Eventu'], row['Numery_Projektow'], status_name, 
+                                            e_loc, e_auto, str(e_date), e_notatki
+                                        ]))
+                                        st.cache_data.clear()
+                                        st.rerun()
+
+                            # 3. AKCJA: USUŃ (Popover z potwierdzeniem)
+                            with b_del:
+                                with st.popover("🗑️", use_container_width=True):
+                                    st.error("Trwale usunąć ten projekt z tablicy?")
+                                    if st.button("Tak, Usuń", key=f"del_{proj_id}", type="primary", use_container_width=True):
+                                        db.delete_row("DB_Empties", gs_row)
+                                        st.cache_data.clear()
+                                        st.rerun()
+
+                            # 4. AKCJA: DALEJ
+                            with b_next:
+                                if status_index < len(statusy) - 1:
+                                    if st.button("➡️", key=f"next_{proj_id}", help="Przesuń do kolejnego etapu", use_container_width=True):
+                                        db.update_single_row_safe("DB_Empties", gs_row, pd.Series([
+                                            proj_id, row['Nazwa_Eventu'], row['Numery_Projektow'], statusy[status_index + 1], 
+                                            row['Lokalizacja_Aktualna'], row['Auto_Kierowca'], row['Data_Akcji'], row['Notatki']
+                                        ]))
+                                        st.cache_data.clear()
+                                        st.rerun()
+                            
+                            st.markdown("<div style='height: 15px;'></div>", unsafe_allow_html=True)
+
+            # --- RYSOWANIE STATUSÓW ---
+            # Kolumna 1: STRUMIEŃ INBOUND & ZMAGAZYNOWANIE
             draw_kanban_cards(df_event, 0, kol_1)
             draw_kanban_cards(df_event, 1, kol_1)
+            draw_kanban_cards(df_event, 2, kol_1)
             
-            draw_kanban_cards(df_event, 2, kol_2)
+            # Kolumna 2: STRUMIEŃ PREP & OUTBOUND
             draw_kanban_cards(df_event, 3, kol_2)
+            draw_kanban_cards(df_event, 4, kol_2)
             
-            draw_kanban_cards(df_event, 4, kol_3)
+            # Kolumna 3: STRUMIEŃ FINALIZACJI
             draw_kanban_cards(df_event, 5, kol_3)
             draw_kanban_cards(df_event, 6, kol_3)
 
     # ==========================================
-    # ZAKŁADKA 2: DODAJ / EDYTUJ
+    # ZAKŁADKA 2: DODAJ NOWE PROJEKTY (START)
     # ==========================================
     with tab_formularz:
         with st.form("form_add_empties", clear_on_submit=True):
@@ -145,13 +200,13 @@ def render(sh):
                 status_start = st.selectbox("Status Początkowy", statusy, index=0)
                 
             with c2:
-                lokalizacja = st.text_input("Lokalizacja (np. nr Hali/Stoiska)", placeholder="np. Hala 3.2, stoisko 100")
-                auto_kier = st.text_input("Przypisane Auto / Kierowca", placeholder="np. PO 12345 / Jan Kowalski")
+                lokalizacja = st.text_input("Lokalizacja Startowa (Hala/Stoisko)", placeholder="np. Hala 3.2, stoisko 100")
+                auto_kier = st.text_input("Auto / Kierowca realizujący zrzut", placeholder="np. PO 12345 / Jan Kowalski")
                 data_akcji = st.date_input("Data zrzutu (Dostawy)")
                 
             notatki = st.text_area("Dodatkowe instrukcje (np. priorytet odbioru pustych)")
             
-            if st.form_submit_button("💾 Utwórz karty projektów", type="primary"):
+            if st.form_submit_button("💾 Wygeneruj karty dla podanych projektów", type="primary"):
                 if not nazwa_evt or not projekty:
                     st.error("Uzupełnij nazwę targów i numery projektów!")
                 else:
@@ -193,26 +248,9 @@ def render(sh):
                         fresh_ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
                         st.cache_data.clear()
                         
-                        msg = f"✅ Pomyślnie utworzono {len(nowe_wiersze)} osobnych kart na tablicy!"
+                        msg = f"✅ Pomyślnie utworzono {len(nowe_wiersze)} niezależnych kart projektów!"
                         if pominete: msg += f" Pominięto duplikaty: {', '.join(pominete)}."
                         st.success(msg)
                         st.rerun()
                     else:
                         st.error(f"⚠️ Wszystkie podane projekty ({', '.join(pominete)}) już istnieją na tablicy dla tej imprezy.")
-
-        if not df.empty:
-            st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 25px 0;'>", unsafe_allow_html=True)
-            st.markdown("<h4 style='color: #E2DCD3;'>Edycja bezpośrednia (Tabela)</h4>", unsafe_allow_html=True)
-            st.info("Zmień lokalizację, przypisane auto lub dodaj notatki bezpośrednio w komórkach, a następnie zapisz.")
-            
-            df_do_edycji = df.drop(columns=['sheet_row'], errors='ignore')
-            edited_df = st.data_editor(df_do_edycji, use_container_width=True, hide_index=True)
-            
-            if st.button("💾 Zapisz zmiany w tabeli", type="primary"):
-                fresh_ws = sh.worksheet("DB_Empties")
-                fresh_ws.clear()
-                df_str = edited_df.astype(str).replace('nan', '')
-                fresh_ws.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
-                st.cache_data.clear()
-                st.success("Tabela zaktualizowana!")
-                st.rerun()
