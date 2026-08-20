@@ -260,15 +260,14 @@ def render(sh):
                     """
                     events_html += part_html.replace('\n', '')
                 
-                # Zmiana CSS dla Przewoźnika: ciemniejszy czerwony border (#7A0000), tło lekkie (#990000 z alpha), 
-                # a czcionka maksymalnie ciemna - wpadająca w czarny brąz (#2A0505) i super gruba (font-weight: 900)
+                # Zastosowanie gotowej klasy z Twojego pliku style.css: class="tag-zen-red"
                 main_html = f"""
                 <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 12px; flex-direction: column; align-items: flex-start; padding: 18px 24px;">
                     <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 14px;">
-                        <div class="cr-title" style="font-size: 21px !important; margin: 0 0 8px 0; font-weight: 800; line-height: 1.2;">
+                        <div class="cr-title" style="font-size: 21px !important; margin: 0 0 10px 0; font-weight: 800; line-height: 1.2;">
                             🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span>
                         </div>
-                        <div style="background: rgba(153, 0, 0, 0.1); border: 1px solid #7A0000; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 900; color: #2A0505 !important; letter-spacing: 0.5px; display: inline-block;">
+                        <div class="tag-zen-red" style="display: inline-block; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);">
                             🚛 PRZEWOŹNIK: {nazwa_przew.upper()}
                         </div>
                     </div>
@@ -280,7 +279,7 @@ def render(sh):
                 st.markdown(main_html.replace('\n', ''), unsafe_allow_html=True)
                 
             with c2:
-                base_margin = 48
+                base_margin = 55
                 extra_margin_per_event = 25
                 margin_top = base_margin + ((len(events) - 1) * extra_margin_per_event)
                 
