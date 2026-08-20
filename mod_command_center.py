@@ -76,7 +76,7 @@ def render(sh):
             przewoznik = row.get("Przewoźnik", "Brak danych")
             
             # Weryfikacja czy to jest zlecenie wygenerowane z PRO
-            is_pro_order = str(nr).startswith("CRG")
+            is_pro_order = str(nr).startswith("CRG") or str(nr).startswith("EVT")
             
             # Załadunki Poboczne (pomijamy dla PRO)
             d_zal_p = normalize_date(row.get("Data Załadunku"))
@@ -231,31 +231,60 @@ def render(sh):
     if not zdarzenia_wybranego_dnia:
         st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
     else:
-        for idx, ev in enumerate(zdarzenia_wybranego_dnia):
+        # --- NOWA LOGIKA: GRUPOWANIE PO NUMERZE ZLECENIA ---
+        grouped_events = defaultdict(list)
+        for ev in zdarzenia_wybranego_dnia:
+            grouped_events[ev['nr']].append(ev)
+            
+        # Sortowanie alfabetyczne/numeryczne po nazwie zlecenia
+        for nr in sorted(grouped_events.keys()):
+            events = grouped_events[nr]
+            main_color = events[0]['kolor']
+            
             c1, c2 = st.columns([5, 1])
             
             with c1:
-                st.markdown(f"""
-                <div class="custom-row" style="border-left: 3px solid {ev['kolor']}; margin-bottom: 8px;">
-                    <div class="cr-col">
-                        <div class="cr-title" style="color: {ev['kolor']}; font-size: 12px; margin-bottom: 2px;">
-                            {ev['ikona']} <strong>{ev['typ']}</strong> | {ev['nr']}
+                events_html = ""
+                # Renderowanie poszczególnych akcji (załadunek, rozładunek) dla tego samego zlecenia
+                for i, ev in enumerate(events):
+                    border_bottom = "border-bottom: 1px dashed rgba(0,0,0,0.1); margin-bottom: 8px; padding-bottom: 8px;" if i < len(events) - 1 else ""
+                    events_html += f"""
+                    <div style="{border_bottom}">
+                        <div class="cr-title" style="color: {ev['kolor']} !important; font-size: 13px !important; margin-bottom: 4px; text-transform: uppercase;">
+                            {ev['ikona']} <strong>{ev['typ']}</strong>
                         </div>
-                        <div class="cr-text" style="font-size: 13px; color: #E2DCD3;">
+                        <div class="cr-text">
                             {ev['szczegoly']}
                         </div>
+                    </div>
+                    """
+                
+                # Główny kontener zlecenia (Karta)
+                st.markdown(f"""
+                <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 10px; flex-direction: column; align-items: flex-start; padding: 16px 24px;">
+                    <div style="margin-bottom: 10px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom: 8px;">
+                        <span class="cr-title" style="font-size: 20px !important;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
+                    </div>
+                    <div style="width: 100%;">
+                        {events_html}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
             with c2:
-                st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+                # Obliczanie marginesu, aby przycisk był wyśrodkowany niezależnie od liczby wierszy
+                base_margin = 35
+                extra_margin_per_event = 20
+                margin_top = base_margin + ((len(events) - 1) * extra_margin_per_event)
                 
-                if st.button("Otwórz ➔", key=f"link_{wybrana_data_str}_{idx}_{ev['nr']}", use_container_width=True):
+                st.markdown(f"<div style='height: {margin_top}px;'></div>", unsafe_allow_html=True)
+                
+                if st.button("Otwórz ➔", key=f"link_{wybrana_data_str}_{nr}", use_container_width=True):
                     
-                    st.session_state['przekierowanie_nr_zlecenia'] = ev['nr']
+                    st.session_state['przekierowanie_nr_zlecenia'] = nr
                     
-                    if "PRO" in ev['typ']:
+                    # Wyszukaj typ zlecenia po zawartości 'typ'
+                    if any("PRO" in e['typ'] for e in events):
                         st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO" 
                     else:
                         st.session_state['menu_option'] = "ZLECENIA POBOCZNE"
