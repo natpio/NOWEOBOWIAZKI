@@ -99,6 +99,61 @@ def main():
     elif os.path.exists("washi_bg.jpg"):
         with open("washi_bg.jpg", "rb") as f: b64_washi_inline = base64.b64encode(f.read()).decode()
 
+    # --- NOWE: Wczytywanie grafik do paska bocznego ---
+    b64_baseball_gear = ""
+    if os.path.exists("image_14a961.png"):
+        with open("image_14a961.png", "rb") as f: b64_baseball_gear = base64.b64encode(f.read()).decode()
+        
+    b64_btn_refresh = ""
+    if os.path.exists("image_983cc3.png"):
+        with open("image_983cc3.png", "rb") as f: b64_btn_refresh = base64.b64encode(f.read()).decode()
+        
+    b64_btn_logout = ""
+    if os.path.exists("image_983fe1.png"):
+        with open("image_983fe1.png", "rb") as f: b64_btn_logout = base64.b64encode(f.read()).decode()
+
+    # --- Wstrzykiwanie stylów dla przycisków skórzanych ---
+    st.markdown(f"""
+    <style>
+    /* Formatowanie kontenera przycisków na pasku bocznym */
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button {{
+        color: transparent !important;
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        height: 60px !important; 
+        background-size: contain !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }}
+    
+    /* Ukrycie domyślnego tekstu Streamlit */
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button p {{
+        display: none !important;
+    }}
+    
+    /* Efekt wciśnięcia / najechania */
+    [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
+        transform: scale(1.03);
+        background-color: transparent !important;
+        border: none !important;
+        filter: brightness(1.1);
+    }}
+    
+    /* Przycisk 1: Niebieski (Odśwież) - Złapanie przedostatniego elementu w pasku */
+    [data-testid="stSidebar"] div.element-container:nth-last-of-type(2) button {{
+        background-image: url('data:image/png;base64,{b64_btn_refresh}') !important;
+    }}
+    
+    /* Przycisk 2: Brązowy (Wyloguj) - Złapanie ostatniego elementu w pasku */
+    [data-testid="stSidebar"] div.element-container:nth-last-of-type(1) button {{
+        background-image: url('data:image/png;base64,{b64_btn_logout}') !important;
+    }}
+    </style>
+    """, unsafe_allow_html=True)
+
+
     # --- MENU BOCZNE (SIDEBAR) ---
     with st.sidebar:
         st.markdown("""<div class="sidebar-logo-container">
@@ -166,6 +221,7 @@ def main():
         )
         st.session_state["menu_option"] = wybrany_modul
         
+        # PROFIL I NOWA GRAFIKA ZE SPRZĘTEM BASEBALLOWYM
         st.markdown(f"""<div class="sidebar-profile-card">
 <div style="display: flex; align-items: center; gap: 15px;">
 <div class="profile-avatar" style="background-image: url('data:image/png;base64,{b64_washi_inline}');">
@@ -179,13 +235,14 @@ def main():
 </div>
 </div>
 </div>
-<div class="refresh-graphic">
+<div class="refresh-graphic" style="text-align: center; margin-top: 30px;">
 <div class="rg-title">REFRESH</div>
 <div class="rg-subtitle">THE LINEUP</div>
-<div class="rg-icon">🏏⚾🏏</div>
+<img src="data:image/png;base64,{b64_baseball_gear}" style="width: 75%; max-width: 160px; margin-top: 15px; margin-bottom: 5px; filter: drop-shadow(2px 5px 8px rgba(0,0,0,0.5));">
 </div>
-<div class="sidebar-buttons">""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
+        # Przyciski zostawiamy standardowe - nowy kod CSS podmieni ich wygląd na grafiki
         if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True): 
             st.cache_data.clear()
             st.rerun()
@@ -193,8 +250,6 @@ def main():
         if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True): 
             st.session_state["zalogowany"] = False
             st.rerun()
-            
-        st.markdown('</div>', unsafe_allow_html=True)
 
     # --- ROUTING MODUŁÓW ---
     if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
