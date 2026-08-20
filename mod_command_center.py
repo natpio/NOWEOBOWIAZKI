@@ -161,7 +161,6 @@ def render(sh):
                 min-height: 52px;
                 margin-bottom: 15px;
             }
-            /* Lokalne nadpisanie CSS tylko dla tego widoku, aby przyciski dni nie były przezroczyste */
             div[data-testid="stVerticalBlock"] div[data-testid="column"] button[kind="secondary"] {
                 background-color: #1C1A18 !important;
                 border: 1px solid rgba(140, 132, 119, 0.3) !important;
@@ -194,7 +193,6 @@ def render(sh):
                     is_selected = (st.session_state.cal_selected_date == d_str)
                     btn_type = "primary" if is_selected else "secondary"
                     
-                    # Generowanie estetycznych ikon zamiast zwykłego tekstu
                     ikonki = []
                     for ev in lista_zdarzen:
                         if "PŁATNOŚCI" in ev['typ'] and "💳" not in ikonki: ikonki.append("💳")
@@ -232,7 +230,7 @@ def render(sh):
     if not zdarzenia_wybranego_dnia:
         st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
     else:
-        # --- NOWA LOGIKA: GRUPOWANIE PO NUMERZE ZLECENIA ---
+        # --- LOGIKA: GRUPOWANIE PO NUMERZE ZLECENIA ---
         grouped_events = defaultdict(list)
         for ev in zdarzenia_wybranego_dnia:
             grouped_events[ev['nr']].append(ev)
@@ -250,7 +248,8 @@ def render(sh):
                 # Renderowanie poszczególnych akcji (załadunek, rozładunek) dla tego samego zlecenia
                 for i, ev in enumerate(events):
                     border_bottom = "border-bottom: 1px dashed rgba(0,0,0,0.1); margin-bottom: 8px; padding-bottom: 8px;" if i < len(events) - 1 else ""
-                    events_html += f"""
+                    # Zmiana kluczowa - używamy replace('\n', '') na cząstkowym HTML, żeby zapobiec "psuciu" przez Markdown
+                    part_html = f"""
                     <div style="{border_bottom}">
                         <div class="cr-title" style="color: {ev['kolor']} !important; font-size: 13px !important; margin-bottom: 4px; text-transform: uppercase;">
                             {ev['ikona']} <strong>{ev['typ']}</strong>
@@ -260,9 +259,10 @@ def render(sh):
                         </div>
                     </div>
                     """
+                    events_html += part_html.replace('\n', '')
                 
                 # Główny kontener zlecenia (Karta)
-                st.markdown(f"""
+                main_html = f"""
                 <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 10px; flex-direction: column; align-items: flex-start; padding: 16px 24px;">
                     <div style="margin-bottom: 10px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span class="cr-title" style="font-size: 20px !important; margin: 0;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
@@ -274,7 +274,8 @@ def render(sh):
                         {events_html}
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
+                """
+                st.markdown(main_html.replace('\n', ''), unsafe_allow_html=True)
                 
             with c2:
                 # Obliczanie marginesu, aby przycisk był wyśrodkowany niezależnie od liczby wierszy
