@@ -21,33 +21,32 @@ st.set_page_config(page_title="SQM HUB", page_icon="⚾", layout="wide")
 
 # 2. ŁADOWANIE LOKALNEGO CSS Z PAMIĘCIĄ PODRĘCZNĄ (CACHE)
 @st.cache_data(show_spinner=False)
-def prepare_cached_css(file_name):
+def get_cached_css(file_name):
     if not os.path.exists(file_name):
         return ""
-    
+        
     with open(file_name, "r", encoding="utf-8") as f:
         css_content = f.read()
-
-    def replace_bg(img_name):
-        nonlocal css_content
-        if os.path.exists(img_name):
-            with open(img_name, "rb") as img_f:
+        
+    # Podmieniamy tła w CSS tylko raz i zapisujemy w pamięci podręcznej
+    bg_images = ["fuji_bg.png", "lantern_bg.png", "washi_bg.png", "washi_bg.jpg"]
+    for img in bg_images:
+        if os.path.exists(img):
+            with open(img, "rb") as img_f:
                 b64 = base64.b64encode(img_f.read()).decode()
-            mime = "image/jpeg" if img_name.endswith(('.jpg', '.jpeg')) else "image/png"
-            css_content = css_content.replace(f"url('{img_name}')", f"url('data:{mime};base64,{b64}')")
-
-    # Podmiana teł w CSS (przeliczana tylko raz!)
-    replace_bg("fuji_bg.png")
-    replace_bg("lantern_bg.png")
-    replace_bg("washi_bg.png")
-    replace_bg("washi_bg.jpg")
-    
+            mime = "image/jpeg" if img.endswith('.jpg') else "image/png"
+            css_content = css_content.replace(f"url('{img}')", f"url('data:{mime};base64,{b64}')")
+            
     return css_content
 
 def local_css(file_name):
-    css_content = prepare_cached_css(file_name)
-    if css_content:
-        st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
+    st.markdown("""<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playball&family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">""", unsafe_allow_html=True)
+    
+    css_data = get_cached_css(file_name)
+    if css_data:
+        st.markdown(f"<style>{css_data}</style>", unsafe_allow_html=True)
 
 local_css("style.css")
 
@@ -59,7 +58,7 @@ def init_connection():
     client = gspread.authorize(creds)
     return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
-# 4. FUNKCJA DO OBRAZÓW BASE64 Z PAMIĘCIĄ PODRĘCZNĄ (ZAPOBIEGA ZAWIESZANIU)
+# 4. FUNKCJA DO OBRAZÓW BASE64 Z PAMIĘCIĄ PODRĘCZNĄ
 @st.cache_data(show_spinner=False)
 def get_base64_image(file_name):
     if os.path.exists(file_name):
@@ -69,7 +68,7 @@ def get_base64_image(file_name):
         return f"data:{mime};base64,{b64}"
     return "none"
 
-# 5. EKRAN LOGOWANIA
+# 5. NOWY, DEDYKOWANY EKRAN LOGOWANIA
 def login_screen():
     b64_logo_banner = get_base64_image("logowanie.png") 
     
@@ -239,13 +238,13 @@ def main():
             background-color: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            height: 65px !important;
+            height: 82px !important;
             width: 100% !important;
             background-size: contain !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
             transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.2s;
-            margin-bottom: 2px !important;
+            margin-bottom: -8px !important;
             padding: 0 !important;
         }}
         
@@ -276,7 +275,7 @@ def main():
         [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_baz}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_fin}') !important; }}
         
-        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 15px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(15) button {{ background-image: url('{b64_btn_logout}') !important; }}
         </style>
         """, unsafe_allow_html=True)
