@@ -142,10 +142,11 @@ def main():
             elif "POBOCZNE" in st.session_state["menu_option"]: st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
             else: st.session_state["menu_option"] = "COMMAND CENTER"
 
-        # Dynamika podświetlenia aktywnego elementu (przesunięcie +2 bo indeksy w CSS zaczynają się od 1, a Logo to element 1)
-        active_idx = opcje_menu.index(st.session_state["menu_option"]) + 2
+        # Dynamika podświetlenia aktywnego elementu (przesunięcie +3, bo: 1 to Logo, 2 to styl CSS)
+        active_idx = opcje_menu.index(st.session_state["menu_option"]) + 3
 
         # --- CSS MAGIA (Podmiana przycisków na grafiki) ---
+        # Wprowadziłem tu też od razu poprawkę "contain" z poprzedniego kroku!
         st.markdown(f"""
         <style>
         /* Styl bazowy dla wszystkich przycisków na pasku bocznym */
@@ -169,6 +170,20 @@ def main():
             display: none !important;
         }}
         
+        /* Wyjątek dla "COMMAND CENTER" (element 3) */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(3) button p {{
+            display: block !important;
+            color: #9C7D58 !important; /* Kolor wytłoczonej skóry */
+            font-family: 'Bebas Neue', sans-serif !important;
+            font-size: 26px !important;
+            letter-spacing: 1px !important;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0px rgba(255,255,255,0.1) !important;
+            margin: 0 !important;
+            padding-left: 55px !important; /* Ominięcie wytłoczonej strzałki */
+            text-align: left !important;
+            width: 100% !important;
+        }}
+        
         /* Efekt hover dla wszystkich przycisków */
         [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
             transform: scale(1.03);
@@ -183,25 +198,25 @@ def main():
             position: relative;
         }}
 
-        /* Przypisanie konkretnych grafik do konkretnych pozycji (od 2 do 11) */
-        [data-testid="stSidebar"] div.element-container:nth-of-type(2) button {{ background-image: url('{b64_cmd}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_gantt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_gen}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_evt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_emp}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_pob}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_sub}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_yes}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_baz}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_fin}') !important; }}
+        /* Przypisanie konkretnych grafik do konkretnych pozycji (teraz od 3 do 12) */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_cmd}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_gantt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gen}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_evt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_emp}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_pob}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_sub}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_yes}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_baz}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_fin}') !important; }}
         
-        /* Przyciski Odśwież (13) i Wyloguj (14) */
-        [data-testid="stSidebar"] div.element-container:nth-of-type(13) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 15px !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_logout}') !important; }}
+        /* Przyciski Odśwież (14) i Wyloguj (15) po przesunięciu profilu */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 15px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(15) button {{ background-image: url('{b64_btn_logout}') !important; }}
         </style>
         """, unsafe_allow_html=True)
 
-        # ELEMENTY 2-11: Rysowanie przycisków MENU
+        # ELEMENTY 3-12: Rysowanie przycisków MENU
         if st.button("COMMAND CENTER", use_container_width=True): 
             st.session_state["menu_option"] = "COMMAND CENTER"
             st.rerun()
@@ -233,7 +248,7 @@ def main():
             st.session_state["menu_option"] = "FINANSE I RAPORTY"
             st.rerun()
 
-        # ELEMENT 12: Karta profilu + grafika (Markdown)
+        # ELEMENT 13: Karta profilu + grafika (Markdown)
         st.markdown(f"""<div class="sidebar-profile-card">
 <div style="display: flex; align-items: center; gap: 15px;">
 <div class="profile-avatar" style="background-image: url('{b64_washi_inline}');">
@@ -254,7 +269,7 @@ def main():
 </div>
 """, unsafe_allow_html=True)
 
-        # ELEMENTY 13-14: Przyciski operacyjne
+        # ELEMENTY 14-15: Przyciski operacyjne
         if st.button("ODŚWIEŻ DANE / REFRESH", use_container_width=True): 
             st.cache_data.clear()
             st.rerun()
