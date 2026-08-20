@@ -60,7 +60,7 @@ def init_connection():
     client = gspread.authorize(creds)
     return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
-# 4. FUNKCJA POMOCNICZA DO OBRAZÓW BASE64 (Przeniesiona wyżej dla ekranu logowania)
+# 4. FUNKCJA POMOCNICZA DO OBRAZÓW BASE64
 def get_base64_image(file_name):
     if os.path.exists(file_name):
         with open(file_name, "rb") as f:
@@ -69,62 +69,117 @@ def get_base64_image(file_name):
         return f"data:{mime};base64,{b64}"
     return "none"
 
-# 5. EKRAN LOGOWANIA
+# 5. NOWY, DEDYKOWANY EKRAN LOGOWANIA
 def login_screen():
-    st.markdown("<div style='height: 12vh;'></div>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1.2, 1])
+    b64_logo_banner = get_base64_image("logowanie.jpg")
     
+    st.markdown(f"""
+    <style>
+    /* 1. Całkowite ukrycie elementów nawigacji przed zalogowaniem */
+    [data-testid="stSidebar"] {{ display: none !important; }}
+    [data-testid="collapsedControl"] {{ display: none !important; }}
+    
+    /* 2. Formatowanie kontenera z nową grafiką tła */
+    .login-hero {{
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-top: 10vh;
+        margin-bottom: 2rem;
+    }}
+    
+    .login-banner-img {{
+        width: 100%;
+        max-width: 850px;
+        border-radius: 16px;
+        box-shadow: 0px 25px 50px rgba(0,0,0,0.9), inset 0px 0px 0px 1px rgba(255,255,255,0.1);
+        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    }}
+    
+    .login-banner-img:hover {{
+        transform: scale(1.02);
+    }}
+    
+    /* 3. Stylowanie pola na hasło */
+    div[data-testid="stTextInput"] label {{
+        color: #C5A880 !important;
+        font-family: 'Bebas Neue', sans-serif !important;
+        letter-spacing: 3px;
+        font-size: 22px !important;
+        text-align: center;
+        display: block;
+        margin-bottom: 12px;
+        text-shadow: 1px 1px 5px rgba(0,0,0,0.8);
+    }}
+    
+    div[data-testid="stTextInput"] input {{
+        background-color: rgba(5, 10, 21, 0.8) !important;
+        border: 2px solid rgba(197, 168, 128, 0.3) !important;
+        color: #FDFBF7 !important;
+        text-align: center;
+        font-size: 28px !important;
+        letter-spacing: 12px;
+        border-radius: 12px !important;
+        padding: 20px !important;
+        box-shadow: inset 0 5px 15px rgba(0,0,0,0.8);
+        transition: all 0.3s ease;
+    }}
+    
+    div[data-testid="stTextInput"] input:focus {{
+        border-color: #BA4949 !important;
+        box-shadow: 0 0 20px rgba(186, 73, 73, 0.5), inset 0 5px 15px rgba(0,0,0,0.8) !important;
+    }}
+    
+    /* 4. Stylowanie gigantycznego przycisku ENTER */
+    div[data-testid="stButton"] > button {{
+        background: linear-gradient(to bottom, #8B2635, #5A1620) !important;
+        border: 1px solid #BA4949 !important;
+        color: #FDFBF7 !important;
+        font-family: 'Bebas Neue', sans-serif !important;
+        font-size: 28px !important;
+        letter-spacing: 4px !important;
+        border-radius: 12px !important;
+        height: 75px !important;
+        width: 100% !important;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.8) !important;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+        margin-top: 15px;
+    }}
+    
+    div[data-testid="stButton"] > button:hover {{
+        background: linear-gradient(to bottom, #BA4949, #8B2635) !important;
+        transform: translateY(-3px) scale(1.02);
+        box-shadow: 0 15px 35px rgba(186, 73, 73, 0.6) !important;
+        color: #ffffff !important;
+        border-color: #E2DCD3 !important;
+    }}
+    
+    /* Personalizacja komunikatów błędów (Złe hasło) */
+    div[data-testid="stNotification"] {{
+        background-color: rgba(186, 73, 73, 0.1) !important;
+        border: 1px solid #BA4949 !important;
+        color: #FDFBF7 !important;
+        border-radius: 8px !important;
+        backdrop-filter: blur(5px);
+    }}
+    </style>
+    
+    <div class="login-hero">
+        <img src="{b64_logo_banner}" class="login-banner-img">
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        b64_leather = get_base64_image("4.png")
+        pwd = st.text_input("AUTHORIZATION REQUIRED / 認証が必要", type="password")
         
-        # Nowy skórzany szyld nad polem logowania
-        st.markdown(f"""
-        <div style='
-            background-image: url("{b64_leather}");
-            background-size: 100% 100%;
-            background-position: center;
-            background-repeat: no-repeat;
-            height: 160px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding-left: 12%; /* Odsunięcie od metalowej strzałki z lewej strony */
-        '>
-            <div style='display: flex; align-items: center; gap: 20px;'>
-                <div style='font-size: 55px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.5));'>⚾</div>
-                <div style='text-align: left; padding-top: 5px;'>
-                    <h2 style='
-                        color: #9C7D58; 
-                        font-family: "Bebas Neue", sans-serif; 
-                        font-size: 60px; 
-                        letter-spacing: 4px; 
-                        margin: 0; 
-                        line-height: 0.9;
-                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0px rgba(255,255,255,0.1);
-                    '>SQM HUB</h2>
-                    <p style='
-                        color: #5c4328; 
-                        font-size: 13px; 
-                        letter-spacing: 6px; 
-                        margin: 0; 
-                        font-weight: 800;
-                        text-shadow: 1px 1px 1px rgba(255,255,255,0.15);
-                    '>ヤスミ・ハブ</p>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        pwd = st.text_input("Hasło dostępu / パスワード", type="password")
-        if st.button("WEJDŹ / 入る", use_container_width=True, type="primary"):
+        if st.button("ENTER HUB / 入る", use_container_width=True):
             if pwd == st.secrets.get("app_password", "sqm2026"):
                 st.session_state["zalogowany"] = True
                 st.rerun()
             else:
-                st.error("Nieprawidłowe hasło.")
+                st.error("ACCESS DENIED / アクセス拒否")
 
 # 6. GŁÓWNA LOGIKA APLIKACJI
 def main():
