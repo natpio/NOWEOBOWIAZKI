@@ -14,7 +14,6 @@ def normalize_date(date_val):
         if "." in d_str:
             return datetime.strptime(d_str, "%d.%m.%Y").strftime("%Y-%m-%d")
         elif "-" in d_str:
-            # Próbuje zinterpretować długą datę z godziną lub krótką
             return datetime.strptime(d_str.split(" ")[0], "%Y-%m-%d").strftime("%Y-%m-%d")
     except:
         return None
@@ -42,22 +41,27 @@ def render(sh):
         df_zlecenia = db.fetch_data("Zlecenia")
         df_poboczne = db.fetch_data("Zlecenia Poboczne")
 
+    # Zbiór wszystkich numerów zleceń PRO do szybkiej eliminacji duplikatów
+    pro_orders_set = set()
+    if not df_zlecenia.empty and 'Numer zlecenia' in df_zlecenia.columns:
+        pro_orders_set = set(df_zlecenia['Numer zlecenia'].dropna().astype(str).str.strip().tolist())
+
     # --- AGREGACJA ZDARZEŃ W SŁOWNIKU ---
     all_events = defaultdict(list)
 
     # 1. Analiza Zleceń PRO
     if not df_zlecenia.empty:
         for _, row in df_zlecenia.iterrows():
-            nr = row.get("Numer zlecenia", "Brak NR")
-            projekt = row.get("ID Projektu", "")
-            przewoznik = row.get("Zleceniobiorca", "Brak danych")
+            nr = str(row.get("Numer zlecenia", "Brak NR")).strip()
+            projekt = str(row.get("ID Projektu", "Brak")).strip()
+            przewoznik = str(row.get("Zleceniobiorca", "Brak danych")).strip()
             
             # Załadunki PRO
             d_zal = normalize_date(row.get("Data załadunku"))
             if d_zal:
                 all_events[d_zal].append({
                     "typ": "ZAŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"Projekt: {projekt} | Miejsce: {row.get('Miejsce Zaladunku', '')}", 
+                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | <b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Zaladunku', '')}", 
                     "kolor": "#C9A471", "ikona": "🟢"
                 })
             
@@ -66,43 +70,43 @@ def render(sh):
             if d_roz:
                 all_events[d_roz].append({
                     "typ": "ROZŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"Projekt: {projekt} | Miejsce: {row.get('Miejsce Rozladunku', '')}", 
+                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | <b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Rozladunku', '')}", 
                     "kolor": "#83A5DB", "ikona": "🏁"
                 })
 
     # 2. Analiza Zleceń Pobocznych
     if not df_poboczne.empty:
         for _, row in df_poboczne.iterrows():
-            nr = row.get("Nr Zlecenia", "Brak NR")
-            przewoznik = row.get("Przewoźnik", "Brak danych")
+            nr = str(row.get("Nr Zlecenia", "Brak NR")).strip()
+            przewoznik = str(row.get("Przewoźnik", "Brak danych")).strip()
             
-            # Weryfikacja czy to jest zlecenie wygenerowane z PRO
-            is_pro_order = str(nr).startswith("CRG") or str(nr).startswith("EVT")
+            # Weryfikacja: wykluczamy zlecenia, które już są w bazie PRO lub mają prefiksy systemowe PRO
+            is_pro_order = (nr in pro_orders_set) or nr.startswith(("CRG", "EVT", "ZLP"))
             
-            # Załadunki Poboczne (pomijamy dla PRO)
+            # Załadunki Poboczne (tylko dla zleceń utworzonych stricte w module pobocznym)
             d_zal_p = normalize_date(row.get("Data Załadunku"))
             if d_zal_p and not is_pro_order:
                 all_events[d_zal_p].append({
                     "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"Opis: {row.get('Opis Ładunku / Trasy', '')}", 
+                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | <b>Opis:</b> {row.get('Opis Ładunku / Trasy', '')}", 
                     "kolor": "#AF8FC9", "ikona": "🟡"
                 })
             
-            # Rozładunki Poboczne (pomijamy dla PRO)
+            # Rozładunki Poboczne (tylko dla zleceń utworzonych stricte w module pobocznym)
             d_roz_p = normalize_date(row.get("Data Rozładunku"))
             if d_roz_p and not is_pro_order:
                 all_events[d_roz_p].append({
                     "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"Cel osiągnięty", 
+                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | Cel osiągnięty", 
                     "kolor": "#77A385", "ikona": "🚩"
                 })
                 
-            # Terminy Płatności (ZOSTAWIAMY dla wszystkich, również dla PRO)
+            # Terminy Płatności (ZOSTAWIAMY dla wszystkich)
             d_plat_p = normalize_date(row.get("Data Płatności"))
             if d_plat_p:
                 all_events[d_plat_p].append({
                     "typ": "TERMIN PŁATNOŚCI FAKTURY", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"Ostateczny dzień płatności", 
+                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> (Ostateczny dzień płatności)", 
                     "kolor": "#BA4949", "ikona": "💳"
                 })
 
@@ -116,9 +120,7 @@ def render(sh):
         </div>
     """, unsafe_allow_html=True)
     
-    # Wybór miesiąca i roku (Nowoczesny pasek nawigacyjny)
     c_m, c_y, c_btn, _ = st.columns([2, 2, 2, 4])
-    
     nazwy_miesiecy = ["Styczeń", "Luty", "Marzec", "Kwiecień", "Maj", "Czerwiec", "Lipiec", "Sierpień", "Wrzesień", "Październik", "Listopad", "Grudzień"]
     
     with c_m:
@@ -136,7 +138,6 @@ def render(sh):
             st.session_state.cal_selected_date = dzis.strftime("%Y-%m-%d")
             st.rerun()
 
-    # Renderowanie siatki kalendarza z nieprzezroczystym, solidnym tłem
     with st.container(border=True):
         st.markdown("""
             <style>
@@ -200,7 +201,6 @@ def render(sh):
                         elif "POBOCZNE" in ev['typ'] and "🚚" not in ikonki: ikonki.append("🚚")
                     
                     ikony_str = " ".join(ikonki) if ikonki else "-"
-                    
                     is_today = (d_str == dzis_str)
                     prefix = "📍 " if is_today else ""
                     
@@ -210,7 +210,7 @@ def render(sh):
                         st.session_state.cal_selected_date = d_str
                         st.rerun()
 
-    # --- SZCZEGÓŁY WYBRANEGO DNIA (ROZKŁAD JAZDY) ---
+    # --- SZCZEGÓŁY WYBRANEGO DNIA ---
     wybrana_data_str = st.session_state.cal_selected_date
     zdarzenia_wybranego_dnia = all_events.get(wybrana_data_str, [])
     
@@ -230,44 +230,41 @@ def render(sh):
     if not zdarzenia_wybranego_dnia:
         st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
     else:
-        # --- LOGIKA: GRUPOWANIE PO NUMERZE ZLECENIA ---
+        # Grupowanie po numerze zlecenia
         grouped_events = defaultdict(list)
         for ev in zdarzenia_wybranego_dnia:
             grouped_events[ev['nr']].append(ev)
             
-        # Sortowanie alfabetyczne/numeryczne po nazwie zlecenia
         for nr in sorted(grouped_events.keys()):
             events = grouped_events[nr]
             main_color = events[0]['kolor']
-            nazwa_przew = events[0].get('przewoznik', 'Brak przewoźnika')
+            nazwa_przew = events[0].get('przewoznik', 'Brak danych')
             
             c1, c2 = st.columns([5, 1])
             
             with c1:
                 events_html = ""
-                # Renderowanie poszczególnych akcji (załadunek, rozładunek) dla tego samego zlecenia
                 for i, ev in enumerate(events):
-                    border_bottom = "border-bottom: 1px dashed rgba(0,0,0,0.1); margin-bottom: 8px; padding-bottom: 8px;" if i < len(events) - 1 else ""
-                    # Zmiana kluczowa - używamy replace('\n', '') na cząstkowym HTML, żeby zapobiec "psuciu" przez Markdown
+                    border_bottom = "border-bottom: 1px dashed rgba(0,0,0,0.12); margin-bottom: 10px; padding-bottom: 10px;" if i < len(events) - 1 else ""
                     part_html = f"""
                     <div style="{border_bottom}">
-                        <div class="cr-title" style="color: {ev['kolor']} !important; font-size: 13px !important; margin-bottom: 4px; text-transform: uppercase;">
-                            {ev['ikona']} <strong>{ev['typ']}</strong>
+                        <div class="cr-title" style="color: {ev['kolor']} !important; font-size: 14px !important; margin-bottom: 4px; text-transform: uppercase; font-weight: 800;">
+                            {ev['ikona']} {ev['typ']}
                         </div>
-                        <div class="cr-text">
+                        <div class="cr-text" style="font-size: 13px !important; color: #2B2620 !important;">
                             {ev['szczegoly']}
                         </div>
                     </div>
                     """
                     events_html += part_html.replace('\n', '')
                 
-                # Główny kontener zlecenia (Karta)
+                # Karta zlecenia z wyraźnym oznaczeniem przewoźnika
                 main_html = f"""
-                <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 10px; flex-direction: column; align-items: flex-start; padding: 16px 24px;">
-                    <div style="margin-bottom: 10px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span class="cr-title" style="font-size: 20px !important; margin: 0;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
-                        <span class="cr-text" style="font-size: 14px !important; font-weight: 700; color: #1A2530 !important; display: flex; align-items: center; gap: 5px;">
-                            👤 {nazwa_przew}
+                <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 12px; flex-direction: column; align-items: flex-start; padding: 18px 24px;">
+                    <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span class="cr-title" style="font-size: 21px !important; margin: 0; font-weight: 800;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
+                        <span style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 800; color: #990000 !important; letter-spacing: 0.5px;">
+                            🚛 PRZEWOŹNIK: {nazwa_przew.upper()}
                         </span>
                     </div>
                     <div style="width: 100%;">
@@ -278,21 +275,16 @@ def render(sh):
                 st.markdown(main_html.replace('\n', ''), unsafe_allow_html=True)
                 
             with c2:
-                # Obliczanie marginesu, aby przycisk był wyśrodkowany niezależnie od liczby wierszy
                 base_margin = 35
-                extra_margin_per_event = 20
+                extra_margin_per_event = 25
                 margin_top = base_margin + ((len(events) - 1) * extra_margin_per_event)
                 
                 st.markdown(f"<div style='height: {margin_top}px;'></div>", unsafe_allow_html=True)
                 
                 if st.button("Otwórz ➔", key=f"link_{wybrana_data_str}_{nr}", use_container_width=True):
-                    
                     st.session_state['przekierowanie_nr_zlecenia'] = nr
-                    
-                    # Wyszukaj typ zlecenia po zawartości 'typ'
                     if any("PRO" in e['typ'] for e in events):
                         st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO" 
                     else:
                         st.session_state['menu_option'] = "ZLECENIA POBOCZNE"
-                        
                     st.rerun()
