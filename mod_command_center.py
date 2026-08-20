@@ -5,19 +5,24 @@ from datetime import datetime
 from collections import defaultdict
 import db
 
-def normalize_date(date_val):
-    """Bezpiecznie konwertuje różne formaty dat z bazy na standard YYYY-MM-DD"""
+def extract_dates(date_val):
+    """Wykrywa wszystkie daty w ciągu (nawet wielokrotne po przecinku) i zwraca jako listę YYYY-MM-DD"""
     if pd.isna(date_val) or not str(date_val).strip():
-        return None
+        return []
     d_str = str(date_val).strip()
-    try:
-        if "." in d_str:
-            return datetime.strptime(d_str, "%d.%m.%Y").strftime("%Y-%m-%d")
-        elif "-" in d_str:
-            return datetime.strptime(d_str.split(" ")[0], "%Y-%m-%d").strftime("%Y-%m-%d")
-    except:
-        return None
-    return None
+    dates = []
+    # Dzielimy po przecinkach (rozwiązuje problem wielokrotnych rozładunków)
+    parts = [p.strip() for p in d_str.replace(" i ", ",").split(',')]
+    for p in parts:
+        p = p.split(" ")[0] # Odrzucamy godzinę jeśli się przypałętała
+        try:
+            if "." in p:
+                dates.append(datetime.strptime(p, "%d.%m.%Y").strftime("%Y-%m-%d"))
+            elif "-" in p:
+                dates.append(datetime.strptime(p, "%Y-%m-%d").strftime("%Y-%m-%d"))
+        except:
+            pass
+    return dates
 
 def render(sh):
     st.markdown('''
@@ -41,7 +46,7 @@ def render(sh):
         df_zlecenia = db.fetch_data("Zlecenia")
         df_poboczne = db.fetch_data("Zlecenia Poboczne")
 
-    # Zbiór wszystkich numerów zleceń PRO do szybkiej eliminacji duplikatów
+    # Zbiór numerów zleceń PRO (do eliminacji duplikatów)
     pro_orders_set = set()
     if not df_zlecenia.empty and 'Numer zlecenia' in df_zlecenia.columns:
         pro_orders_set = set(df_zlecenia['Numer zlecenia'].dropna().astype(str).str.strip().tolist())
@@ -56,18 +61,16 @@ def render(sh):
             projekt = str(row.get("ID Projektu", "Brak")).strip()
             przewoznik = str(row.get("Zleceniobiorca", "Brak danych")).strip()
             
-            # Załadunki PRO
-            d_zal = normalize_date(row.get("Data załadunku"))
-            if d_zal:
+            # Załadunki PRO (dla każdej znalezionej daty w komórce)
+            for d_zal in extract_dates(row.get("Data załadunku")):
                 all_events[d_zal].append({
                     "typ": "ZAŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
                     "szczegoly": f"<b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Zaladunku', '')}", 
                     "kolor": "#C9A471", "ikona": "🟢"
                 })
             
-            # Rozładunki PRO
-            d_roz = normalize_date(row.get("Data rozładunku"))
-            if d_roz:
+            # Rozładunki PRO (dla każdej znalezionej daty, nawet jeśli jest ich kilka)
+            for d_roz in extract_dates(row.get("Data rozładunku")):
                 all_events[d_roz].append({
                     "typ": "ROZŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
                     "szczegoly": f"<b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Rozladunku', '')}", 
@@ -80,30 +83,28 @@ def render(sh):
             nr = str(row.get("Nr Zlecenia", "Brak NR")).strip()
             przewoznik = str(row.get("Przewoźnik", "Brak danych")).strip()
             
-            # Weryfikacja: wykluczamy zlecenia, które już są w bazie PRO lub mają prefiksy systemowe PRO
             is_pro_order = (nr in pro_orders_set) or nr.startswith(("CRG", "EVT", "ZLP"))
             
-            # Załadunki Poboczne (tylko dla zleceń utworzonych stricte w module pobocznym)
-            d_zal_p = normalize_date(row.get("Data Załadunku"))
-            if d_zal_p and not is_pro_order:
-                all_events[d_zal_p].append({
-                    "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"<b>Opis:</b> {row.get('Opis Ładunku / Trasy', '')}", 
-                    "kolor": "#AF8FC9", "ikona": "🟡"
-                })
+            # Załadunki Poboczne 
+            for d_zal_p in extract_dates(row.get("Data Załadunku")):
+                if not is_pro_order:
+                    all_events[d_zal_p].append({
+                        "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
+                        "szczegoly": f"<b>Opis:</b> {row.get('Opis Ładunku / Trasy', '')}", 
+                        "kolor": "#AF8FC9", "ikona": "🟡"
+                    })
             
-            # Rozładunki Poboczne (tylko dla zleceń utworzonych stricte w module pobocznym)
-            d_roz_p = normalize_date(row.get("Data Rozładunku"))
-            if d_roz_p and not is_pro_order:
-                all_events[d_roz_p].append({
-                    "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"Cel osiągnięty", 
-                    "kolor": "#77A385", "ikona": "🚩"
-                })
+            # Rozładunki Poboczne
+            for d_roz_p in extract_dates(row.get("Data Rozładunku")):
+                if not is_pro_order:
+                    all_events[d_roz_p].append({
+                        "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
+                        "szczegoly": f"Cel osiągnięty", 
+                        "kolor": "#77A385", "ikona": "🚩"
+                    })
                 
-            # Terminy Płatności (ZOSTAWIAMY dla wszystkich)
-            d_plat_p = normalize_date(row.get("Data Płatności"))
-            if d_plat_p:
+            # Terminy Płatności
+            for d_plat_p in extract_dates(row.get("Data Płatności")):
                 all_events[d_plat_p].append({
                     "typ": "TERMIN PŁATNOŚCI", "nr": nr, "przewoznik": przewoznik,
                     "szczegoly": f"Ostateczny dzień zapłaty za fakturę", 
@@ -230,7 +231,6 @@ def render(sh):
     if not zdarzenia_wybranego_dnia:
         st.info("Brak zaplanowanych operacji, załadunków i płatności na ten dzień.")
     else:
-        # Grupowanie po numerze zlecenia
         grouped_events = defaultdict(list)
         for ev in zdarzenia_wybranego_dnia:
             grouped_events[ev['nr']].append(ev)
@@ -240,7 +240,8 @@ def render(sh):
             main_color = events[0]['kolor']
             nazwa_przew = events[0].get('przewoznik', 'Brak danych')
             
-            c1, c2 = st.columns([5, 1])
+            # Wyrównanie w pionie załatwi problem brzydkich marginesów guzika przy zawijaniu tekstu
+            c1, c2 = st.columns([5, 1], vertical_alignment="center")
             
             with c1:
                 events_html = ""
@@ -258,14 +259,14 @@ def render(sh):
                     """
                     events_html += part_html.replace('\n', '')
                 
-                # Zabezpieczenie przed zgniataniem -> white-space: nowrap; flex-shrink: 0;
+                # Używamy flex-wrap: wrap i inline-block, aby zapobiec zgniataniu plakietki przez Streamlit!
                 main_html = f"""
                 <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 12px; flex-direction: column; align-items: flex-start; padding: 18px 24px;">
-                    <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 15px;">
-                        <span class="cr-title" style="font-size: 21px !important; margin: 0; font-weight: 800;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
-                        <span style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 800; color: #990000 !important; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0;">
+                    <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 10px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div class="cr-title" style="font-size: 21px !important; margin: 0; font-weight: 800; min-width: 200px;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></div>
+                        <div style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 800; color: #990000 !important; letter-spacing: 0.5px; display: inline-block; white-space: nowrap;">
                             🚛 PRZEWOŹNIK: {nazwa_przew.upper()}
-                        </span>
+                        </div>
                     </div>
                     <div style="width: 100%;">
                         {events_html}
@@ -275,12 +276,7 @@ def render(sh):
                 st.markdown(main_html.replace('\n', ''), unsafe_allow_html=True)
                 
             with c2:
-                base_margin = 35
-                extra_margin_per_event = 25
-                margin_top = base_margin + ((len(events) - 1) * extra_margin_per_event)
-                
-                st.markdown(f"<div style='height: {margin_top}px;'></div>", unsafe_allow_html=True)
-                
+                # Kolumna wyśrodkowana przez vertical_alignment="center", marginesy usunięte
                 if st.button("Otwórz ➔", key=f"link_{wybrana_data_str}_{nr}", use_container_width=True):
                     st.session_state['przekierowanie_nr_zlecenia'] = nr
                     if any("PRO" in e['typ'] for e in events):
