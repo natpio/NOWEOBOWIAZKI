@@ -61,7 +61,7 @@ def render(sh):
             if d_zal:
                 all_events[d_zal].append({
                     "typ": "ZAŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | <b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Zaladunku', '')}", 
+                    "szczegoly": f"<b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Zaladunku', '')}", 
                     "kolor": "#C9A471", "ikona": "🟢"
                 })
             
@@ -70,7 +70,7 @@ def render(sh):
             if d_roz:
                 all_events[d_roz].append({
                     "typ": "ROZŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | <b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Rozladunku', '')}", 
+                    "szczegoly": f"<b>Projekt:</b> {projekt} | <b>Miejsce:</b> {row.get('Miejsce Rozladunku', '')}", 
                     "kolor": "#83A5DB", "ikona": "🏁"
                 })
 
@@ -88,7 +88,7 @@ def render(sh):
             if d_zal_p and not is_pro_order:
                 all_events[d_zal_p].append({
                     "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | <b>Opis:</b> {row.get('Opis Ładunku / Trasy', '')}", 
+                    "szczegoly": f"<b>Opis:</b> {row.get('Opis Ładunku / Trasy', '')}", 
                     "kolor": "#AF8FC9", "ikona": "🟡"
                 })
             
@@ -97,7 +97,7 @@ def render(sh):
             if d_roz_p and not is_pro_order:
                 all_events[d_roz_p].append({
                     "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> | Cel osiągnięty", 
+                    "szczegoly": f"Cel osiągnięty", 
                     "kolor": "#77A385", "ikona": "🚩"
                 })
                 
@@ -105,8 +105,8 @@ def render(sh):
             d_plat_p = normalize_date(row.get("Data Płatności"))
             if d_plat_p:
                 all_events[d_plat_p].append({
-                    "typ": "TERMIN PŁATNOŚCI FAKTURY", "nr": nr, "przewoznik": przewoznik,
-                    "szczegoly": f"<b>Przewoźnik:</b> <strong style='color:#990000;'>{przewoznik}</strong> (Ostateczny dzień płatności)", 
+                    "typ": "TERMIN PŁATNOŚCI", "nr": nr, "przewoznik": przewoznik,
+                    "szczegoly": f"Ostateczny dzień zapłaty za fakturę", 
                     "kolor": "#BA4949", "ikona": "💳"
                 })
 
@@ -258,12 +258,12 @@ def render(sh):
                     """
                     events_html += part_html.replace('\n', '')
                 
-                # Karta zlecenia z wyraźnym oznaczeniem przewoźnika
+                # Zabezpieczenie przed zgniataniem -> white-space: nowrap; flex-shrink: 0;
                 main_html = f"""
                 <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 12px; flex-direction: column; align-items: flex-start; padding: 18px 24px;">
-                    <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 15px;">
                         <span class="cr-title" style="font-size: 21px !important; margin: 0; font-weight: 800;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
-                        <span style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 800; color: #990000 !important; letter-spacing: 0.5px;">
+                        <span style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 4px 12px; border-radius: 4px; font-size: 13px; font-weight: 800; color: #990000 !important; letter-spacing: 0.5px; white-space: nowrap; flex-shrink: 0;">
                             🚛 PRZEWOŹNIK: {nazwa_przew.upper()}
                         </span>
                     </div>
