@@ -71,7 +71,8 @@ def get_base64_image(file_name):
 
 # 5. NOWY, DEDYKOWANY EKRAN LOGOWANIA
 def login_screen():
-    b64_logo_banner = get_base64_image("logowanie.jpg")
+    # Zmieniono rozszerzenie na logowanie.png
+    b64_logo_banner = get_base64_image("logowanie.png") 
     
     st.markdown(f"""
     <style>
@@ -92,13 +93,14 @@ def login_screen():
     .login-banner-img {{
         width: 100%;
         max-width: 850px;
-        border-radius: 16px;
-        box-shadow: 0px 25px 50px rgba(0,0,0,0.9), inset 0px 0px 0px 1px rgba(255,255,255,0.1);
-        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        /* Zastosowano drop-shadow zamiast box-shadow, aby cień śledził kontury przezroczystego PNG */
+        filter: drop-shadow(0px 20px 30px rgba(0,0,0,0.8));
+        transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.4s;
     }}
     
     .login-banner-img:hover {{
         transform: scale(1.02);
+        filter: drop-shadow(0px 25px 40px rgba(0,0,0,0.95));
     }}
     
     /* 3. Stylowanie pola na hasło */
