@@ -104,7 +104,7 @@ def main():
     b64_baseball_gear = get_base64_image("image_14a961.png")
     
     # Ładowanie grafik menu
-    b64_cmd = get_base64_image("4.png")
+    b64_cmd = get_base64_image("command.jpg")
     b64_gantt = get_base64_image("harmonogram.jpg")
     b64_gen = get_base64_image("GENERATOR.jpg")
     b64_evt = get_base64_image("eventy.jpg")
@@ -154,9 +154,9 @@ def main():
             background-color: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            height: 62px !important;
+            height: 65px !important;
             width: 100% !important;
-            background-size: 100% 100% !important;
+            background-size: contain !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
             transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.2s;
@@ -167,20 +167,6 @@ def main():
         /* Ukrycie standardowego tekstu we wszystkich przyciskach */
         [data-testid="stSidebar"] div[data-testid="stButton"] > button p {{
             display: none !important;
-        }}
-        
-        /* Wyjątek dla "COMMAND CENTER" (4.png nie ma tekstu w grafice) */
-        [data-testid="stSidebar"] div.element-container:nth-of-type(2) button p {{
-            display: block !important;
-            color: #9C7D58 !important; /* Kolor wytłoczonej skóry */
-            font-family: 'Bebas Neue', sans-serif !important;
-            font-size: 26px !important;
-            letter-spacing: 1px !important;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0px rgba(255,255,255,0.1) !important;
-            margin: 0 !important;
-            padding-left: 55px !important; /* Ominięcie wytłoczonej strzałki */
-            text-align: left !important;
-            width: 100% !important;
         }}
         
         /* Efekt hover dla wszystkich przycisków */
