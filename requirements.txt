@@ -5,8 +5,6 @@ plotly
 pyotp
 qrcode
 pillow
-streamlit-option-menu
 oauth2client
 fpdf
 openpyxl
-starlette==0.37.2
