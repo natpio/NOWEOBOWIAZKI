@@ -71,7 +71,6 @@ def get_base64_image(file_name):
 
 # 5. NOWY, DEDYKOWANY EKRAN LOGOWANIA
 def login_screen():
-    # Zmieniono rozszerzenie na logowanie.png
     b64_logo_banner = get_base64_image("logowanie.png") 
     
     st.markdown(f"""
@@ -93,7 +92,6 @@ def login_screen():
     .login-banner-img {{
         width: 100%;
         max-width: 850px;
-        /* Zastosowano drop-shadow zamiast box-shadow, aby cień śledził kontury przezroczystego PNG */
         filter: drop-shadow(0px 20px 30px rgba(0,0,0,0.8));
         transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.4s;
     }}
@@ -250,13 +248,13 @@ def main():
             background-color: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            height: 65px !important;
+            height: 82px !important; /* ZWIĘKSZONA WYSOKOŚĆ ABY PRZYCISKI MOGŁY BYĆ SZERSZE */
             width: 100% !important;
             background-size: contain !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
             transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.2s;
-            margin-bottom: 2px !important;
+            margin-bottom: -8px !important; /* ZBLIŻENIE DO SIEBIE, ŻEBY PASEK NIE BYŁ ZA DŁUGI */
             padding: 0 !important;
         }}
         
@@ -292,7 +290,7 @@ def main():
         [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_fin}') !important; }}
         
         /* Przyciski Odśwież (14) i Wyloguj (15) po przesunięciu profilu */
-        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 15px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(15) button {{ background-image: url('{b64_btn_logout}') !important; }}
         </style>
         """, unsafe_allow_html=True)
