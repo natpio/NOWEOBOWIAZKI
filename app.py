@@ -1,7 +1,6 @@
 import streamlit as st
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from streamlit_option_menu import option_menu
 import os
 import base64
 
@@ -79,6 +78,15 @@ def login_screen():
                 st.error("Nieprawidłowe hasło.")
         st.markdown("</div>", unsafe_allow_html=True)
 
+# Funkcja pomocnicza do ładowania obrazów Base64
+def get_base64_image(file_name):
+    if os.path.exists(file_name):
+        with open(file_name, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        mime = "image/jpeg" if file_name.lower().endswith(('.jpg', '.jpeg')) else "image/png"
+        return f"data:{mime};base64,{b64}"
+    return "none"
+
 # 5. GŁÓWNA LOGIKA APLIKACJI
 def main():
     if "zalogowany" not in st.session_state: st.session_state["zalogowany"] = False
@@ -92,70 +100,28 @@ def main():
         st.error(f"Błąd połączenia z bazą danych (Google Sheets): {e}")
         return
 
-    # Pobieranie Base64 tekstury papieru
-    b64_washi_inline = ""
-    if os.path.exists("washi_bg.png"):
-        with open("washi_bg.png", "rb") as f: b64_washi_inline = base64.b64encode(f.read()).decode()
-    elif os.path.exists("washi_bg.jpg"):
-        with open("washi_bg.jpg", "rb") as f: b64_washi_inline = base64.b64encode(f.read()).decode()
-
-    # --- NOWE: Wczytywanie grafik do paska bocznego ---
-    b64_baseball_gear = ""
-    if os.path.exists("image_14a961.png"):
-        with open("image_14a961.png", "rb") as f: b64_baseball_gear = base64.b64encode(f.read()).decode()
-        
-    b64_btn_refresh = ""
-    if os.path.exists("image_983cc3.png"):
-        with open("image_983cc3.png", "rb") as f: b64_btn_refresh = base64.b64encode(f.read()).decode()
-        
-    b64_btn_logout = ""
-    if os.path.exists("image_983fe1.png"):
-        with open("image_983fe1.png", "rb") as f: b64_btn_logout = base64.b64encode(f.read()).decode()
-
-    # --- Wstrzykiwanie stylów dla przycisków skórzanych ---
-    st.markdown(f"""
-    <style>
-    /* Formatowanie kontenera przycisków na pasku bocznym */
-    [data-testid="stSidebar"] div[data-testid="stButton"] > button {{
-        color: transparent !important;
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        height: 60px !important; 
-        background-size: contain !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-        transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-    }}
+    b64_washi_inline = get_base64_image("washi_bg.png") if os.path.exists("washi_bg.png") else get_base64_image("washi_bg.jpg")
+    b64_baseball_gear = get_base64_image("image_14a961.png")
     
-    /* Ukrycie domyślnego tekstu Streamlit */
-    [data-testid="stSidebar"] div[data-testid="stButton"] > button p {{
-        display: none !important;
-    }}
+    # Ładowanie grafik menu
+    b64_cmd = get_base64_image("4.png")
+    b64_gantt = get_base64_image("harmonogram.jpg")
+    b64_gen = get_base64_image("GENERATOR.jpg")
+    b64_evt = get_base64_image("eventy.jpg")
+    b64_emp = get_base64_image("empties.jpg")
+    b64_pob = get_base64_image("zlecenia poboczne.jpg")
+    b64_sub = get_base64_image("subrenty.jpg")
+    b64_yes = get_base64_image("yestech.jpg")
+    b64_baz = get_base64_image("bazy danych.jpg")
+    b64_fin = get_base64_image("finanse.jpg")
     
-    /* Efekt wciśnięcia / najechania */
-    [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
-        transform: scale(1.03);
-        background-color: transparent !important;
-        border: none !important;
-        filter: brightness(1.1);
-    }}
-    
-    /* Przycisk 1: Niebieski (Odśwież) - Złapanie przedostatniego elementu w pasku */
-    [data-testid="stSidebar"] div.element-container:nth-last-of-type(2) button {{
-        background-image: url('data:image/png;base64,{b64_btn_refresh}') !important;
-    }}
-    
-    /* Przycisk 2: Brązowy (Wyloguj) - Złapanie ostatniego elementu w pasku */
-    [data-testid="stSidebar"] div.element-container:nth-last-of-type(1) button {{
-        background-image: url('data:image/png;base64,{b64_btn_logout}') !important;
-    }}
-    </style>
-    """, unsafe_allow_html=True)
-
+    # Ładowanie przycisków akcji
+    b64_btn_refresh = get_base64_image("image_983cc3.png")
+    b64_btn_logout = get_base64_image("image_983fe1.png")
 
     # --- MENU BOCZNE (SIDEBAR) ---
     with st.sidebar:
+        # ELEMENT 1: LOGO (Markdown)
         st.markdown("""<div class="sidebar-logo-container">
 <div style="font-size: 38px; color: #BA4949; margin-bottom: -15px; filter: drop-shadow(2px 2px 0px #050A15);">⚾</div>
 <div class="sidebar-logo-text">SQM <span>HUB</span></div>
@@ -167,7 +133,6 @@ def main():
             "EVENTY / TARGI", "EMPTIES TOWER", "ZLECENIA POBOCZNE", "SUBRENTY", 
             "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
         ]
-        ikony_menu = ["cpu", "calendar-range", "file-earmark-pdf", "truck", "box-seam", "briefcase", "box", "globe", "database", "graph-up"]
 
         if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
         st.session_state["menu_option"] = str(st.session_state["menu_option"]).upper()
@@ -177,54 +142,115 @@ def main():
             elif "POBOCZNE" in st.session_state["menu_option"]: st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
             else: st.session_state["menu_option"] = "COMMAND CENTER"
 
-        aktualny_indeks = opcje_menu.index(st.session_state["menu_option"])
+        # Dynamika podświetlenia aktywnego elementu (przesunięcie +2 bo indeksy w CSS zaczynają się od 1, a Logo to element 1)
+        active_idx = opcje_menu.index(st.session_state["menu_option"]) + 2
+
+        # --- CSS MAGIA (Podmiana przycisków na grafiki) ---
+        st.markdown(f"""
+        <style>
+        /* Styl bazowy dla wszystkich przycisków na pasku bocznym */
+        [data-testid="stSidebar"] div[data-testid="stButton"] > button {{
+            color: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            height: 62px !important;
+            width: 100% !important;
+            background-size: 100% 100% !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.2s;
+            margin-bottom: 2px !important;
+            padding: 0 !important;
+        }}
         
-        # PŁYWAJĄCE, W PEŁNI PRZEZROCZYSTE MENU KRAWĘDŹ W KRAWĘDŹ
-        wybrany_modul = option_menu(
-            menu_title=None,
-            options=opcje_menu,
-            icons=ikony_menu, 
-            default_index=aktualny_indeks,
-            styles={
-                "container": {
-                    "padding": "0!important", 
-                    "margin": "0!important",
-                    "background-color": "transparent !important", 
-                    "width": "100%",
-                    "border": "none"
-                },
-                "icon": {"color": "#C5A880", "font-size": "15px"},
-                "nav-link": {
-                    "color": "#E2DCD3", 
-                    "font-size": "12px", 
-                    "font-weight": "600", 
-                    "font-family": "'Inter', sans-serif",
-                    "letter-spacing": "0.5px", 
-                    "text-align": "left", 
-                    "margin": "0px", 
-                    "padding": "12px 15px 12px 2.5rem",
-                    "border-radius": "0px",
-                    "transition": "all 0.2s ease"
-                },
-                "nav-link-selected": {
-                    "background-color": "#F7F3EC", 
-                    "background-image": f"url('data:image/png;base64,{b64_washi_inline}')" if b64_washi_inline else "none",
-                    "background-blend-mode": "multiply",
-                    "background-size": "cover",
-                    "color": "#0A192F", 
-                    "font-weight": "800",
-                    "border-left": "6px solid #C5A880",
-                    "border-radius": "0px",
-                    "box-shadow": "none"
-                },
-            }
-        )
-        st.session_state["menu_option"] = wybrany_modul
+        /* Ukrycie standardowego tekstu we wszystkich przyciskach */
+        [data-testid="stSidebar"] div[data-testid="stButton"] > button p {{
+            display: none !important;
+        }}
         
-        # PROFIL I NOWA GRAFIKA ZE SPRZĘTEM BASEBALLOWYM
+        /* Wyjątek dla "COMMAND CENTER" (4.png nie ma tekstu w grafice) */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(2) button p {{
+            display: block !important;
+            color: #9C7D58 !important; /* Kolor wytłoczonej skóry */
+            font-family: 'Bebas Neue', sans-serif !important;
+            font-size: 26px !important;
+            letter-spacing: 1px !important;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0px rgba(255,255,255,0.1) !important;
+            margin: 0 !important;
+            padding-left: 55px !important; /* Ominięcie wytłoczonej strzałki */
+            text-align: left !important;
+            width: 100% !important;
+        }}
+        
+        /* Efekt hover dla wszystkich przycisków */
+        [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
+            transform: scale(1.03);
+            filter: brightness(1.15);
+        }}
+        
+        /* Wyróżnienie aktywnego przycisku z menu */
+        [data-testid="stSidebar"] div.element-container:nth-of-type({active_idx}) button {{
+            filter: brightness(1.25) drop-shadow(0px 0px 12px rgba(197, 168, 128, 0.6)) !important;
+            transform: scale(1.04) !important;
+            z-index: 10;
+            position: relative;
+        }}
+
+        /* Przypisanie konkretnych grafik do konkretnych pozycji (od 2 do 11) */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(2) button {{ background-image: url('{b64_cmd}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_gantt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_gen}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_evt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_emp}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_pob}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_sub}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_yes}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_baz}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_fin}') !important; }}
+        
+        /* Przyciski Odśwież (13) i Wyloguj (14) */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(13) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 15px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_logout}') !important; }}
+        </style>
+        """, unsafe_allow_html=True)
+
+        # ELEMENTY 2-11: Rysowanie przycisków MENU
+        if st.button("COMMAND CENTER", use_container_width=True): 
+            st.session_state["menu_option"] = "COMMAND CENTER"
+            st.rerun()
+        if st.button("HARMONOGRAM (GANTT)", use_container_width=True): 
+            st.session_state["menu_option"] = "HARMONOGRAM (GANTT)"
+            st.rerun()
+        if st.button("GENERATOR ZLECEŃ PRO", use_container_width=True): 
+            st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
+            st.rerun()
+        if st.button("EVENTY / TARGI", use_container_width=True): 
+            st.session_state["menu_option"] = "EVENTY / TARGI"
+            st.rerun()
+        if st.button("EMPTIES TOWER", use_container_width=True): 
+            st.session_state["menu_option"] = "EMPTIES TOWER"
+            st.rerun()
+        if st.button("ZLECENIA POBOCZNE", use_container_width=True): 
+            st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
+            st.rerun()
+        if st.button("SUBRENTY", use_container_width=True): 
+            st.session_state["menu_option"] = "SUBRENTY"
+            st.rerun()
+        if st.button("YESTECH EXPORT", use_container_width=True): 
+            st.session_state["menu_option"] = "YESTECH EXPORT"
+            st.rerun()
+        if st.button("BAZY DANYCH / SŁOWNIKI", use_container_width=True): 
+            st.session_state["menu_option"] = "BAZY DANYCH / SŁOWNIKI"
+            st.rerun()
+        if st.button("FINANSE I RAPORTY", use_container_width=True): 
+            st.session_state["menu_option"] = "FINANSE I RAPORTY"
+            st.rerun()
+
+        # ELEMENT 12: Karta profilu + grafika (Markdown)
         st.markdown(f"""<div class="sidebar-profile-card">
 <div style="display: flex; align-items: center; gap: 15px;">
-<div class="profile-avatar" style="background-image: url('data:image/png;base64,{b64_washi_inline}');">
+<div class="profile-avatar" style="background-image: url('{b64_washi_inline}');">
 <span style="color: #0A192F; font-weight: 800; font-size: 20px; font-family: 'Bebas Neue', sans-serif;">P</span>
 </div>
 <div>
@@ -238,20 +264,22 @@ def main():
 <div class="refresh-graphic" style="text-align: center; margin-top: 30px;">
 <div class="rg-title">REFRESH</div>
 <div class="rg-subtitle">THE LINEUP</div>
-<img src="data:image/png;base64,{b64_baseball_gear}" style="width: 75%; max-width: 160px; margin-top: 15px; margin-bottom: 5px; filter: drop-shadow(2px 5px 8px rgba(0,0,0,0.5));">
+<img src="{b64_baseball_gear}" style="width: 75%; max-width: 160px; margin-top: 15px; margin-bottom: 5px; filter: drop-shadow(2px 5px 8px rgba(0,0,0,0.5));">
 </div>
 """, unsafe_allow_html=True)
 
-        # Przyciski zostawiamy standardowe - nowy kod CSS podmieni ich wygląd na grafiki
-        if st.button("🔄 ODŚWIEŻ DANE / REFRESH", use_container_width=True): 
+        # ELEMENTY 13-14: Przyciski operacyjne
+        if st.button("ODŚWIEŻ DANE / REFRESH", use_container_width=True): 
             st.cache_data.clear()
             st.rerun()
 
-        if st.button("🚪 WYLOGUJ / ログアウト", use_container_width=True): 
+        if st.button("WYLOGUJ / ログアウト", use_container_width=True): 
             st.session_state["zalogowany"] = False
             st.rerun()
 
     # --- ROUTING MODUŁÓW ---
+    wybrany_modul = st.session_state["menu_option"]
+    
     if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
     elif wybrany_modul == "HARMONOGRAM (GANTT)": mod_harmonogram.render(sh)
     elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
