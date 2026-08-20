@@ -3,6 +3,7 @@ import gspread
 import pandas as pd
 import datetime
 import re
+import time
 
 @st.cache_resource
 def init_connection():
@@ -19,113 +20,139 @@ def get_col_letter(col_idx):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_data(_sh, sheet_name):
-    try:
-        worksheet = _sh.worksheet(sheet_name)
-    except gspread.exceptions.WorksheetNotFound:
-        worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
+    max_retries = 3
+    
+    for attempt in range(max_retries):
+        try:
+            try:
+                worksheet = _sh.worksheet(sheet_name)
+            except gspread.exceptions.WorksheetNotFound:
+                worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
-    raw_data = worksheet.get_all_values()
-    if raw_data and len(raw_data) > 0:
-        headers = raw_data[0]
-        headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
-        
-        seen = set()
-        for i, h in enumerate(headers):
-            if h in seen:
-                headers[i] = f"{h}_duplikat_{i}"
-            seen.add(headers[i])
-            
-        data = raw_data[1:]
-        df = pd.DataFrame(data, columns=headers)
-    else:
-        df = pd.DataFrame()
-            
-    if not df.empty:
-        df['sheet_row'] = df.index + 2
-    else:
-        df['sheet_row'] = []
-
-    if sheet_name == "DB_Eventy":
-        wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch",
-                    "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"]
-        for kol in wymagane:
-            if kol not in df.columns: df[kol] = ""
-            
-        domyslne_kolumny = {
-            "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
-            "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
-            "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
-            "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
-            "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
-        }
-        for kol, val in domyslne_kolumny.items():
-            if kol not in df.columns: df[kol] = val
-
-    elif sheet_name == "DB_Subrenty":
-        domyslne_subrenty = {
-            "ID_Subrentu": "", "Rodzaj_Zlecenia": "Dry Hire", "Dostawca": "", "Co_Jedzie": "",
-            "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()),
-            "Status_Subrentu": "1. Zamówione (Oczekuje na IN)", "Transport_IN_Kto": "", "Transport_IN_Dokumenty": "",
-            "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": 0.0,
-            "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
-            "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
-        }
-        for kol, val in domyslne_subrenty.items():
-            if kol not in df.columns: df[kol] = val
+            raw_data = worksheet.get_all_values()
+            if raw_data and len(raw_data) > 0:
+                headers = raw_data[0]
+                headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
                 
-    elif sheet_name == "DB_Yestech":
-        domyslne_yestech = {
-            "ID_Yestech": "", "Data_Zgloszenia": str(datetime.date.today()),
-            "Destynacja": "", "Gabaryt": "", "Status_Ofertowy": "1. Zapytanie",
-            "Wycena_Dla_Basi": 0.0, "Koszt_Rzeczywisty": 0.0, "Marza_Info": "",
-            "Przewoznik": "", "CMR_Gotowe": "", "Nr_Zlecenia_Zewn": "",
-            "Nr_Faktury": "", "Data_Zlecenia_Tr": "", "Data_Zakonczenia_Uslugi": "",
-            "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "",
-            "Zakonczone_Arch": "NIE"
-        }
-        for kol in domyslne_yestech.keys():
-            if kol not in df.columns: df[kol] = domyslne_yestech[kol]
-            
-        kolumny_do_zostawienia = list(domyslne_yestech.keys())
-        if 'sheet_row' in df.columns:
-            kolumny_do_zostawienia.append('sheet_row')
-        df = df[kolumny_do_zostawienia]
+                seen = set()
+                for i, h in enumerate(headers):
+                    if h in seen:
+                        headers[i] = f"{h}_duplikat_{i}"
+                    seen.add(headers[i])
+                    
+                data = raw_data[1:]
+                df = pd.DataFrame(data, columns=headers)
+            else:
+                df = pd.DataFrame()
+                    
+            if not df.empty:
+                df['sheet_row'] = df.index + 2
+            else:
+                df['sheet_row'] = []
 
-    elif sheet_name == "DB_Sloty":
-        domyslne_sloty = {
-            "ID_Zlecenia": "", "Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today()),
-            "Godzina_Od": "", "Godzina_Do": "", "Brama_Rampa": "", "Notatki": ""
-        }
-        for kol, val in domyslne_sloty.items():
-            if kol not in df.columns: df[kol] = val
+            # Inicjalizacja domyślnych kolumn dla konkretnych arkuszy
+            if sheet_name == "DB_Eventy":
+                wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch",
+                            "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"]
+                for kol in wymagane:
+                    if kol not in df.columns: df[kol] = ""
+                    
+                domyslne_kolumny = {
+                    "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
+                    "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
+                    "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
+                    "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
+                    "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
+                }
+                for kol, val in domyslne_kolumny.items():
+                    if kol not in df.columns: df[kol] = val
+
+            elif sheet_name == "DB_Subrenty":
+                domyslne_subrenty = {
+                    "ID_Subrentu": "", "Rodzaj_Zlecenia": "Dry Hire", "Dostawca": "", "Co_Jedzie": "",
+                    "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()),
+                    "Status_Subrentu": "1. Zamówione (Oczekuje na IN)", "Transport_IN_Kto": "", "Transport_IN_Dokumenty": "",
+                    "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": 0.0,
+                    "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
+                    "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
+                }
+                for kol, val in domyslne_subrenty.items():
+                    if kol not in df.columns: df[kol] = val
+                        
+            elif sheet_name == "DB_Yestech":
+                domyslne_yestech = {
+                    "ID_Yestech": "", "Data_Zgloszenia": str(datetime.date.today()),
+                    "Destynacja": "", "Gabaryt": "", "Status_Ofertowy": "1. Zapytanie",
+                    "Wycena_Dla_Basi": 0.0, "Koszt_Rzeczywisty": 0.0, "Marza_Info": "",
+                    "Przewoznik": "", "CMR_Gotowe": "", "Nr_Zlecenia_Zewn": "",
+                    "Nr_Faktury": "", "Data_Zlecenia_Tr": "", "Data_Zakonczenia_Uslugi": "",
+                    "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "",
+                    "Zakonczone_Arch": "NIE"
+                }
+                for kol in domyslne_yestech.keys():
+                    if kol not in df.columns: df[kol] = domyslne_yestech[kol]
+                    
+                kolumny_do_zostawienia = list(domyslne_yestech.keys())
+                if 'sheet_row' in df.columns:
+                    kolumny_do_zostawienia.append('sheet_row')
+                df = df[kolumny_do_zostawienia]
+
+            elif sheet_name == "DB_Sloty":
+                domyslne_sloty = {
+                    "ID_Zlecenia": "", "Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today()),
+                    "Godzina_Od": "", "Godzina_Do": "", "Brama_Rampa": "", "Notatki": ""
+                }
+                for kol, val in domyslne_sloty.items():
+                    if kol not in df.columns: df[kol] = val
+                    
+                kolumny_do_zostawienia = list(domyslne_sloty.keys())
+                if 'sheet_row' in df.columns:
+                    kolumny_do_zostawienia.append('sheet_row')
+                df = df[kolumny_do_zostawienia]
+                        
+            return worksheet, df
+
+        except Exception as e:
+            if ("503" in str(e) or "429" in str(e) or "Quota" in str(e)) and attempt < max_retries - 1:
+                time.sleep(1.5 ** attempt)
+                continue
             
-        kolumny_do_zostawienia = list(domyslne_sloty.keys())
-        if 'sheet_row' in df.columns:
-            kolumny_do_zostawienia.append('sheet_row')
-        df = df[kolumny_do_zostawienia]
-                
-    return worksheet, df
+            st.error(f"Błąd ładowania arkusza {sheet_name}: {e}")
+            load_data.clear()
+            return None, pd.DataFrame()
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_data(sheet_name):
     sh = init_connection()
-    try:
-        ws = sh.worksheet(sheet_name)
-        raw_data = ws.get_all_values()
-        if raw_data and len(raw_data) > 0:
-            headers = raw_data[0]
-            headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
-            seen = set()
-            for i, h in enumerate(headers):
-                if h in seen:
-                    headers[i] = f"{h}_duplikat_{i}"
-                seen.add(headers[i])
-            df = pd.DataFrame(raw_data[1:], columns=headers)
-            return df
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
-        return pd.DataFrame()
+    max_retries = 3
+    
+    for attempt in range(max_retries):
+        try:
+            ws = sh.worksheet(sheet_name)
+            raw_data = ws.get_all_values()
+            if raw_data and len(raw_data) > 0:
+                headers = raw_data[0]
+                headers = [f"Brak_Nazwy_{i}" if str(h).strip() == "" else str(h).strip() for i, h in enumerate(headers)]
+                seen = set()
+                for i, h in enumerate(headers):
+                    if h in seen:
+                        headers[i] = f"{h}_duplikat_{i}"
+                    seen.add(headers[i])
+                df = pd.DataFrame(raw_data[1:], columns=headers)
+                return df
+            return pd.DataFrame()
+            
+        except Exception as e:
+            # Jeśli to błąd 503 lub 429 i mamy jeszcze próby w zapasie - czekamy i ponawiamy
+            if ("503" in str(e) or "429" in str(e) or "Quota" in str(e)) and attempt < max_retries - 1:
+                time.sleep(1.5 ** attempt)  # Czeka 1s, potem 1.5s, potem 2.25s...
+                continue
+                
+            # Jeśli wyczerpano próby, wyślij błąd
+            st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
+            # Czyścimy cache tej funkcji, aby Streamlit nie zapamiętał pustego wyniku na minutę!
+            fetch_data.clear()
+            return pd.DataFrame()
 
 def get_next_cmr_number():
     sh = init_connection()
