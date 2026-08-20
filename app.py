@@ -142,11 +142,10 @@ def main():
             elif "POBOCZNE" in st.session_state["menu_option"]: st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
             else: st.session_state["menu_option"] = "COMMAND CENTER"
 
-        # Dynamika podświetlenia aktywnego elementu (przesunięcie +3, bo: 1 to Logo, 2 to styl CSS)
+        # Dynamika podświetlenia aktywnego elementu (przesunięcie +3 bo 1 to Logo, 2 to styl CSS)
         active_idx = opcje_menu.index(st.session_state["menu_option"]) + 3
 
         # --- CSS MAGIA (Podmiana przycisków na grafiki) ---
-        # Wprowadziłem tu też od razu poprawkę "contain" z poprzedniego kroku!
         st.markdown(f"""
         <style>
         /* Styl bazowy dla wszystkich przycisków na pasku bocznym */
@@ -168,20 +167,6 @@ def main():
         /* Ukrycie standardowego tekstu we wszystkich przyciskach */
         [data-testid="stSidebar"] div[data-testid="stButton"] > button p {{
             display: none !important;
-        }}
-        
-        /* Wyjątek dla "COMMAND CENTER" (element 3) */
-        [data-testid="stSidebar"] div.element-container:nth-of-type(3) button p {{
-            display: block !important;
-            color: #9C7D58 !important; /* Kolor wytłoczonej skóry */
-            font-family: 'Bebas Neue', sans-serif !important;
-            font-size: 26px !important;
-            letter-spacing: 1px !important;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0px rgba(255,255,255,0.1) !important;
-            margin: 0 !important;
-            padding-left: 55px !important; /* Ominięcie wytłoczonej strzałki */
-            text-align: left !important;
-            width: 100% !important;
         }}
         
         /* Efekt hover dla wszystkich przycisków */
