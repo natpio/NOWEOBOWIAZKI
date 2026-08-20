@@ -19,35 +19,34 @@ import mod_empties
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="⚾", layout="wide")
 
-# 2. ŁADOWANIE LOKALNEGO CSS Z OBSŁUGĄ BASE64 DLA TŁA I CZCIONEK
+# 2. ŁADOWANIE LOKALNEGO CSS Z PAMIĘCIĄ PODRĘCZNĄ (CACHE)
+@st.cache_data(show_spinner=False)
+def prepare_cached_css(file_name):
+    if not os.path.exists(file_name):
+        return ""
+    
+    with open(file_name, "r", encoding="utf-8") as f:
+        css_content = f.read()
+
+    def replace_bg(img_name):
+        nonlocal css_content
+        if os.path.exists(img_name):
+            with open(img_name, "rb") as img_f:
+                b64 = base64.b64encode(img_f.read()).decode()
+            mime = "image/jpeg" if img_name.endswith(('.jpg', '.jpeg')) else "image/png"
+            css_content = css_content.replace(f"url('{img_name}')", f"url('data:{mime};base64,{b64}')")
+
+    # Podmiana teł w CSS (przeliczana tylko raz!)
+    replace_bg("fuji_bg.png")
+    replace_bg("lantern_bg.png")
+    replace_bg("washi_bg.png")
+    replace_bg("washi_bg.jpg")
+    
+    return css_content
+
 def local_css(file_name):
-    st.markdown("""<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playball&family=Bebas+Neue&family=Inter:wght@400;500;600;700;800&family=Shippori+Mincho:wght@700&display=swap" rel="stylesheet">""", unsafe_allow_html=True)
-
-    if os.path.exists(file_name):
-        with open(file_name, "r", encoding="utf-8") as f:
-            css_content = f.read()
-        
-        if os.path.exists("fuji_bg.png"):
-            with open("fuji_bg.png", "rb") as img_f:
-                b64_fuji = base64.b64encode(img_f.read()).decode()
-            css_content = css_content.replace("url('fuji_bg.png')", f"url('data:image/png;base64,{b64_fuji}')")
-            
-        if os.path.exists("lantern_bg.png"):
-            with open("lantern_bg.png", "rb") as img_l:
-                b64_lantern = base64.b64encode(img_l.read()).decode()
-            css_content = css_content.replace("url('lantern_bg.png')", f"url('data:image/png;base64,{b64_lantern}')")
-
-        if os.path.exists("washi_bg.png"):
-            with open("washi_bg.png", "rb") as img_w:
-                b64_washi = base64.b64encode(img_w.read()).decode()
-            css_content = css_content.replace("url('washi_bg.png')", f"url('data:image/png;base64,{b64_washi}')")
-        elif os.path.exists("washi_bg.jpg"):
-            with open("washi_bg.jpg", "rb") as img_w:
-                b64_washi = base64.b64encode(img_w.read()).decode()
-            css_content = css_content.replace("url('washi_bg.jpg')", f"url('data:image/jpeg;base64,{b64_washi}')")
-            
+    css_content = prepare_cached_css(file_name)
+    if css_content:
         st.markdown(f"<style>{css_content}</style>", unsafe_allow_html=True)
 
 local_css("style.css")
@@ -60,7 +59,8 @@ def init_connection():
     client = gspread.authorize(creds)
     return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
-# 4. FUNKCJA POMOCNICZA DO OBRAZÓW BASE64
+# 4. FUNKCJA DO OBRAZÓW BASE64 Z PAMIĘCIĄ PODRĘCZNĄ (ZAPOBIEGA ZAWIESZANIU)
+@st.cache_data(show_spinner=False)
 def get_base64_image(file_name):
     if os.path.exists(file_name):
         with open(file_name, "rb") as f:
@@ -69,17 +69,15 @@ def get_base64_image(file_name):
         return f"data:{mime};base64,{b64}"
     return "none"
 
-# 5. NOWY, DEDYKOWANY EKRAN LOGOWANIA
+# 5. EKRAN LOGOWANIA
 def login_screen():
     b64_logo_banner = get_base64_image("logowanie.png") 
     
     st.markdown(f"""
     <style>
-    /* 1. Całkowite ukrycie elementów nawigacji przed zalogowaniem */
     [data-testid="stSidebar"] {{ display: none !important; }}
     [data-testid="collapsedControl"] {{ display: none !important; }}
     
-    /* 2. Formatowanie kontenera z nową grafiką tła */
     .login-hero {{
         display: flex;
         flex-direction: column;
@@ -101,7 +99,6 @@ def login_screen():
         filter: drop-shadow(0px 25px 40px rgba(0,0,0,0.95));
     }}
     
-    /* 3. Stylowanie pola na hasło */
     div[data-testid="stTextInput"] label {{
         color: #C5A880 !important;
         font-family: 'Bebas Neue', sans-serif !important;
@@ -131,7 +128,6 @@ def login_screen():
         box-shadow: 0 0 20px rgba(186, 73, 73, 0.5), inset 0 5px 15px rgba(0,0,0,0.8) !important;
     }}
     
-    /* 4. Stylowanie gigantycznego przycisku ENTER */
     div[data-testid="stButton"] > button {{
         background: linear-gradient(to bottom, #8B2635, #5A1620) !important;
         border: 1px solid #BA4949 !important;
@@ -155,7 +151,6 @@ def login_screen():
         border-color: #E2DCD3 !important;
     }}
     
-    /* Personalizacja komunikatów błędów (Złe hasło) */
     div[data-testid="stNotification"] {{
         background-color: rgba(186, 73, 73, 0.1) !important;
         border: 1px solid #BA4949 !important;
@@ -215,7 +210,6 @@ def main():
 
     # --- MENU BOCZNE (SIDEBAR) ---
     with st.sidebar:
-        # ELEMENT 1: LOGO (Markdown)
         st.markdown("""<div class="sidebar-logo-container">
 <div style="font-size: 38px; color: #BA4949; margin-bottom: -15px; filter: drop-shadow(2px 2px 0px #050A15);">⚾</div>
 <div class="sidebar-logo-text">SQM <span>HUB</span></div>
@@ -236,40 +230,34 @@ def main():
             elif "POBOCZNE" in st.session_state["menu_option"]: st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
             else: st.session_state["menu_option"] = "COMMAND CENTER"
 
-        # Dynamika podświetlenia aktywnego elementu (przesunięcie +3, bo 1 to Logo, 2 to styl CSS)
         active_idx = opcje_menu.index(st.session_state["menu_option"]) + 3
 
-        # --- CSS MAGIA (Podmiana przycisków na grafiki) ---
         st.markdown(f"""
         <style>
-        /* Styl bazowy dla wszystkich przycisków na pasku bocznym */
         [data-testid="stSidebar"] div[data-testid="stButton"] > button {{
             color: transparent !important;
             background-color: transparent !important;
             border: none !important;
             box-shadow: none !important;
-            height: 82px !important; /* ZWIĘKSZONA WYSOKOŚĆ ABY PRZYCISKI MOGŁY BYĆ SZERSZE */
+            height: 65px !important;
             width: 100% !important;
             background-size: contain !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
             transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), filter 0.2s;
-            margin-bottom: -8px !important; /* ZBLIŻENIE DO SIEBIE, ŻEBY PASEK NIE BYŁ ZA DŁUGI */
+            margin-bottom: 2px !important;
             padding: 0 !important;
         }}
         
-        /* Ukrycie standardowego tekstu we wszystkich przyciskach */
         [data-testid="stSidebar"] div[data-testid="stButton"] > button p {{
             display: none !important;
         }}
         
-        /* Efekt hover dla wszystkich przycisków */
         [data-testid="stSidebar"] div[data-testid="stButton"] > button:hover {{
             transform: scale(1.03);
             filter: brightness(1.15);
         }}
         
-        /* Wyróżnienie aktywnego przycisku z menu */
         [data-testid="stSidebar"] div.element-container:nth-of-type({active_idx}) button {{
             filter: brightness(1.25) drop-shadow(0px 0px 12px rgba(197, 168, 128, 0.6)) !important;
             transform: scale(1.04) !important;
@@ -277,7 +265,6 @@ def main():
             position: relative;
         }}
 
-        /* Przypisanie konkretnych grafik do konkretnych pozycji (od 3 do 12) */
         [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_cmd}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_gantt}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gen}') !important; }}
@@ -289,45 +276,34 @@ def main():
         [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_baz}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_fin}') !important; }}
         
-        /* Przyciski Odśwież (14) i Wyloguj (15) po przesunięciu profilu */
-        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 15px !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(15) button {{ background-image: url('{b64_btn_logout}') !important; }}
         </style>
         """, unsafe_allow_html=True)
 
-        # ELEMENTY 3-12: Rysowanie przycisków MENU
+        # Rysowanie przycisków MENU
         if st.button("COMMAND CENTER", use_container_width=True): 
-            st.session_state["menu_option"] = "COMMAND CENTER"
-            st.rerun()
+            st.session_state["menu_option"] = "COMMAND CENTER"; st.rerun()
         if st.button("HARMONOGRAM (GANTT)", use_container_width=True): 
-            st.session_state["menu_option"] = "HARMONOGRAM (GANTT)"
-            st.rerun()
+            st.session_state["menu_option"] = "HARMONOGRAM (GANTT)"; st.rerun()
         if st.button("GENERATOR ZLECEŃ PRO", use_container_width=True): 
-            st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"
-            st.rerun()
+            st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"; st.rerun()
         if st.button("EVENTY / TARGI", use_container_width=True): 
-            st.session_state["menu_option"] = "EVENTY / TARGI"
-            st.rerun()
+            st.session_state["menu_option"] = "EVENTY / TARGI"; st.rerun()
         if st.button("EMPTIES TOWER", use_container_width=True): 
-            st.session_state["menu_option"] = "EMPTIES TOWER"
-            st.rerun()
+            st.session_state["menu_option"] = "EMPTIES TOWER"; st.rerun()
         if st.button("ZLECENIA POBOCZNE", use_container_width=True): 
-            st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
-            st.rerun()
+            st.session_state["menu_option"] = "ZLECENIA POBOCZNE"; st.rerun()
         if st.button("SUBRENTY", use_container_width=True): 
-            st.session_state["menu_option"] = "SUBRENTY"
-            st.rerun()
+            st.session_state["menu_option"] = "SUBRENTY"; st.rerun()
         if st.button("YESTECH EXPORT", use_container_width=True): 
-            st.session_state["menu_option"] = "YESTECH EXPORT"
-            st.rerun()
+            st.session_state["menu_option"] = "YESTECH EXPORT"; st.rerun()
         if st.button("BAZY DANYCH / SŁOWNIKI", use_container_width=True): 
-            st.session_state["menu_option"] = "BAZY DANYCH / SŁOWNIKI"
-            st.rerun()
+            st.session_state["menu_option"] = "BAZY DANYCH / SŁOWNIKI"; st.rerun()
         if st.button("FINANSE I RAPORTY", use_container_width=True): 
-            st.session_state["menu_option"] = "FINANSE I RAPORTY"
-            st.rerun()
+            st.session_state["menu_option"] = "FINANSE I RAPORTY"; st.rerun()
 
-        # ELEMENT 13: Karta profilu + grafika (Markdown)
+        # Karta profilu
         st.markdown(f"""<div class="sidebar-profile-card">
 <div style="display: flex; align-items: center; gap: 15px;">
 <div class="profile-avatar" style="background-image: url('{b64_washi_inline}');">
@@ -348,16 +324,12 @@ def main():
 </div>
 """, unsafe_allow_html=True)
 
-        # ELEMENTY 14-15: Przyciski operacyjne
         if st.button("ODŚWIEŻ DANE / REFRESH", use_container_width=True): 
-            st.cache_data.clear()
-            st.rerun()
+            st.cache_data.clear(); st.rerun()
 
         if st.button("WYLOGUJ / ログアウト", use_container_width=True): 
-            st.session_state["zalogowany"] = False
-            st.rerun()
+            st.session_state["zalogowany"] = False; st.rerun()
 
-    # --- ROUTING MODUŁÓW ---
     wybrany_modul = st.session_state["menu_option"]
     
     if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
