@@ -50,12 +50,13 @@ def render(sh):
         for _, row in df_zlecenia.iterrows():
             nr = row.get("Numer zlecenia", "Brak NR")
             projekt = row.get("ID Projektu", "")
+            przewoznik = row.get("Zleceniobiorca", "Brak danych")
             
             # Załadunki PRO
             d_zal = normalize_date(row.get("Data załadunku"))
             if d_zal:
                 all_events[d_zal].append({
-                    "typ": "ZAŁADUNEK (PRO)", "nr": nr, 
+                    "typ": "ZAŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
                     "szczegoly": f"Projekt: {projekt} | Miejsce: {row.get('Miejsce Zaladunku', '')}", 
                     "kolor": "#C9A471", "ikona": "🟢"
                 })
@@ -64,7 +65,7 @@ def render(sh):
             d_roz = normalize_date(row.get("Data rozładunku"))
             if d_roz:
                 all_events[d_roz].append({
-                    "typ": "ROZŁADUNEK (PRO)", "nr": nr, 
+                    "typ": "ROZŁADUNEK (PRO)", "nr": nr, "przewoznik": przewoznik,
                     "szczegoly": f"Projekt: {projekt} | Miejsce: {row.get('Miejsce Rozladunku', '')}", 
                     "kolor": "#83A5DB", "ikona": "🏁"
                 })
@@ -82,8 +83,8 @@ def render(sh):
             d_zal_p = normalize_date(row.get("Data Załadunku"))
             if d_zal_p and not is_pro_order:
                 all_events[d_zal_p].append({
-                    "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, 
-                    "szczegoly": f"Przewoźnik: {przewoznik} | Opis: {row.get('Opis Ładunku / Trasy', '')}", 
+                    "typ": "ZAŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
+                    "szczegoly": f"Opis: {row.get('Opis Ładunku / Trasy', '')}", 
                     "kolor": "#AF8FC9", "ikona": "🟡"
                 })
             
@@ -91,8 +92,8 @@ def render(sh):
             d_roz_p = normalize_date(row.get("Data Rozładunku"))
             if d_roz_p and not is_pro_order:
                 all_events[d_roz_p].append({
-                    "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, 
-                    "szczegoly": f"Przewoźnik: {przewoznik} | Cel osiągnięty", 
+                    "typ": "ROZŁADUNEK (POBOCZNE)", "nr": nr, "przewoznik": przewoznik,
+                    "szczegoly": f"Cel osiągnięty", 
                     "kolor": "#77A385", "ikona": "🚩"
                 })
                 
@@ -100,8 +101,8 @@ def render(sh):
             d_plat_p = normalize_date(row.get("Data Płatności"))
             if d_plat_p:
                 all_events[d_plat_p].append({
-                    "typ": "TERMIN PŁATNOŚCI FAKTURY", "nr": nr, 
-                    "szczegoly": f"Przewoźnik: {przewoznik} (Ostateczny dzień płatności)", 
+                    "typ": "TERMIN PŁATNOŚCI FAKTURY", "nr": nr, "przewoznik": przewoznik,
+                    "szczegoly": f"Ostateczny dzień płatności", 
                     "kolor": "#BA4949", "ikona": "💳"
                 })
 
@@ -240,6 +241,7 @@ def render(sh):
         for nr in sorted(grouped_events.keys()):
             events = grouped_events[nr]
             main_color = events[0]['kolor']
+            nazwa_przew = events[0].get('przewoznik', 'Brak przewoźnika')
             
             c1, c2 = st.columns([5, 1])
             
@@ -262,8 +264,11 @@ def render(sh):
                 # Główny kontener zlecenia (Karta)
                 st.markdown(f"""
                 <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 10px; flex-direction: column; align-items: flex-start; padding: 16px 24px;">
-                    <div style="margin-bottom: 10px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom: 8px;">
-                        <span class="cr-title" style="font-size: 20px !important;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
+                    <div style="margin-bottom: 10px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.05); padding-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+                        <span class="cr-title" style="font-size: 20px !important; margin: 0;">🚚 Zlecenie: <span style="color: {main_color} !important;">{nr}</span></span>
+                        <span class="cr-text" style="font-size: 14px !important; font-weight: 700; color: #1A2530 !important; display: flex; align-items: center; gap: 5px;">
+                            👤 {nazwa_przew}
+                        </span>
                     </div>
                     <div style="width: 100%;">
                         {events_html}
