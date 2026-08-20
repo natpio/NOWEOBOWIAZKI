@@ -60,25 +60,7 @@ def init_connection():
     client = gspread.authorize(creds)
     return client.open("NOWY PODZIAŁ OBOWIĄZKÓW")
 
-# 4. EKRAN LOGOWANIA
-def login_screen():
-    st.markdown("<div style='height: 15vh;'></div>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1.2, 1])
-    with col2:
-        st.markdown("""<div class='login-box' style='background-color: rgba(5, 10, 21, 0.9); padding: 40px; border-radius: 8px; border: 2px dashed #BA4949; text-align: center;'>
-<div style='font-size: 40px; margin-bottom: 10px; color: #C5A880;'>⚾</div>
-<h2 style='color: #E2DCD3; letter-spacing: 2px; margin-bottom: 5px; font-weight: 600;'>SQM HUB</h2>
-<p style='color: #8C8477; font-size: 11px; letter-spacing: 3px; margin-bottom: 30px;'>ヤスミ・ハブ</p>""", unsafe_allow_html=True)
-        pwd = st.text_input("Hasło dostępu / パスワード", type="password")
-        if st.button("WEJDŹ / 入る", use_container_width=True, type="primary"):
-            if pwd == st.secrets.get("app_password", "sqm2026"):
-                st.session_state["zalogowany"] = True
-                st.rerun()
-            else:
-                st.error("Nieprawidłowe hasło.")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-# Funkcja pomocnicza do ładowania obrazów Base64
+# 4. FUNKCJA POMOCNICZA DO OBRAZÓW BASE64 (Przeniesiona wyżej dla ekranu logowania)
 def get_base64_image(file_name):
     if os.path.exists(file_name):
         with open(file_name, "rb") as f:
@@ -87,7 +69,64 @@ def get_base64_image(file_name):
         return f"data:{mime};base64,{b64}"
     return "none"
 
-# 5. GŁÓWNA LOGIKA APLIKACJI
+# 5. EKRAN LOGOWANIA
+def login_screen():
+    st.markdown("<div style='height: 12vh;'></div>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1.2, 1])
+    
+    with col2:
+        b64_leather = get_base64_image("4.png")
+        
+        # Nowy skórzany szyld nad polem logowania
+        st.markdown(f"""
+        <div style='
+            background-image: url("{b64_leather}");
+            background-size: 100% 100%;
+            background-position: center;
+            background-repeat: no-repeat;
+            height: 160px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding-left: 12%; /* Odsunięcie od metalowej strzałki z lewej strony */
+        '>
+            <div style='display: flex; align-items: center; gap: 20px;'>
+                <div style='font-size: 55px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.5));'>⚾</div>
+                <div style='text-align: left; padding-top: 5px;'>
+                    <h2 style='
+                        color: #9C7D58; 
+                        font-family: "Bebas Neue", sans-serif; 
+                        font-size: 60px; 
+                        letter-spacing: 4px; 
+                        margin: 0; 
+                        line-height: 0.9;
+                        text-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 0px rgba(255,255,255,0.1);
+                    '>SQM HUB</h2>
+                    <p style='
+                        color: #5c4328; 
+                        font-size: 13px; 
+                        letter-spacing: 6px; 
+                        margin: 0; 
+                        font-weight: 800;
+                        text-shadow: 1px 1px 1px rgba(255,255,255,0.15);
+                    '>ヤスミ・ハブ</p>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        pwd = st.text_input("Hasło dostępu / パスワード", type="password")
+        if st.button("WEJDŹ / 入る", use_container_width=True, type="primary"):
+            if pwd == st.secrets.get("app_password", "sqm2026"):
+                st.session_state["zalogowany"] = True
+                st.rerun()
+            else:
+                st.error("Nieprawidłowe hasło.")
+
+# 6. GŁÓWNA LOGIKA APLIKACJI
 def main():
     if "zalogowany" not in st.session_state: st.session_state["zalogowany"] = False
     if not st.session_state["zalogowany"]:
@@ -142,7 +181,7 @@ def main():
             elif "POBOCZNE" in st.session_state["menu_option"]: st.session_state["menu_option"] = "ZLECENIA POBOCZNE"
             else: st.session_state["menu_option"] = "COMMAND CENTER"
 
-        # Dynamika podświetlenia aktywnego elementu (przesunięcie +3 bo 1 to Logo, 2 to styl CSS)
+        # Dynamika podświetlenia aktywnego elementu (przesunięcie +3, bo 1 to Logo, 2 to styl CSS)
         active_idx = opcje_menu.index(st.session_state["menu_option"]) + 3
 
         # --- CSS MAGIA (Podmiana przycisków na grafiki) ---
@@ -183,7 +222,7 @@ def main():
             position: relative;
         }}
 
-        /* Przypisanie konkretnych grafik do konkretnych pozycji (teraz od 3 do 12) */
+        /* Przypisanie konkretnych grafik do konkretnych pozycji (od 3 do 12) */
         [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_cmd}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_gantt}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gen}') !important; }}
