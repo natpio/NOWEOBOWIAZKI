@@ -841,6 +841,8 @@ def render_project_card(
         with st.popover("⚙️ EDYTUJ", use_container_width=True):
             st.markdown("<div style=\"font-family:'Playball'; color:#C5A880; font-size:25px; margin-bottom:12px;\">Korekta Projektu</div>", unsafe_allow_html=True)
 
+            # Dodano pole edycji numeru projektu
+            e_proj_num = st.text_input("🔢 Numer Projektu", value=safe_text(row.get("Numery_Projektow"), ""), key=f"edit_proj_{proj_id}")
             e_loc = st.text_input("📍 Lokalizacja", value=safe_text(row.get("Lokalizacja_Aktualna"), ""), key=f"edit_loc_{proj_id}")
             e_auto = st.text_input("🚚 Auto / Kierowca", value=safe_text(row.get("Auto_Kierowca"), ""), key=f"edit_auto_{proj_id}")
 
@@ -859,7 +861,7 @@ def render_project_card(
                     pd.Series([
                         row["ID_Empties"],
                         row["Nazwa_Eventu"],
-                        row["Numery_Projektow"],
+                        e_proj_num, # Aktualizacja numeru projektu w bazie
                         STATUSY[idx],
                         e_loc,
                         e_auto,
