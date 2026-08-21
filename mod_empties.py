@@ -541,35 +541,135 @@ def inject_css():
 
 
     /* =====================================================
-       BUTTONS
+       BASEBALL BUTTONS — LEATHER + STITCHING
+       Prawdziwe przyciski Streamlita, stylizowane CSS-em.
     ===================================================== */
 
-    div[data-testid="stButton"] button {
-        background: #111318 !important;
-        color: #BCA989 !important;
-        border: 1px solid rgba(197,168,128,0.20) !important;
-        border-radius: 4px !important;
-        min-height: 29px !important;
-        padding: 0 4px !important;
+    div[data-testid="stButton"] button,
+    div[data-testid="stFormSubmitButton"] button {
+        position: relative !important;
+        overflow: hidden !important;
+        min-height: 34px !important;
+        padding: 0 14px !important;
+        border-radius: 18px !important;
+        border: 2px solid #7E2E2E !important;
+        color: #F5EBDD !important;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.10), transparent 28%),
+            repeating-linear-gradient(0deg, rgba(80,35,20,0.12) 0 2px, rgba(255,255,255,0.025) 2px 4px),
+            linear-gradient(145deg, #8D3436 0%, #6F252A 52%, #48191D 100%) !important;
+        box-shadow:
+            inset 0 2px 2px rgba(255,255,255,0.16),
+            inset 0 -3px 5px rgba(0,0,0,0.45),
+            0 4px 10px rgba(0,0,0,0.40) !important;
         font-family: 'Bebas Neue', sans-serif !important;
-        font-size: 12px !important; /* Powiększona czcionka na guzikach */
-        letter-spacing: 1px !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+        letter-spacing: 1.4px !important;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.65) !important;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease !important;
     }
 
-    div[data-testid="stButton"] button:hover {
-        background: #C5A880 !important;
-        color: #080B11 !important;
-        border-color: #F4EFE5 !important;
+    /* Optyczne czerwone szwy baseballowe na krawędzi */
+    div[data-testid="stButton"] button::before,
+    div[data-testid="stFormSubmitButton"] button::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: 3px !important;
+        border-radius: 15px !important;
+        border: 1px dashed rgba(246, 224, 193, 0.72) !important;
+        box-shadow: inset 0 0 0 1px rgba(65,18,18,0.28) !important;
+        pointer-events: none !important;
     }
 
-    div[data-testid="stButton"] button[kind="primary"] {
-        background: #8B3038 !important;
-        color: #F9F3E9 !important;
-        border-color: #BA4949 !important;
+    div[data-testid="stButton"] button::after,
+    div[data-testid="stFormSubmitButton"] button::after {
+        content: "" !important;
+        position: absolute !important;
+        left: 12px !important;
+        right: 12px !important;
+        top: 4px !important;
+        height: 1px !important;
+        background: rgba(255,255,255,0.16) !important;
+        pointer-events: none !important;
     }
 
-    div[data-testid="stButton"] button[kind="primary"]:hover {
-        background: #BA4949 !important;
+    div[data-testid="stButton"] button:hover,
+    div[data-testid="stFormSubmitButton"] button:hover {
+        filter: brightness(1.14) saturate(1.08) !important;
+        transform: translateY(-1px) !important;
+        box-shadow:
+            inset 0 2px 3px rgba(255,255,255,0.20),
+            inset 0 -3px 5px rgba(0,0,0,0.40),
+            0 6px 16px rgba(0,0,0,0.48),
+            0 0 10px rgba(186,73,73,0.16) !important;
+        border-color: #C85A5A !important;
+    }
+
+    div[data-testid="stButton"] button:active,
+    div[data-testid="stFormSubmitButton"] button:active {
+        transform: translateY(2px) scale(0.985) !important;
+        box-shadow:
+            inset 0 3px 6px rgba(0,0,0,0.48),
+            0 2px 5px rgba(0,0,0,0.35) !important;
+    }
+
+    /* Primary = główna akcja: mocniejsza, stadionowa czerwień */
+    div[data-testid="stButton"] button[kind="primary"],
+    div[data-testid="stFormSubmitButton"] button[kind="primary"] {
+        min-height: 38px !important;
+        border-color: #D16A61 !important;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.15), transparent 30%),
+            repeating-linear-gradient(0deg, rgba(70,20,20,0.13) 0 2px, rgba(255,255,255,0.025) 2px 4px),
+            linear-gradient(145deg, #B33D43 0%, #8B3038 55%, #651F27 100%) !important;
+        box-shadow:
+            inset 0 2px 3px rgba(255,255,255,0.18),
+            inset 0 -4px 6px rgba(0,0,0,0.42),
+            0 5px 13px rgba(0,0,0,0.45) !important;
+    }
+
+    div[data-testid="stButton"] button[kind="primary"]::before,
+    div[data-testid="stFormSubmitButton"] button[kind="primary"]::before {
+        border-color: rgba(250,232,205,0.82) !important;
+    }
+
+    /* Przyciski drugorzędne: wygląd jasnej skóry baseballowej */
+    div[data-testid="stButton"] button:not([kind="primary"]),
+    div[data-testid="stFormSubmitButton"] button:not([kind="primary"]) {
+        color: #17191D !important;
+        text-shadow: none !important;
+        border-color: #A36B4B !important;
+        background:
+            linear-gradient(180deg, rgba(255,255,255,0.48), transparent 30%),
+            repeating-linear-gradient(0deg, rgba(120,75,42,0.06) 0 2px, rgba(255,255,255,0.08) 2px 4px),
+            linear-gradient(145deg, #F2E4CC 0%, #D9C3A4 52%, #B99A78 100%) !important;
+        box-shadow:
+            inset 0 2px 2px rgba(255,255,255,0.65),
+            inset 0 -3px 5px rgba(78,48,29,0.25),
+            0 4px 10px rgba(0,0,0,0.35) !important;
+    }
+
+    div[data-testid="stButton"] button:not([kind="primary"]):hover,
+    div[data-testid="stFormSubmitButton"] button:not([kind="primary"]):hover {
+        color: #111318 !important;
+        border-color: #D6A16D !important;
+        filter: brightness(1.08) !important;
+    }
+
+    /* Popovery zachowują baseballowy charakter */
+    div[data-testid="stPopover"] button {
+        border-radius: 18px !important;
+    }
+
+    /* Na bardzo wąskich ekranach nie przesadzamy z odstępami */
+    @media (max-width: 700px) {
+        div[data-testid="stButton"] button,
+        div[data-testid="stFormSubmitButton"] button {
+            padding: 0 9px !important;
+            font-size: 11px !important;
+            letter-spacing: 1px !important;
+        }
     }
 
 
