@@ -323,7 +323,7 @@ def inject_css():
         min-height: 92px;
         padding: 15px 17px;
         margin-top: 10px;
-        margin-bottom: 11px;
+        margin-bottom: 25px;
         border-radius: 7px;
         border: 1px solid rgba(255,255,255,0.18);
         box-shadow:
@@ -407,13 +407,13 @@ def inject_css():
                 rgba(29,31,34,0.98),
                 rgba(17,19,22,0.98)
             );
-        border: 1px solid rgba(197,168,128,0.16);
+        border: 1px solid rgba(197,168,128,0.25);
         border-radius: 6px;
         padding: 13px;
-        margin-bottom: 5px;
+        margin-bottom: 15px; /* Dodano więcej luzu od dołu w widoku siatki */
         overflow: hidden;
         box-shadow:
-            0 5px 13px rgba(0,0,0,0.30);
+            0 5px 15px rgba(0,0,0,0.40);
     }
 
     .project-card::after {
@@ -493,7 +493,7 @@ def inject_css():
 
     .progress-wrap {
         margin-top: 12px;
-        margin-bottom: 4px;
+        margin-bottom: 12px;
     }
 
     .progress-label {
@@ -531,12 +531,12 @@ def inject_css():
         background: rgba(0,0,0,0.18);
         border: 1px dashed rgba(197,168,128,0.18);
         border-radius: 6px;
-        padding: 20px 10px;
+        padding: 40px 10px;
         margin-bottom: 15px;
         color: #69665F;
         font-family: 'Bebas Neue', sans-serif;
         letter-spacing: 1.5px;
-        font-size: 11px;
+        font-size: 18px;
     }
 
 
@@ -552,7 +552,7 @@ def inject_css():
         min-height: 29px !important;
         padding: 0 4px !important;
         font-family: 'Bebas Neue', sans-serif !important;
-        font-size: 10px !important;
+        font-size: 12px !important; /* Powiększona czcionka na guzikach */
         letter-spacing: 1px !important;
     }
 
@@ -652,9 +652,9 @@ def render_scoreboard(df_event, search_query):
     c1, c2, c3, c4 = st.columns(4, gap="small")
 
     cards = [
-        ("PROJECTS", total),
+        ("ALL PROJECTS", total),
         ("IN BUFFER", buffer_count),
-        ("READY", ready_count),
+        ("READY FOR PICKUP", ready_count),
         ("IN TRANSIT", transit_count),
     ]
 
@@ -822,100 +822,37 @@ def render_project_card(
 
     render_progress(idx)
 
-    b1, b2, b3, b4 = st.columns(
-        [1, 1, 1, 1],
-        gap="small",
-    )
-
-    # --------------------------------------------------------
-    # PREVIOUS
-    # --------------------------------------------------------
-
+    # Układ przycisków 2x2: (Wstecz / Dalej) oraz (Edytuj / Usuń)
+    b1, b2 = st.columns(2, gap="small")
+    
     with b1:
-
         if idx > 0:
-
-            if st.button(
-                "◀ BACK",
-                key=f"back_{proj_id}",
-                use_container_width=True,
-                help="Cofnij projekt do poprzedniej bazy",
-            ):
-
-                update_status(
-                    row,
-                    STATUSY[idx - 1],
-                )
-
-    # --------------------------------------------------------
-    # EDIT
-    # --------------------------------------------------------
+            if st.button("◀ WSTECZ", key=f"back_{proj_id}", use_container_width=True):
+                update_status(row, STATUSY[idx - 1])
 
     with b2:
+        if idx < len(STATUSY) - 1:
+            if st.button("DALEJ ▶", key=f"next_{proj_id}", type="primary", use_container_width=True):
+                update_status(row, STATUSY[idx + 1])
 
-        with st.popover(
-            "EDIT",
-            use_container_width=True,
-        ):
+    b3, b4 = st.columns(2, gap="small")
+    
+    with b3:
+        with st.popover("⚙️ EDYTUJ", use_container_width=True):
+            st.markdown("<div style=\"font-family:'Playball'; color:#C5A880; font-size:25px; margin-bottom:12px;\">Korekta Projektu</div>", unsafe_allow_html=True)
 
-            html_edit = """
-            <div style="font-family:'Playball'; color:#C5A880; font-size:25px; margin-bottom:12px;">
-                Project Correction
-            </div>
-            """
-            st.markdown(html_edit.replace('\n', ''), unsafe_allow_html=True)
-
-            e_loc = st.text_input(
-                "📍 Lokalizacja",
-                value=safe_text(
-                    row.get("Lokalizacja_Aktualna"),
-                    "",
-                ),
-                key=f"edit_loc_{proj_id}",
-            )
-
-            e_auto = st.text_input(
-                "🚚 Auto / Kierowca",
-                value=safe_text(
-                    row.get("Auto_Kierowca"),
-                    "",
-                ),
-                key=f"edit_auto_{proj_id}",
-            )
+            e_loc = st.text_input("📍 Lokalizacja", value=safe_text(row.get("Lokalizacja_Aktualna"), ""), key=f"edit_loc_{proj_id}")
+            e_auto = st.text_input("🚚 Auto / Kierowca", value=safe_text(row.get("Auto_Kierowca"), ""), key=f"edit_auto_{proj_id}")
 
             try:
-
-                parsed_date = datetime.datetime.strptime(
-                    safe_text(row.get("Data_Akcji")),
-                    "%Y-%m-%d",
-                ).date()
-
+                parsed_date = datetime.datetime.strptime(safe_text(row.get("Data_Akcji")), "%Y-%m-%d").date()
             except Exception:
-
                 parsed_date = datetime.datetime.now().date()
 
-            e_date = st.date_input(
-                "📅 Data",
-                value=parsed_date,
-                key=f"edit_date_{proj_id}",
-            )
+            e_date = st.date_input("📅 Data", value=parsed_date, key=f"edit_date_{proj_id}")
+            e_notes = st.text_area("📝 Notatki", value=safe_text(row.get("Notatki"), ""), key=f"edit_notes_{proj_id}")
 
-            e_notes = st.text_area(
-                "📝 Notatki",
-                value=safe_text(
-                    row.get("Notatki"),
-                    "",
-                ),
-                key=f"edit_notes_{proj_id}",
-            )
-
-            if st.button(
-                "SAVE UPDATE",
-                key=f"save_{proj_id}",
-                type="primary",
-                use_container_width=True,
-            ):
-
+            if st.button("ZAPISZ ZMIANY", key=f"save_{proj_id}", type="primary", use_container_width=True):
                 db.update_single_row_safe(
                     "DB_Empties",
                     sheet_row,
@@ -930,75 +867,23 @@ def render_project_card(
                         e_notes,
                     ]),
                 )
-
                 st.cache_data.clear()
                 st.rerun()
-
-    # --------------------------------------------------------
-    # DELETE
-    # --------------------------------------------------------
-
-    with b3:
-
-        with st.popover(
-            "DEL",
-            use_container_width=True,
-        ):
-
-            html_del = """
-            <div style="color:#D85B5B; font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px;">
-                REMOVE PROJECT?
-            </div>
-            """
-            st.markdown(html_del.replace('\n', ''), unsafe_allow_html=True)
-
-            st.caption(
-                f"Projekt #{project_number} zostanie usunięty."
-            )
-
-            if st.button(
-                "CONFIRM DELETE",
-                key=f"delete_{proj_id}",
-                type="primary",
-                use_container_width=True,
-            ):
-
-                db.delete_row(
-                    "DB_Empties",
-                    sheet_row,
-                )
-
-                st.cache_data.clear()
-                st.rerun()
-
-    # --------------------------------------------------------
-    # NEXT
-    # --------------------------------------------------------
 
     with b4:
+        with st.popover("🗑️ USUŃ", use_container_width=True):
+            st.markdown("<div style=\"color:#D85B5B; font-family:'Bebas Neue'; font-size:18px; letter-spacing:1px;\">POTWIERDŹ USUNIĘCIE</div>", unsafe_allow_html=True)
+            st.caption(f"Projekt #{project_number} zostanie usunięty na zawsze.")
+            if st.button("USUŃ PROJEKT", key=f"delete_{proj_id}", type="primary", use_container_width=True):
+                db.delete_row("DB_Empties", sheet_row)
+                st.cache_data.clear()
+                st.rerun()
 
-        if idx < len(STATUSY) - 1:
-
-            if st.button(
-                "NEXT BASE ▶",
-                key=f"next_{proj_id}",
-                use_container_width=True,
-                help="Przenieś projekt do następnego etapu",
-            ):
-
-                update_status(
-                    row,
-                    STATUSY[idx + 1],
-                )
-
-    st.markdown(
-        "<div style='height:14px;'></div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("<div style='height:14px;'></div>", unsafe_allow_html=True)
 
 
 # ============================================================
-# INNING
+# INNING (RENDEROWANIE ZAKŁADKI)
 # ============================================================
 
 def render_inning(
@@ -1009,25 +894,15 @@ def render_inning(
 ):
 
     config = INNINGS[status_index]
-
     status_name = STATUSY[status_index]
-
-    df_status = df_event[
-        df_event["Status"] == status_name
-    ]
-
+    df_status = df_event[df_event["Status"] == status_name]
     count = len(df_status)
 
     batter_style = ""
-
     if batter_b64:
-
-        batter_style = f"""
-            background-image: url("data:image/png;base64,{batter_b64}"); background-size: contain; background-position: right center; background-repeat: no-repeat;
-        """
+        batter_style = f'background-image: url("data:image/png;base64,{batter_b64}"); background-size: contain; background-position: right center; background-repeat: no-repeat;'
 
     with container:
-
         html_header = f"""
         <div class="inning-header" style="background: linear-gradient(135deg, {config['bg']}, {config['bg2']}); color:{config['accent']}; border-color:{config['border']}; {batter_style}">
             <div class="inning-number">INNING {config['number']}</div>
@@ -1040,23 +915,18 @@ def render_inning(
         st.markdown(html_header.replace('\n', ''), unsafe_allow_html=True)
 
         if df_status.empty:
-
             html_empty = """
             <div class="empty-state">
-                NO PLAYERS ON BASE
+                NO PROJECTS ON THIS BASE
             </div>
             """
             st.markdown(html_empty.replace('\n', ''), unsafe_allow_html=True)
-
         else:
-
-            for _, row in df_status.iterrows():
-
-                render_project_card(
-                    row=row,
-                    idx=status_index,
-                    style=config,
-                )
+            # SIATKA KART: Zamiast jednej pionowej listy, rozrzucamy je w 3 kolumnach
+            cols = st.columns(3, gap="large")
+            for i, (_, row) in enumerate(df_status.iterrows()):
+                with cols[i % 3]:
+                    render_project_card(row, status_index, config)
 
 
 # ============================================================
@@ -1495,62 +1365,22 @@ def render(sh):
             st.markdown(html_divider.replace('\n', ''), unsafe_allow_html=True)
 
             # ------------------------------------------------
-            # KANBAN
+            # ZAKŁADKI (TABS) ZAMIAST PIONOWEGO KANBANA
             # ------------------------------------------------
-
-            col1, col2, col3 = st.columns(
-                3,
-                gap="large",
-            )
-
-            render_inning(
-                df_event,
-                0,
-                col1,
-                batter_b64,
-            )
-
-            render_inning(
-                df_event,
-                1,
-                col1,
-                batter_b64,
-            )
-
-            render_inning(
-                df_event,
-                2,
-                col1,
-                batter_b64,
-            )
-
-            render_inning(
-                df_event,
-                3,
-                col2,
-                batter_b64,
-            )
-
-            render_inning(
-                df_event,
-                4,
-                col2,
-                batter_b64,
-            )
-
-            render_inning(
-                df_event,
-                5,
-                col3,
-                batter_b64,
-            )
-
-            render_inning(
-                df_event,
-                6,
-                col3,
-                batter_b64,
-            )
+            
+            # Generujemy dynamiczne nazwy zakładek z licznikiem projektów
+            tab_titles = []
+            for i, config in enumerate(INNINGS):
+                status_name = STATUSY[i]
+                count = len(df_event[df_event["Status"] == status_name])
+                # Wyciągamy emoji ze statusu (np. 🚚 z "0. 🚚 Dostarczone...")
+                emoji = status_name.split(" ")[1] if len(status_name.split(" ")) > 1 else ""
+                tab_titles.append(f"{emoji} {config['title']} [{count}]")
+            
+            inning_tabs = st.tabs(tab_titles)
+            
+            for i, tab in enumerate(inning_tabs):
+                render_inning(df_event, i, tab, batter_b64)
 
     # ========================================================
     # ADD PROJECT
