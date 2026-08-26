@@ -8,3 +8,4 @@ pillow
 oauth2client
 fpdf
 openpyxl
+streamlit-calendar
