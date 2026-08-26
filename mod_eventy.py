@@ -176,8 +176,10 @@ def render(sh):
             
             df_widok = df_aktywne.copy()
             
+            # --- ZABEZPIECZENIE PANDAS: empty check przed .apply() ---
             if st.session_state["filtr_eventow"] == "BrakCMR":
-                df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1)]
+                if not df_widok.empty:
+                    df_widok = df_widok[df_widok.apply(wymaga_cmr, axis=1).astype(bool)]
             elif st.session_state["filtr_eventow"] == "BrakPOD":
                 df_widok = df_widok[df_widok.get("CMR_Podpisane_POD", pd.Series()) == "NIE"]
             elif st.session_state["filtr_eventow"] == "BrakFaktury":
@@ -225,11 +227,11 @@ def render(sh):
                         except: pass
                         
                     try:
-                        if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych', 'N/A']:
+                        if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
                             dt_powrot = pd.to_datetime(powrot, errors='coerce')
                             if pd.notnull(dt_powrot): return dt_powrot.date() < dzisiaj_date
                             
-                        elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych', 'N/A']:
+                        elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
                             dt_roz = pd.to_datetime(roz, errors='coerce')
                             if pd.notnull(dt_roz): return dt_roz.date() < dzisiaj_date
                         else:
@@ -332,10 +334,14 @@ def render(sh):
                                         st.session_state["wybrany_event_id"] = row.get('ID_Zlecenia')
                                         st.rerun()
 
-                mask_zamkniete = df_widok.apply(is_past_end_date, axis=1)
-                
-                df_zam = df_widok[mask_zamkniete]
-                df_reszta = df_widok[~mask_zamkniete]
+                # --- ZABEZPIECZENIE PANDAS: empty check przed .apply() na empty dataframe ---
+                if df_widok.empty:
+                    df_zam = df_widok.copy()
+                    df_reszta = df_widok.copy()
+                else:
+                    mask_zamkniete = df_widok.apply(is_past_end_date, axis=1).astype(bool)
+                    df_zam = df_widok[mask_zamkniete]
+                    df_reszta = df_widok[~mask_zamkniete]
                 
                 df_plan = df_reszta[df_reszta['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja", na=False)]
                 df_zal = df_reszta[df_reszta['Faza_Procesu'].str.lower().str.contains("załadunek", na=False)]
@@ -607,8 +613,9 @@ def render(sh):
                                 u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
                                 usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj datę", key=f"del_roz2_{dane_eventu['ID_Zlecenia']}")
                                 
-                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi")))
-                                usun_powrot = r_ed3.checkbox("🗑️ Skasuj datę", key=f"del_powrot_{dane_eventu['ID_Zlecenia']}")
+                                obecny_koniec = parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi"))
+                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=obecny_koniec if obecny_koniec else pd.Timestamp.today().date())
+                                usun_powrot = r_ed3.checkbox("🗑️ Skasuj datę powrotu", value=(obecny_koniec is None))
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
