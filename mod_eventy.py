@@ -603,12 +603,12 @@ def render(sh):
                                         pass
 
                                 u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=roz_1_val)
-                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
-                                usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj Rozładunek 2")
                                 
-                                obecny_koniec = parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi"))
-                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=obecny_koniec if obecny_koniec else pd.Timestamp.today().date())
-                                usun_powrot = r_ed3.checkbox("🗑️ Skasuj datę powrotu", value=(obecny_koniec is None))
+                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
+                                usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj datę", key=f"del_roz2_{dane_eventu['ID_Zlecenia']}")
+                                
+                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi")))
+                                usun_powrot = r_ed3.checkbox("🗑️ Skasuj datę", key=f"del_powrot_{dane_eventu['ID_Zlecenia']}")
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
@@ -857,7 +857,7 @@ def render(sh):
                 data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
                 
                 data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
-                usun_roz_2_nowe = r_form2.checkbox("🗑️ Skasuj Rozładunek 2")
+                usun_roz_2_nowe = r_form2.checkbox("🗑️ Skasuj datę")
                 
                 data_powrotu_baza = r_form3.date_input("Powrót do bazy (Koniec):", value=None)
                 usun_powrot_nowe = r_form3.checkbox("🗑️ Skasuj datę powrotu")
