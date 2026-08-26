@@ -194,14 +194,19 @@ def render(sh):
             with col_lista:
                 t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
                 
-                # --- POPRAWIONA Funkcja do oceny czy zlecenie historycznie wygasło ---
                 from datetime import datetime
                 dzisiaj_date = datetime.now().date()
                 
                 def is_past_end_date(row):
                     faza = str(row.get('Faza_Procesu', '')).lower()
+                    
+                    # Jeśli jest już zamknięte ręcznie, zostawiamy zamknięte
                     if "zamknięte" in faza: 
                         return True
+                    
+                    # ZABEZPIECZENIE: Nie ruszamy zleceń, w których celowo ustawiłeś status początkowy
+                    if "planowanie" in faza or "inicjacja" in faza or "załadunek" in faza:
+                        return False
                     
                     powrot = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
                     notatki = str(row.get('Notatki', ''))
@@ -220,18 +225,17 @@ def render(sh):
                         if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
                             return pd.to_datetime(powrot).date() < dzisiaj_date
                             
-                        # 2. Jeśli nie ma Powrotu, ale jest wpisany Rozładunek, sprawdzamy czy minął
+                        # 2. Jeśli nie ma Powrotu, to znaczy że to "Tylko Dostawa". Wtedy koniec to Rozładunek
                         elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
                             return pd.to_datetime(roz).date() < dzisiaj_date
                             
-                        # 3. Jeśli nie wpisano ŻADNEJ daty końcowej, NIE ZAMYKAMY automatycznie!
+                        # 3. Brak jakichkolwiek dat końcowych -> nie ruszamy
                         else:
                             return False
                     except:
                         pass
                     
                     return False
-                # ------------------------------------------------------------------
 
                 def render_list(df_subset, tab_container):
                     with tab_container:
