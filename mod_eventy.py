@@ -4,9 +4,17 @@ import datetime
 import os
 import base64
 import time
+import re
 import db
 from db import load_data, generuj_smart_id
 from mod_generator_pdf import generate_cmr_excel, get_cmr_city_format
+
+def parse_date_safe(d_str):
+    """Bezpieczne konwertowanie dat z bazy (String/NaT/NaN) na obiekt daty pythona."""
+    if pd.isna(d_str) or str(d_str).strip() in ["", "None", "nan", "NaT", "N/A", "Brak danych"]:
+        return None
+    dt = pd.to_datetime(str(d_str).strip(), errors='coerce')
+    return dt.date() if pd.notnull(dt) else None
 
 def get_full_address(place_name, df_miejsca):
     """Funkcja pomocnicza do pobierania pełnego adresu z bazy na potrzeby CMR."""
@@ -194,25 +202,20 @@ def render(sh):
             with col_lista:
                 t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
                 
-                from datetime import datetime
-                dzisiaj_date = datetime.now().date()
+                dzisiaj_date = datetime.date.today()
                 
                 def is_past_end_date(row):
                     faza = str(row.get('Faza_Procesu', '')).lower()
-                    
-                    # Jeśli jest już zamknięte ręcznie, zostawiamy zamknięte
                     if "zamknięte" in faza: 
                         return True
                     
-                    # ZABEZPIECZENIE: Nie ruszamy zleceń, w których celowo ustawiłeś status początkowy
                     if "planowanie" in faza or "inicjacja" in faza or "załadunek" in faza:
                         return False
-                    
+                        
                     powrot = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
                     notatki = str(row.get('Notatki', ''))
                     roz = ""
                     
-                    # Szukamy daty ostatniego rozładunku
                     if "[Rozładunki:" in notatki:
                         try: 
                             roz_raw = notatki.split("[Rozładunki:")[1].split("]")[0].strip()
@@ -221,15 +224,13 @@ def render(sh):
                         except: pass
                         
                     try:
-                        # 1. Jeśli jest wpisany Powrót do bazy, sprawdzamy czy minął
                         if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
-                            return pd.to_datetime(powrot).date() < dzisiaj_date
+                            dt_powrot = pd.to_datetime(powrot, errors='coerce')
+                            if pd.notnull(dt_powrot): return dt_powrot.date() < dzisiaj_date
                             
-                        # 2. Jeśli nie ma Powrotu, to znaczy że to "Tylko Dostawa". Wtedy koniec to Rozładunek
                         elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
-                            return pd.to_datetime(roz).date() < dzisiaj_date
-                            
-                        # 3. Brak jakichkolwiek dat końcowych -> nie ruszamy
+                            dt_roz = pd.to_datetime(roz, errors='coerce')
+                            if pd.notnull(dt_roz): return dt_roz.date() < dzisiaj_date
                         else:
                             return False
                     except:
@@ -579,27 +580,37 @@ def render(sh):
                                 waga_akt = str(dane_eventu.get('Waga', '0'))
                                 u_waga = st.number_input("Waga (kg)", min_value=0, value=int(float(waga_akt)) if waga_akt.replace('.', '', 1).isdigit() else 0, step=100)
                                 
-                                dp_trasa = str(dane_eventu.get("Data_Zlecenia_Tr", "")).strip()
-                                try: dp_parsed = datetime.datetime.strptime(dp_trasa, "%Y-%m-%d").date() if dp_trasa not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
-                                except: dp_parsed = None
-                                u_data_tr = st.date_input("Data Załadunku", value=dp_parsed)
+                                u_data_tr = st.date_input("Data Załadunku", value=parse_date_safe(dane_eventu.get("Data_Zlecenia_Tr")))
                                 
                                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Kalendarz na trasie (Dla Wykresu Gantta):</p>", unsafe_allow_html=True)
                                 r_ed1, r_ed2, r_ed3 = st.columns(3)
-                                u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=None)
-                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=None)
                                 
-                                dp_zak = str(dane_eventu.get("Data_Zakonczenia_Uslugi", "")).strip()
-                                try: dp_zak_parsed = datetime.datetime.strptime(dp_zak, "%Y-%m-%d").date() if dp_zak not in ["", "None", "nan", "NaT", "N/A", "no info"] else None
-                                except: dp_zak_parsed = None
-                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=dp_zak_parsed)
+                                notatki_baza = str(dane_eventu.get('Notatki', ''))
+                                roz_1_val = None
+                                roz_2_val = None
+                                notatki_czyste = notatki_baza
+                                
+                                if "[Rozładunki:" in notatki_baza:
+                                    try:
+                                        roz_raw = notatki_baza.split("[Rozładunki:")[1].split("]")[0].strip()
+                                        notatki_czyste = re.sub(r'\[Rozładunki:.*?\]', '', notatki_baza).strip()
+                                        
+                                        dates = [d.strip() for d in roz_raw.split(",")]
+                                        if len(dates) > 0: roz_1_val = parse_date_safe(dates[0])
+                                        if len(dates) > 1: roz_2_val = parse_date_safe(dates[1])
+                                    except:
+                                        pass
+
+                                u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=roz_1_val)
+                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
+                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi")))
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
                                 idx_mag = mag_lista.index(akt_mag) if akt_mag in mag_lista else 0
                                 u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=idx_mag)
 
-                            u_notatki = st.text_area("Notatki", value=str(dane_eventu.get('Notatki', '')))
+                            u_notatki = st.text_area("Notatki", value=notatki_czyste)
                             
                             if st.form_submit_button("💾 Zapisz Zmiany"):
                                 idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
@@ -621,10 +632,11 @@ def render(sh):
                                 rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
                                 if u_data_roz_2:
                                     rozładunki_str += f", {u_data_roz_2}"
+                                    
                                 if rozładunki_str:
-                                    df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {u_notatki}"
+                                    df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {str(u_notatki).strip()}"
                                 else:
-                                    df.at[idx, 'Notatki'] = str(u_notatki)
+                                    df.at[idx, 'Notatki'] = str(u_notatki).strip()
                                 
                                 df.at[idx, 'Data_Zakonczenia_Uslugi'] = str(u_data_zakonczenia) if u_data_zakonczenia else ""
                                 
