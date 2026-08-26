@@ -194,7 +194,9 @@ def render(sh):
             with col_lista:
                 t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
                 
-                dzisiaj_date = datetime.datetime.now().date()
+                # --- POPRAWIONA Funkcja do oceny czy zlecenie historycznie wygasło ---
+                from datetime import datetime
+                dzisiaj_date = datetime.now().date()
                 
                 def is_past_end_date(row):
                     faza = str(row.get('Faza_Procesu', '')).lower()
@@ -203,24 +205,33 @@ def render(sh):
                     
                     powrot = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
                     notatki = str(row.get('Notatki', ''))
-                    roz = "Brak danych"
+                    roz = ""
                     
+                    # Szukamy daty ostatniego rozładunku
                     if "[Rozładunki:" in notatki:
-                        try: roz = notatki.split("[Rozładunki:")[1].split("]")[0].strip()
+                        try: 
+                            roz_raw = notatki.split("[Rozładunki:")[1].split("]")[0].strip()
+                            if roz_raw:
+                                roz = roz_raw.split(",")[-1].strip()
                         except: pass
                         
-                    zal = str(row.get('Data_Zlecenia_Tr', '')).strip()
-                    
                     try:
+                        # 1. Jeśli jest wpisany Powrót do bazy, sprawdzamy czy minął
                         if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
                             return pd.to_datetime(powrot).date() < dzisiaj_date
-                        elif roz != "Brak danych":
-                            return pd.to_datetime(roz.split(",")[-1].strip()).date() < dzisiaj_date
-                        elif zal not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
-                            return pd.to_datetime(zal).date() < dzisiaj_date
+                            
+                        # 2. Jeśli nie ma Powrotu, ale jest wpisany Rozładunek, sprawdzamy czy minął
+                        elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
+                            return pd.to_datetime(roz).date() < dzisiaj_date
+                            
+                        # 3. Jeśli nie wpisano ŻADNEJ daty końcowej, NIE ZAMYKAMY automatycznie!
+                        else:
+                            return False
                     except:
                         pass
+                    
                     return False
+                # ------------------------------------------------------------------
 
                 def render_list(df_subset, tab_container):
                     with tab_container:
