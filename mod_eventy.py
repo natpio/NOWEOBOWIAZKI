@@ -194,45 +194,63 @@ def render(sh):
             with col_lista:
                 t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
                 
+                dzisiaj_date = datetime.datetime.now().date()
+                
+                def is_past_end_date(row):
+                    faza = str(row.get('Faza_Procesu', '')).lower()
+                    if "zamknięte" in faza: 
+                        return True
+                    
+                    powrot = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
+                    notatki = str(row.get('Notatki', ''))
+                    roz = "Brak danych"
+                    
+                    if "[Rozładunki:" in notatki:
+                        try: roz = notatki.split("[Rozładunki:")[1].split("]")[0].strip()
+                        except: pass
+                        
+                    zal = str(row.get('Data_Zlecenia_Tr', '')).strip()
+                    
+                    try:
+                        if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
+                            return pd.to_datetime(powrot).date() < dzisiaj_date
+                        elif roz != "Brak danych":
+                            return pd.to_datetime(roz.split(",")[-1].strip()).date() < dzisiaj_date
+                        elif zal not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
+                            return pd.to_datetime(zal).date() < dzisiaj_date
+                    except:
+                        pass
+                    return False
+
                 def render_list(df_subset, tab_container):
                     with tab_container:
                         if df_subset.empty:
                             if wyszukiwarka:
-                                st.warning(f"Brak zleceń pasujących do frazy w tej fazie procesu.")
+                                st.warning("Brak zleceń pasujących do frazy w tej fazie procesu.")
                             else:
                                 st.info("Brak aktywnych zleceń w tej fazie procesu.")
                         else:
                             for index, row in df_subset.iterrows():
                                 faza = str(row.get('Faza_Procesu', '')).lower()
-                                badge_class = "cr-badge"
-                                if "inicjacja" in faza: badge_class += " inicjacja"
-                                elif "planowanie" in faza: badge_class += " planowanie"
-                                elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
-                                elif "trasa" in faza or "zamknięte" in faza: badge_class += " trasa"
-                                else: badge_class += " domyslny"
                                 
                                 is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
                                 braki_tagi_html = ""
                                 
                                 if wymaga_cmr(row):
-                                    braki_tagi_html += f"<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
+                                    braki_tagi_html += "<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
                                 
                                 if not is_sqm_row:
                                     if str(row.get('CMR_Podpisane_POD', '')) == 'NIE':
-                                        braki_tagi_html += f"<span class='tag-zen-orange'>📄 BRAK POD</span>"
+                                        braki_tagi_html += "<span class='tag-zen-orange'>📄 BRAK POD</span>"
                                     if str(row.get('Faktura_Oplacona', '')) == 'NIE':
-                                        braki_tagi_html += f"<span class='tag-zen-red'>💰 NIEOPŁACONE</span>"
+                                        braki_tagi_html += "<span class='tag-zen-red'>💰 NIEOPŁACONE</span>"
                                     if str(row.get('PP_Otrzymane', '')) == 'NIE':
-                                        braki_tagi_html += f"<span class='tag-zen-blue'>💳 BRAK PP</span>"
+                                        braki_tagi_html += "<span class='tag-zen-blue'>💳 BRAK PP</span>"
 
-                                if braki_tagi_html:
-                                    tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>'
-                                else:
-                                    tags_div = ""
+                                tags_div = f'<div style="margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap;">{braki_tagi_html}</div>' if braki_tagi_html else ""
 
                                 data_zal_lista = str(row.get('Data_Zlecenia_Tr', '')).strip()
-                                if data_zal_lista in ['', 'None', 'nan', 'NaT']:
-                                    data_zal_lista = 'Brak danych'
+                                if data_zal_lista in ['', 'None', 'nan', 'NaT']: data_zal_lista = 'Brak danych'
                                     
                                 notatki_str = str(row.get('Notatki', ''))
                                 data_roz_lista = "Brak danych"
@@ -241,8 +259,26 @@ def render(sh):
                                     except: pass
 
                                 powrot_lista = str(row.get('Data_Zakonczenia_Uslugi', '')).strip()
-                                if powrot_lista in ['', 'None', 'nan', 'NaT']:
-                                    powrot_lista = "Brak danych"
+                                if powrot_lista in ['', 'None', 'nan', 'NaT']: powrot_lista = "Brak danych"
+
+                                if powrot_lista != "Brak danych":
+                                    typ_etykieta = '<div style="display: inline-block; padding: 4px 10px; background: rgba(109, 40, 217, 0.1); border: 1px solid #6D28D9; color: #6D28D9 !important; border-radius: 4px; font-size: 11px; font-weight: 800; margin-top: 8px; letter-spacing: 0.5px;">🔄 PEŁNY EVENT (Z POWROTEM)</div>'
+                                else:
+                                    typ_etykieta = '<div style="display: inline-block; padding: 4px 10px; background: rgba(4, 120, 87, 0.1); border: 1px solid #047857; color: #047857 !important; border-radius: 4px; font-size: 11px; font-weight: 800; margin-top: 8px; letter-spacing: 0.5px;">➡️ TYLKO DOSTAWA (BEZ POWROTU)</div>'
+
+                                if "zamknięte" in faza:
+                                    badge_class = "cr-badge zamkniete"
+                                    faza_wyswietlana = row.get('Faza_Procesu', '-').upper()
+                                elif is_past_end_date(row):
+                                    badge_class = "cr-badge zamkniete"
+                                    faza_wyswietlana = "ZAMKNIĘTE (AUTO)"
+                                else:
+                                    faza_wyswietlana = row.get('Faza_Procesu', '-').upper()
+                                    badge_class = "cr-badge"
+                                    if "inicjacja" in faza: badge_class += " inicjacja"
+                                    elif "planowanie" in faza: badge_class += " planowanie"
+                                    elif "załadunek" in faza or "częściowo" in str(row.get('Status_Magazyn', '')).lower(): badge_class += " zaladunek"
+                                    else: badge_class += " trasa"
 
                                 c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
                                 
@@ -253,6 +289,7 @@ def render(sh):
                                             <div class="cr-col" style="width: 40%;">
                                                 <div class="cr-title" style="font-size: 18px; color: #050A15 !important; font-weight: 800; margin-bottom: 2px;">{row.get('Nazwa_Targow', '-')}</div>
                                                 <div class="cr-text" style="font-size: 13px; font-weight: 700; color: #1A2530 !important;">📍 {row.get('ID_Zlecenia', '-')}</div>
+                                                <div>{typ_etykieta}</div>
                                             </div>
                                             <div class="cr-col" style="width: 25%;">
                                                 <div class="cr-text" style="color: #1A2530 !important; font-weight: 600;">🚛 {row.get('Typ_Pojazdu', '-')}</div>
@@ -262,7 +299,7 @@ def render(sh):
                                                 <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">📅 Załadunek: <b style="color: #050A15 !important;">{data_zal_lista}</b></div>
                                                 <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 2px; font-size: 13px;">🏁 Rozładunek: <b style="color: #050A15 !important;">{data_roz_lista}</b></div>
                                                 <div class="cr-text" style="color: #1A2530 !important; margin-bottom: 6px; font-size: 13px;">🔙 Powrót: <b style="color: #050A15 !important;">{powrot_lista}</b></div>
-                                                <div class="{badge_class}">{row.get('Faza_Procesu', '-')}</div>
+                                                <div class="{badge_class}">{faza_wyswietlana}</div>
                                             </div>
                                         </div>
                                         {tags_div}
@@ -271,18 +308,21 @@ def render(sh):
                                     st.markdown(html_karta.replace('\n', ''), unsafe_allow_html=True)
                                     
                                 with c_btn:
-                                    is_primary = st.session_state["wybrany_event_id"] == row['ID_Zlecenia']
+                                    is_primary = st.session_state.get("wybrany_event_id") == row.get('ID_Zlecenia')
                                     btn_type = "primary" if is_primary else "secondary"
                                     
-                                    # KLUCZOWE ZABEZPIECZENIE (unikalny index DataFrame zapobiega duplikatom)
                                     if st.button("🔍 Szczegóły", key=f"det_{index}_{row.get('ID_Zlecenia', '')}", type=btn_type, use_container_width=True):
-                                        st.session_state["wybrany_event_id"] = row['ID_Zlecenia']
+                                        st.session_state["wybrany_event_id"] = row.get('ID_Zlecenia')
                                         st.rerun()
 
-                df_plan = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja", na=False)]
-                df_zal = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("załadunek", na=False)]
-                df_tra = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("trasa", na=False)]
-                df_zam = df_widok[df_widok['Faza_Procesu'].str.lower().str.contains("zamknięte", na=False)]
+                mask_zamkniete = df_widok.apply(is_past_end_date, axis=1)
+                
+                df_zam = df_widok[mask_zamkniete]
+                df_reszta = df_widok[~mask_zamkniete]
+                
+                df_plan = df_reszta[df_reszta['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja", na=False)]
+                df_zal = df_reszta[df_reszta['Faza_Procesu'].str.lower().str.contains("załadunek", na=False)]
+                df_tra = df_reszta[~df_reszta['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja|załadunek", na=False)]
 
                 render_list(df_plan, t_plan)
                 render_list(df_zal, t_zal)
@@ -414,7 +454,6 @@ def render(sh):
                             df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                             nowy_wiersz_z_id = df_temp.iloc[-1].copy()
                             
-                            # --- ZABEZPIECZENIE PRZED DUPLIKATEM ID W BAZIE ---
                             base_id = str(nowy_wiersz_z_id.get('ID_Zlecenia', '')).strip()
                             if not base_id or base_id in df['ID_Zlecenia'].values:
                                 suffix = str(int(time.time()))[-4:]
