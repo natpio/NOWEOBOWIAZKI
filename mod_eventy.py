@@ -202,7 +202,8 @@ def render(sh):
             with col_lista:
                 t_plan, t_zal, t_tra, t_zam = st.tabs(["📋 Planowanie", "📦 Załadunek", "🚚 W trasie", "✅ Zamknięte"])
                 
-                dzisiaj_date = datetime.date.today()
+                from datetime import datetime
+                dzisiaj_date = datetime.now().date()
                 
                 def is_past_end_date(row):
                     faza = str(row.get('Faza_Procesu', '')).lower()
@@ -224,11 +225,11 @@ def render(sh):
                         except: pass
                         
                     try:
-                        if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
+                        if powrot not in ['', 'None', 'nan', 'NaT', 'Brak danych', 'N/A']:
                             dt_powrot = pd.to_datetime(powrot, errors='coerce')
                             if pd.notnull(dt_powrot): return dt_powrot.date() < dzisiaj_date
                             
-                        elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych']:
+                        elif roz not in ['', 'None', 'nan', 'NaT', 'Brak danych', 'N/A']:
                             dt_roz = pd.to_datetime(roz, errors='coerce')
                             if pd.notnull(dt_roz): return dt_roz.date() < dzisiaj_date
                         else:
@@ -603,7 +604,11 @@ def render(sh):
 
                                 u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=roz_1_val)
                                 u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
-                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi")))
+                                usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj Rozładunek 2")
+                                
+                                obecny_koniec = parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi"))
+                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=obecny_koniec if obecny_koniec else pd.Timestamp.today().date())
+                                usun_powrot = r_ed3.checkbox("🗑️ Skasuj datę powrotu", value=(obecny_koniec is None))
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
@@ -630,15 +635,18 @@ def render(sh):
                                 df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
                                 
                                 rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
-                                if u_data_roz_2:
-                                    rozładunki_str += f", {u_data_roz_2}"
+                                final_roz_2 = "" if usun_roz_2 else (str(u_data_roz_2) if u_data_roz_2 else "")
+                                
+                                if final_roz_2:
+                                    rozładunki_str += f", {final_roz_2}"
                                     
                                 if rozładunki_str:
                                     df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {str(u_notatki).strip()}"
                                 else:
                                     df.at[idx, 'Notatki'] = str(u_notatki).strip()
                                 
-                                df.at[idx, 'Data_Zakonczenia_Uslugi'] = str(u_data_zakonczenia) if u_data_zakonczenia else ""
+                                final_powrot = "" if usun_powrot else (str(u_data_zakonczenia) if u_data_zakonczenia else "")
+                                df.at[idx, 'Data_Zakonczenia_Uslugi'] = final_powrot
                                 
                                 gs_row = int(df.at[idx, 'sheet_row'])
                                 db.update_single_row_safe("DB_Eventy", gs_row, df.loc[idx])
@@ -847,8 +855,12 @@ def render(sh):
                 st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Kalendarz na trasie (Dla Wykresu Gantta):</p>", unsafe_allow_html=True)
                 r_form1, r_form2, r_form3 = st.columns(3)
                 data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
+                
                 data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
+                usun_roz_2_nowe = r_form2.checkbox("🗑️ Skasuj Rozładunek 2")
+                
                 data_powrotu_baza = r_form3.date_input("Powrót do bazy (Koniec):", value=None)
+                usun_powrot_nowe = r_form3.checkbox("🗑️ Skasuj datę powrotu")
                 
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Firma Transportowa *")
@@ -892,16 +904,18 @@ def render(sh):
                     else:
                         nr_zewn_final = "FLOTA WŁASNA"
                         
+                    final_roz_2 = "" if usun_roz_2_nowe else (str(data_rozladunku_2) if data_rozladunku_2 else "")
                     roz_str = str(data_rozladunku_1) if data_rozladunku_1 else ""
-                    if data_rozladunku_2:
-                        roz_str += f", {data_rozladunku_2}"
+                    if final_roz_2:
+                        roz_str += f", {final_roz_2}"
                     
                     finalne_notatki = notatki
                     if roz_str:
                         finalne_notatki = f"[Rozładunki: {roz_str}] {notatki}"
                         
                     finalne_miejsce_przeznaczenia = u_miejsce_man_c if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else u_miejsce_sel_c
-                        
+                    final_powrot_nowe = "" if usun_powrot_nowe else (str(data_powrotu_baza) if data_powrotu_baza else "")
+                    
                     nowy_wiersz = {
                         "ID_Zlecenia": str(id_zlecenia_custom), "Nazwa_Targow": str(nazwa_targow), "Typ_Transportu": str(typ_transportu),
                         "Faza_Procesu": str(faza_procesu), "Typ_Pojazdu": str(typ_pojazdu), "Przewoznik": str(przewoznik),
@@ -910,7 +924,7 @@ def render(sh):
                         "Notatki": str(finalne_notatki), "Koszt_Transportu_EUR": str(koszt_transportu), "CMR_Gotowe": str(cmr_gotowe), 
                         "CMR_Podpisane_POD": str(cmr_podpisane), "Nr_Zlecenia_Zewn": str(nr_zewn_final), 
                         "Nr_Faktury": str(nr_faktury), 
-                        "Data_Zakonczenia_Uslugi": str(data_powrotu_baza) if data_powrotu_baza else "",
+                        "Data_Zakonczenia_Uslugi": final_powrot_nowe,
                         "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": str(faktura_opl), "PP_Otrzymane": str(pp_otrzymane), "Zakonczone_Arch": "NIE",
                         "Miejsce_Przeznaczenia": str(finalne_miejsce_przeznaczenia), "Waga": str(waga), "Nr_Rejestracyjny": str(nr_rejestracyjny), 
