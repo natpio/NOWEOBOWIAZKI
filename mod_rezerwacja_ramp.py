@@ -134,7 +134,6 @@ def render(sh):
                 if not df_ev.empty:
                     df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
                     
-                    # Definicje slotów i ramp w zależności od typu pojazdu
                     dostepne_sloty_ciezarowe = [
                         ("07:00", "11:00"), 
                         ("11:00", "15:00"), 
@@ -160,23 +159,24 @@ def render(sh):
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
-                        # Bezpiecznik na wsteczne planowanie i weekendy
                         try:
                             data_zal_obj = datetime.strptime(data_zal, "%Y-%m-%d").date()
                             if data_zal_obj < dzisiaj: continue 
                             if data_zal_obj.weekday() >= 5: continue 
                         except: pass
                             
+                        # PANCERNY SYSTEM PRZECIWDZIAŁANIA DUPLIKATOM
                         is_scheduled = False
-                        if not df_rampy.empty and 'Notatki' in df_rampy.columns:
-                            if df_rampy['Notatki'].astype(str).str.contains(ev_id).any():
-                                is_scheduled = True
+                        if not df_rampy.empty:
+                            search_str = f"Powiązane z: {ev_id}"
+                            # Przeszukujemy wszystkie komórki w Dataframe, niezależnie jak ułożone są kolumny w Google Sheets
+                            is_scheduled = df_rampy.astype(str).apply(lambda col: col.str.contains(search_str, regex=False, na=False)).any().any()
                                 
                         if not is_scheduled:
                             przypisano = False
                             
-                            # LOGIKA: Wybór slotów na bazie typu auta
-                            is_bus = "BUS" in typ_poj
+                            # Rozszerzona logika dla BUS / VAN
+                            is_bus = "BUS" in typ_poj or "VAN" in typ_poj
                             akt_sloty = dostepne_sloty_bus if is_bus else dostepne_sloty_ciezarowe
                             akt_rampy = dostepne_rampy_bus if is_bus else dostepne_rampy_ciezarowe
                             
@@ -332,7 +332,7 @@ def render(sh):
             color: #E2DCD3 !important; padding: 10px 0 !important;
         }
         .fc-timegrid-slot { height: 45px !important; border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important; }
-        .fc-timegrid-slot-label { font-size: 12px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
+        .fc-timegrid-slot-label { font-size: 13px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
         .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
         .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
         
