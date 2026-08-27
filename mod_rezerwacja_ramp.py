@@ -199,7 +199,7 @@ def render(sh):
                                         break
                                         
                 if zmieniono > 0:
-                    st.cache_data.clear()
+                    st.cache_data.clear() 
                     st.toast(f"✅ Synchronizacja zakończona: Zarezerwowano {zmieniono} nowych slotów!", icon="🔄")
                     time.sleep(1.5)
                     st.rerun()
@@ -220,7 +220,7 @@ def render(sh):
         st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
     # ==========================================
-    # 4. SILNIK KALENDARZA (Z dynamicznym kluczem!)
+    # 4. SILNIK KALENDARZA (Z wyglądem biletów i powiększoną czcionką)
     # ==========================================
     events = []
     if not df_rampy.empty:
@@ -313,7 +313,7 @@ def render(sh):
             color: #E2DCD3 !important; padding: 10px 0 !important;
         }
         .fc-timegrid-slot { height: 45px !important; border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important; }
-        .fc-timegrid-slot-label { font-size: 12px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
+        .fc-timegrid-slot-label { font-size: 13px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
         .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
         .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
         
@@ -321,16 +321,38 @@ def render(sh):
             border-left: 5px dashed var(--fc-border-color) !important; border-right: 5px dashed var(--fc-border-color) !important;
             border-top: 1px solid rgba(0,0,0,0.1) !important; border-bottom: 1px solid rgba(0,0,0,0.1) !important;
             border-radius: 4px !important; box-shadow: 2px 4px 10px rgba(0,0,0,0.6) !important;
-            padding: 6px !important; cursor: grab !important;
+            padding: 8px !important; cursor: grab !important;
         }
         .fc-event:active { cursor: grabbing !important; }
-        .fc-event-main { padding: 0 !important; height: 100% !important; }
-        .fc-event-title { white-space: pre-wrap !important; font-size: 11px !important; font-weight: 700 !important; line-height: 1.4 !important; color: #1A2530 !important; }
+        
+        /* Flexbox dla wnętrza biletu by wymusić odpowiednie marginesy */
+        .fc-event-main { 
+            padding: 0 !important; 
+            height: 100% !important; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 4px; 
+        }
+        
+        /* Stylizacja górnego zakresu godzin (np. 7:00 - 11:00) */
+        .fc-event-time {
+            font-size: 13px !important;
+            font-weight: 800 !important;
+            color: #8C8477 !important;
+        }
+        
+        /* Stylizacja głównego tekstu na bilecie (zwiększona czcionka) */
+        .fc-event-title { 
+            white-space: pre-wrap !important; 
+            font-size: 15px !important; 
+            font-weight: 700 !important; 
+            line-height: 1.5 !important; 
+            color: #1A2530 !important; 
+        }
     """
 
     st.markdown('<div style="background: #11151E; border-top: 2px solid #BA4949; padding: 10px; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8);">', unsafe_allow_html=True)
     
-    # MAGIC FIX: Dynamiczny klucz zmusza komponent kalendarza do narysowania się od nowa, aktualizując widok daty
     cal_key = f"rampy_cal_{st.session_state.rampy_data.strftime('%Y%m%d')}"
     
     cal_state = calendar(
