@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date, time
+from datetime import datetime, date
+import time
 from streamlit_calendar import calendar
 import db
 
@@ -17,7 +18,13 @@ def render(sh):
     # 1. ŁADOWANIE BAZY DANYCH (Inicjalizacja jeśli nie istnieje)
     worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
     
-    if df_rampy.empty and not worksheet_rampy.row_values(1):
+    # Bezpiecznik: jeśli API padnie i zwróci None
+    if worksheet_rampy is None:
+        st.warning("⚠️ Zbyt wiele zapytań do Google Sheets. Odczekaj kilka sekund i odśwież stronę.")
+        return
+
+    # Usunięto ".row_values(1)" - bazujemy na lokalnym DF, co oszczędza zapytania do API
+    if df_rampy.empty and len(df_rampy.columns) <= 1:
         headers = ["ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", "Nazwa_Imprezy", "Pojazd", "Kierowca", "Faktyczny_Podjazd", "Notatki"]
         worksheet_rampy.append_row(headers)
         st.cache_data.clear()
@@ -196,7 +203,8 @@ def render(sh):
                     new_id = f"RMP-{int(time.time())}"
                     nowy_wiersz = [
                         new_id, nowa_rampa, str(nowa_data), 
-                        nowy_od.strftime("%H:%M"), nowy_do.strftime("%H:%M"),
+                        nowy_od.strftime("%H:%M") if nowy_od else "", 
+                        nowy_do.strftime("%H:%M") if nowy_do else "",
                         nowa_impreza, nowy_pojazd, nowy_kierowca, "", nowe_notatki
                     ]
                     if db.append_data("DB_Rampy", nowy_wiersz):
@@ -204,49 +212,53 @@ def render(sh):
                         st.rerun()
 
     with tab_edytuj:
-        if not df_dzien.empty:
-            df_dzien['Label'] = df_dzien['Godzina_Od'] + " | Rampa " + df_dzien['Rampa'] + " | " + df_dzien['Nazwa_Imprezy']
-            opcje_slownik = dict(zip(df_dzien['ID_Rezerwacji'], df_dzien['Label']))
-            
-            wybrane_id = st.selectbox("Wybierz rezerwację z dzisiaj do edycji:", options=list(opcje_slownik.keys()), format_func=lambda x: opcje_slownik[x])
-            dane_rez = df_dzien[df_dzien['ID_Rezerwacji'] == wybrane_id].iloc[0]
-            
-            with st.form("form_edit_rampa"):
-                st.markdown("<p style='color:#C5A880; font-weight:700; font-size: 14px;'>Szczegóły i Zgłoszenie Podjazdu</p>", unsafe_allow_html=True)
+        if not df_rampy.empty:
+            df_dzien = df_rampy[df_rampy['Data'] == str(wybrana_data)]
+            if not df_dzien.empty:
+                df_dzien['Label'] = df_dzien['Godzina_Od'] + " | Rampa " + df_dzien['Rampa'] + " | " + df_dzien['Nazwa_Imprezy']
+                opcje_slownik = dict(zip(df_dzien['ID_Rezerwacji'], df_dzien['Label']))
                 
-                c1, c2 = st.columns(2)
-                e_impreza = c1.text_input("Nazwa Imprezy", value=dane_rez.get('Nazwa_Imprezy', ''))
+                wybrane_id = st.selectbox("Wybierz rezerwację z dzisiaj do edycji:", options=list(opcje_slownik.keys()), format_func=lambda x: opcje_slownik[x])
+                dane_rez = df_dzien[df_dzien['ID_Rezerwacji'] == wybrane_id].iloc[0]
                 
-                podj_baza = str(dane_rez.get('Faktyczny_Podjazd', '')).strip()
-                if podj_baza and podj_baza not in ["nan", "None"]:
-                    try: val_podj = datetime.strptime(podj_baza, "%H:%M").time()
-                    except: val_podj = None
-                else: val_podj = None
-                
-                e_podjazd = c2.time_input("Faktyczny czas podjazdu pod rampę (Zostaw puste jeśli czeka)", value=val_podj)
-                usun_podjazd = c2.checkbox("🗑️ Cofnij status podjazdu (Wyczyść czas)", value=(val_podj is None))
-                
-                c3, c4 = st.columns(2)
-                e_pojazd = c3.text_input("Pojazd", value=dane_rez.get('Pojazd', ''))
-                e_kierowca = c4.text_input("Kierowca", value=dane_rez.get('Kierowca', ''))
-                
-                c_zapisz, c_usun = st.columns([3, 1])
-                if c_zapisz.form_submit_button("💾 Zapisz Zmiany", type="primary", use_container_width=True):
-                    idx = df_rampy[df_rampy['ID_Rezerwacji'] == wybrane_id].index[0]
-                    df_rampy.at[idx, 'Nazwa_Imprezy'] = e_impreza
-                    df_rampy.at[idx, 'Pojazd'] = e_pojazd
-                    df_rampy.at[idx, 'Kierowca'] = e_kierowca
-                    df_rampy.at[idx, 'Faktyczny_Podjazd'] = "" if usun_podjazd else (e_podjazd.strftime("%H:%M") if e_podjazd else "")
+                with st.form("form_edit_rampa"):
+                    st.markdown("<p style='color:#C5A880; font-weight:700; font-size: 14px;'>Szczegóły i Zgłoszenie Podjazdu</p>", unsafe_allow_html=True)
                     
-                    gs_row = int(df_rampy.at[idx, 'sheet_row'])
-                    if db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx]):
-                        st.success("Zaktualizowano dane rezerwacji!")
-                        st.rerun()
+                    c1, c2 = st.columns(2)
+                    e_impreza = c1.text_input("Nazwa Imprezy", value=dane_rez.get('Nazwa_Imprezy', ''))
+                    
+                    podj_baza = str(dane_rez.get('Faktyczny_Podjazd', '')).strip()
+                    if podj_baza and podj_baza not in ["nan", "None"]:
+                        try: val_podj = datetime.strptime(podj_baza, "%H:%M").time()
+                        except: val_podj = None
+                    else: val_podj = None
+                    
+                    e_podjazd = c2.time_input("Faktyczny czas podjazdu pod rampę (Zostaw puste jeśli czeka)", value=val_podj)
+                    usun_podjazd = c2.checkbox("🗑️ Cofnij status podjazdu (Wyczyść czas)", value=(val_podj is None))
+                    
+                    c3, c4 = st.columns(2)
+                    e_pojazd = c3.text_input("Pojazd", value=dane_rez.get('Pojazd', ''))
+                    e_kierowca = c4.text_input("Kierowca", value=dane_rez.get('Kierowca', ''))
+                    
+                    c_zapisz, c_usun = st.columns([3, 1])
+                    if c_zapisz.form_submit_button("💾 Zapisz Zmiany", type="primary", use_container_width=True):
+                        idx = df_rampy[df_rampy['ID_Rezerwacji'] == wybrane_id].index[0]
+                        df_rampy.at[idx, 'Nazwa_Imprezy'] = e_impreza
+                        df_rampy.at[idx, 'Pojazd'] = e_pojazd
+                        df_rampy.at[idx, 'Kierowca'] = e_kierowca
+                        df_rampy.at[idx, 'Faktyczny_Podjazd'] = "" if usun_podjazd else (e_podjazd.strftime("%H:%M") if e_podjazd else "")
                         
-                if c_usun.form_submit_button("🗑️ Usuń Trwale", use_container_width=True):
-                    gs_row = int(dane_rez['sheet_row'])
-                    db.delete_row("DB_Rampy", gs_row)
-                    st.error("Rezerwacja została usunięta z kalendarza.")
-                    st.rerun()
+                        gs_row = int(df_rampy.at[idx, 'sheet_row'])
+                        if db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx]):
+                            st.success("Zaktualizowano dane rezerwacji!")
+                            st.rerun()
+                            
+                    if c_usun.form_submit_button("🗑️ Usuń Trwale", use_container_width=True):
+                        gs_row = int(dane_rez['sheet_row'])
+                        db.delete_row("DB_Rampy", gs_row)
+                        st.error("Rezerwacja została usunięta z kalendarza.")
+                        st.rerun()
+            else:
+                st.info("Brak rezerwacji w wybranym dniu do edycji.")
         else:
-            st.info("Brak rezerwacji w wybranym dniu do edycji.")
+            st.info("Baza rezerwacji jest całkowicie pusta.")
