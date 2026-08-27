@@ -2,86 +2,67 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 import time
-import os
-import base64
 from streamlit_calendar import calendar
 import db
 
-def get_b64(filepath):
-    if os.path.exists(filepath):
-        with open(filepath, "rb") as f:
-            return base64.b64encode(f.read()).decode()
-    return ""
-
 def render(sh):
     # ==========================================
-    # 1. NAPRAWA WYDAJNOŚCI I KOSMICZNA STYLIZACJA
+    # 1. NAPRAWA WYDAJNOŚCI I CSS 100% ZGODNY Z MOCKUPEM
     # ==========================================
-    b64_ftl = get_b64("ftl.png")
-    
     st.markdown("""
         <style>
-        /* Optymalizacja inputów - brak blura = 0 lagów klawiatury */
+        /* NAPRAWA WYDAJNOŚCI (ZERO LAGÓW) */
         div[data-testid="stTextInput"] input, 
         div[data-testid="stTextArea"] textarea, 
-        div[data-testid="stNumberInput"] input {
+        div[data-testid="stNumberInput"] input,
+        .stSelectbox div {
+            transition: none !important;
+            animation: none !important;
             backdrop-filter: none !important;
             background-color: #0A1428 !important; 
             transform: translateZ(0) !important; 
-            will-change: transform !important;
             border: 1px solid #1C2D4A !important;
             color: #FDFBF7 !important;
         }
-        
+
+        /* Pasek górny (Top Bar) */
         .top-bar-btn button {
             background-color: #12100E !important; border: 1px solid rgba(197, 168, 128, 0.3) !important;
             color: #C5A880 !important; font-weight: bold !important; font-family: 'Bebas Neue', sans-serif !important; letter-spacing: 1px !important;
+            transition: none !important;
         }
         .top-bar-btn button:hover { background-color: #1C1A18 !important; color: #FDFBF7 !important; border-color: #C5A880 !important; }
         
-        /* Karty KPI dla Ramp */
-        .ramp-kpi-container { display: flex; gap: 15px; margin-bottom: 25px; }
-        .ramp-kpi {
-            flex: 1; padding: 15px 20px; border-radius: 8px;
-            background: linear-gradient(135deg, rgba(20,25,40,0.8) 0%, rgba(5,10,21,0.9) 100%);
-            border: 1px solid rgba(197, 168, 128, 0.2);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-            border-left: 4px solid #C5A880;
-            display: flex; align-items: center; justify-content: space-between;
-        }
-        .ramp-kpi-title { color: #8C8477; font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
-        .ramp-kpi-val { color: #E2DCD3; font-size: 32px; font-family: 'Bebas Neue', sans-serif; line-height: 1; margin-top: 5px; }
-        .ramp-kpi-icon { font-size: 30px; opacity: 0.8; }
-        
-        .ramp-kpi.active { border-left-color: #3B82F6; }
-        .ramp-kpi.done { border-left-color: #10B981; }
-        .ramp-kpi.wait { border-left-color: #BA4949; }
-        
+        .btn-action-primary button { background-color: #8B2635 !important; border: 1px solid #BA4949 !important; color: #FDFBF7 !important; }
+        .btn-action-primary button:hover { background-color: #BA4949 !important; border-color: #FDFBF7 !important; }
+
+        /* Legenda */
         .legend-container {
-            display: flex; gap: 20px; align-items: center; margin: 15px 0 30px 0;
-            font-size: 13px; color: #A39B8F; font-weight: 600;
+            display: flex; gap: 20px; align-items: center; margin: 15px 0 20px 0;
+            font-size: 12px; color: #A39B8F; font-weight: 600;
         }
         .legend-item { display: flex; align-items: center; gap: 8px; }
-        .l-box { width: 14px; height: 14px; border-radius: 3px; }
-        .l-yellow { background-color: #C5A880; }
+        .l-box { width: 12px; height: 12px; border-radius: 2px; }
+        .l-yellow { background-color: #F7E8D0; }
         .l-green { background-color: #10B981; }
         .l-blue { background-color: #3B82F6; }
         .l-gray { background-color: #718096; }
         </style>
     """, unsafe_allow_html=True)
 
+    # Nagłówek wizualny (jak w mockupie)
     st.markdown("""
-        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 20px;">
-            <div style="font-size: 40px;">📅</div>
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
+            <div style="font-size: 42px;">📅</div>
             <div>
-                <h1 style="color: #FDFBF7; margin: 0; font-size: 32px; font-weight: 800; font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px;">REZERWACJA RAMPY</h1>
-                <div style="color: #A39B8F; font-size: 13px;">Zarządzaj oknami czasowymi, monitoruj czas załadunku i zwalniaj doki z precyzją.</div>
+                <h1 style="color: #FDFBF7; margin: 0; font-size: 34px; font-weight: 800; font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">REZERWACJA RAMPY</h1>
+                <div style="color: #A39B8F; font-size: 13px;">Zarządzaj rezerwacjami ramp – przeciągaj i upuszczaj, aby zmienić czas lub rampę</div>
             </div>
         </div>
     """, unsafe_allow_html=True)
 
     # ==========================================
-    # 2. BAZA DANYCH I INICJALIZACJA
+    # 2. BAZA DANYCH
     # ==========================================
     worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
     
@@ -104,14 +85,16 @@ def render(sh):
     if "pokaz_formularz" not in st.session_state: st.session_state.pokaz_formularz = None
 
     # ==========================================
-    # 3. GÓRNY PASEK NAWIGACYJNY
+    # 3. GÓRNY PASEK NAWIGACYJNY (100% Mockup)
     # ==========================================
     st.markdown('<div class="top-bar-btn">', unsafe_allow_html=True)
-    c1, c2, c3, c4, c5, c6 = st.columns([0.5, 2, 0.5, 1.2, 3.5, 2], vertical_alignment="center")
+    c1, c2, c3, c4, c5, c6 = st.columns([0.5, 2.5, 0.5, 1.5, 4.5, 2.5], vertical_alignment="center")
     
     with c1:
         if st.button("❮", use_container_width=True): st.session_state.rampy_data -= timedelta(days=1); st.rerun()
     with c2:
+        dni_tyg = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
+        nazwa_dnia = dni_tyg[st.session_state.rampy_data.weekday()]
         nowa_data = st.date_input("Data", value=st.session_state.rampy_data, label_visibility="collapsed")
         if nowa_data != st.session_state.rampy_data: st.session_state.rampy_data = nowa_data; st.rerun()
     with c3:
@@ -124,32 +107,22 @@ def render(sh):
             szukana_fraza = sc1.text_input("Szukaj", placeholder="🔍 Szukaj rezerwacji, auta, kierowcy...", label_visibility="collapsed")
             sc2.form_submit_button("Szukaj")
     with c6:
-        st.markdown('</div>', unsafe_allow_html=True) 
-        if st.button("➕ NOWA REZERWACJA", type="primary", use_container_width=True):
+        st.markdown('<div class="btn-action-primary">', unsafe_allow_html=True)
+        if st.button("➕ NOWA REZERWACJA", use_container_width=True):
             st.session_state.pokaz_formularz = "NOWA"
             st.session_state.wybrana_rezerwacja = None
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-    # OSTRZEŻENIE O WEEKENDZIE
+    # Ostrzeżenie weekendowe
     if st.session_state.rampy_data.weekday() >= 5:
-        st.markdown("""
-            <div style="background: rgba(186, 73, 73, 0.1); border: 1px solid #BA4949; padding: 10px 15px; border-radius: 8px; margin-bottom: 15px; color: #FDFBF7; display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 20px;">⚠️</span>
-                <div>
-                    <strong style="color: #BA4949; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1px; font-size: 16px;">MAGAZYN ZAMKNIĘTY (WEEKEND)</strong><br>
-                    <span style="font-size: 13px; color: #E2DCD3;">Soboty i niedziele są dniami wolnymi. Dodawaj tu rezerwacje tylko, jeśli operacja została wcześniej uzgodniona z obsługą magazynu.</span>
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        st.error("⚠️ Magazyn w weekendy jest zamknięty. Dodawaj rezerwacje tylko po wcześniejszym uzgodnieniu z pracownikami magazynu.")
 
     # ==========================================
-    # 4. PRZELICZANIE DANYCH I KPI
+    # 4. SILNIK KALENDARZA (Z wyglądem biletów)
     # ==========================================
     events = []
-    kpi_oczekujace = 0
-    kpi_w_trakcie = 0
-    kpi_zakonczone = 0
-
     if not df_rampy.empty:
         df_dzien = df_rampy[df_rampy['Data'] == str(st.session_state.rampy_data)]
         
@@ -162,23 +135,17 @@ def render(sh):
             trwa_zaladunek = str(row.get('Trwa_Zaladunek', '')).strip().upper() == "TAK"
             zakonczono = str(row.get('Zakonczono', '')).strip().upper() == "TAK"
             
-            # KPI Counter
-            if zakonczono: kpi_zakonczone += 1
-            elif trwa_zaladunek: kpi_w_trakcie += 1
-            elif podjazd_db and podjazd_db not in ["nan", "None", ""]: kpi_oczekujace += 1
-            
-            # Formatyzacja daty podjazdu na bilecie
+            # Formatowanie czasu podjazdu (rozbicie na dni, żeby wyłapać, czy auto jest z wczoraj)
             podj_display = ""
             if podjazd_db and podjazd_db not in ["nan", "None", ""]:
-                if len(podjazd_db) > 5: # YYYY-MM-DD HH:MM
+                if len(podjazd_db) > 5:
                     p_date, p_time = podjazd_db.split(" ")[0], podjazd_db.split(" ")[1]
-                    if p_date != str(row['Data']):
-                        podj_display = f"{p_date[8:10]}.{p_date[5:7]} {p_time}"
-                    else:
-                        podj_display = p_time
+                    if p_date != str(row['Data']): podj_display = f"{p_date[8:10]}.{p_date[5:7]} {p_time}"
+                    else: podj_display = p_time
                 else:
                     podj_display = podjazd_db
 
+            # Konstruowanie zawartości biletu
             impreza = str(row.get('Nazwa_Imprezy', ''))
             pojazd = str(row.get('Pojazd', ''))
             kierowca = str(row.get('Kierowca', ''))
@@ -186,17 +153,22 @@ def render(sh):
             if zakonczono:
                 kolor_ramki = "#718096"
                 status_txt = "⬛ Zakończono"
+                kolor_tla = "#E2E8F0"
             elif trwa_zaladunek:
                 kolor_ramki = "#3B82F6"
                 status_txt = "⏳ Trwa załadunek..."
+                kolor_tla = "#EBF8FF"
             elif podj_display:
                 kolor_ramki = "#10B981"
                 status_txt = f"✔ Podjechał: {podj_display}"
+                kolor_tla = "#FDFBF7"
             else:
                 kolor_ramki = "#C5A880"
                 status_txt = "🕒 Podjechał: –"
+                kolor_tla = "#FDFBF7"
 
-            tytul_eventu = f"{impreza.upper()}\n{pojazd}\n{kierowca}\n\n{status_txt}"
+            # Białe znaki (\n) pozwalają formatować treść wewnątrz kalendarza
+            tytul_eventu = f"{impreza}\n{pojazd}\n{kierowca}\n\n{status_txt}"
 
             events.append({
                 "id": str(row.get('ID_Rezerwacji', '')),
@@ -205,39 +177,10 @@ def render(sh):
                 "end": f"{row['Data']}T{row.get('Godzina_Do', '01:00')}:00",
                 "title": tytul_eventu,
                 "borderColor": kolor_ramki,
+                "backgroundColor": kolor_tla,
                 "textColor": "#1A2530"
             })
 
-    # Renderowanie KPI
-    st.markdown(f"""
-        <div class="ramp-kpi-container">
-            <div class="ramp-kpi wait">
-                <div>
-                    <div class="ramp-kpi-title">Oczekujące Pod Rampą</div>
-                    <div class="ramp-kpi-val">{kpi_oczekujace}</div>
-                </div>
-                <div class="ramp-kpi-icon">☕</div>
-            </div>
-            <div class="ramp-kpi active">
-                <div>
-                    <div class="ramp-kpi-title">W Trakcie Załadunku</div>
-                    <div class="ramp-kpi-val">{kpi_w_trakcie}</div>
-                </div>
-                <div class="ramp-kpi-icon">🏗️</div>
-            </div>
-            <div class="ramp-kpi done">
-                <div>
-                    <div class="ramp-kpi-title">Zakończone Dzisiaj</div>
-                    <div class="ramp-kpi-val">{kpi_zakonczone}</div>
-                </div>
-                <div class="ramp-kpi-icon">🏁</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # ==========================================
-    # 5. KALENDARZ DRAG & DROP
-    # ==========================================
     calendar_options = {
         "initialView": "resourceTimeGridDay",
         "initialDate": str(st.session_state.rampy_data),
@@ -260,29 +203,46 @@ def render(sh):
         "slotLabelFormat": { "hour": "2-digit", "minute": "2-digit", "hour12": False }
     }
 
+    # CSS bezpośrednio dla kalendarza - replikuje wygląd Twojego zrzutu (cremowe bilety, przerywane krawędzie)
     cal_css = """
         .fc { background-color: transparent !important; color: #E2DCD3; font-family: 'Inter', sans-serif; }
-        .fc-col-header-cell {
-            background-color: #12100E !important; border-bottom: 2px solid rgba(197, 168, 128, 0.2) !important;
-            font-family: 'Bebas Neue', sans-serif !important; font-size: 20px !important; letter-spacing: 2px !important;
-            color: #E2DCD3 !important; padding: 12px 0 !important;
-        }
-        .fc-timegrid-slot { height: 50px !important; border-bottom: 1px dashed rgba(197, 168, 128, 0.1) !important; }
-        .fc-timegrid-slot-label { font-size: 13px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
-        .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
-        .fc-timegrid-col { background: rgba(5, 10, 21, 0.4) !important; }
         
+        .fc-col-header-cell {
+            background-color: #0A1428 !important; border-bottom: 1px solid rgba(197, 168, 128, 0.2) !important;
+            font-family: 'Bebas Neue', sans-serif !important; font-size: 18px !important; letter-spacing: 2px !important;
+            color: #E2DCD3 !important; padding: 10px 0 !important;
+        }
+        
+        .fc-timegrid-slot { height: 45px !important; border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important; }
+        .fc-timegrid-slot-label { font-size: 12px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
+        .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
+        
+        .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
+        
+        /* Baseball ticket style */
         .fc-event {
-            background-color: #FDFBF7 !important; border-left: 5px dashed var(--fc-border-color) !important; border-right: 5px dashed var(--fc-border-color) !important;
-            border-top: 1px solid rgba(0,0,0,0.1) !important; border-bottom: 1px solid rgba(0,0,0,0.1) !important; border-radius: 4px !important;
-            box-shadow: 2px 4px 10px rgba(0,0,0,0.4) !important; padding: 6px !important; cursor: grab !important;
+            border-left: 5px dashed var(--fc-border-color) !important;
+            border-right: 5px dashed var(--fc-border-color) !important;
+            border-top: 1px solid rgba(0,0,0,0.1) !important;
+            border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+            border-radius: 4px !important;
+            box-shadow: 2px 4px 10px rgba(0,0,0,0.6) !important;
+            padding: 6px !important;
+            cursor: grab !important;
         }
         .fc-event:active { cursor: grabbing !important; }
         .fc-event-main { padding: 0 !important; height: 100% !important; }
-        .fc-event-title { white-space: pre-wrap !important; font-size: 12px !important; font-weight: 600 !important; line-height: 1.4 !important; color: #1A2530 !important; }
+        
+        .fc-event-title {
+            white-space: pre-wrap !important; 
+            font-size: 11px !important;
+            font-weight: 700 !important;
+            line-height: 1.4 !important;
+            color: #1A2530 !important;
+        }
     """
 
-    st.markdown('<div style="background: rgba(18, 16, 14, 0.9); padding: 15px; border-radius: 8px; border: 1px solid rgba(197, 168, 128, 0.2); margin-top: 15px;">', unsafe_allow_html=True)
+    st.markdown('<div style="background: #11151E; border-top: 2px solid #BA4949; padding: 10px; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8);">', unsafe_allow_html=True)
     
     cal_state = calendar(
         events=events, 
@@ -293,6 +253,7 @@ def render(sh):
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Legenda pod kalendarzem (100% Mockup)
     st.markdown("""
         <div class="legend-container">
             <div class="legend-item"><div class="l-box l-yellow"></div> Planowana rezerwacja</div>
@@ -303,7 +264,7 @@ def render(sh):
     """, unsafe_allow_html=True)
 
     # ==========================================
-    # 6. OBSŁUGA ZDARZEŃ KALENDARZA
+    # 5. OBSŁUGA ZDARZEŃ (DRAG & DROP)
     # ==========================================
     if cal_state.get("eventChange"):
         zmieniony = cal_state["eventChange"]["event"]
@@ -342,7 +303,7 @@ def render(sh):
             st.rerun()
 
     # ==========================================
-    # 7. SUPER-PANEL SZCZEGÓŁÓW Z LICZNIKIEM
+    # 6. KREMOWY PANEL SZCZEGÓŁÓW (Wzorowany 1:1 na grafice z załącznika)
     # ==========================================
     if st.session_state.get("wybrana_rezerwacja") and st.session_state.get("pokaz_formularz") != "NOWA":
         rez_id = st.session_state.wybrana_rezerwacja
@@ -359,53 +320,99 @@ def render(sh):
             else:
                 podj_data_disp, podj_czas_disp = "📅 –", "🕒 –"
 
-            # Konstrukcja niesamowitego panelu
-            html_panel = f"""
-            <div style="background: linear-gradient(135deg, rgba(20,25,40,0.95) 0%, rgba(5,10,20,0.98) 100%); 
-                        border: 1px solid #C5A880; border-radius: 12px; padding: 30px; color: #E2DCD3; 
-                        display: flex; flex-direction: row; gap: 30px; box-shadow: 0px 15px 40px rgba(0,0,0,0.8);
-                        position: relative; overflow: hidden;">
-                
-                <!-- Ozdobna ciężarówka w tle prawej strony -->
-                <div style="position: absolute; right: -50px; bottom: -50px; opacity: 0.15; pointer-events: none;">
-                    <img src="data:image/png;base64,{b64_ftl}" width="400">
-                </div>
+            # Rozbijanie rejestracji i typu (jeśli wpisane z ukośnikiem np. WGM 12345 / Volvo FH)
+            pojazd_str = str(row.get('Pojazd', ''))
+            rej = pojazd_str.split('/')[0].strip() if '/' in pojazd_str else (pojazd_str if pojazd_str else '-')
+            typ = pojazd_str.split('/')[1].strip() if '/' in pojazd_str else '-'
 
-                <div style="flex: 2.5; z-index: 2;">
-                    <h2 style="color: #FDFBF7; margin: 0; font-size: 32px; font-weight: 800; text-shadow: 2px 2px 10px rgba(0,0,0,0.8);">{row.get('Nazwa_Imprezy', '-')}</h2>
-                    <h4 style="color: #BA4949; margin: 5px 0 25px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; font-size: 22px;">RAMP A  {row.get('Rampa', '-')}</h4>
-                    <div style="display: flex; gap: 40px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px; border: 1px solid rgba(197, 168, 128, 0.1);">
+            # Konstrukcja identycznego panelu z mockupu
+            html_panel = f"""
+            <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
+                
+                <!-- Kolumna 1: Impreza i Daty -->
+                <div style="flex: 3;">
+                    <h2 style="color: #050A15; margin: 0; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif;">{row.get('Nazwa_Imprezy', '-')}</h2>
+                    <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">RAMP A {row.get('Rampa', '-')}</h4>
+                    
+                    <div style="display: flex; gap: 30px;">
                         <div>
-                            <div style="font-family: 'Bebas Neue', sans-serif; color: #C5A880; font-size: 16px; letter-spacing: 1px;">PLAN</div>
-                            <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">📅 {row.get('Data', '-')}</div>
-                            <div style="font-weight: 600; font-size: 15px; margin-top: 2px;">🕒 {row.get('Godzina_Od', '-')} - {row.get('Godzina_Do', '-')}</div>
+                            <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PLANOWANA REZERWACJA</div>
+                            <div style="font-weight: 600; color: #050A15; font-size: 14px; margin-top: 4px;">📅 {row.get('Data', '-')}</div>
+                            <div style="font-weight: 600; color: #050A15; font-size: 14px; margin-top: 2px;">🕒 {row.get('Godzina_Od', '-')} - {row.get('Godzina_Do', '-')}</div>
                         </div>
                         <div>
-                            <div style="font-family: 'Bebas Neue', sans-serif; color: #10B981; font-size: 16px; letter-spacing: 1px;">PODJAZD (START)</div>
-                            <div style="font-weight: 600; font-size: 15px; margin-top: 5px;">{podj_data_disp}</div>
-                            <div style="font-weight: 600; font-size: 15px; margin-top: 2px;">{podj_czas_disp}</div>
+                            <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PODJECHAŁ POD RAMPĘ</div>
+                            <div style="font-weight: 600; color: #10B981; font-size: 14px; margin-top: 4px;">{podj_data_disp}</div>
+                            <div style="font-weight: 600; color: #10B981; font-size: 14px; margin-top: 2px;">{podj_czas_disp}</div>
                         </div>
                     </div>
                 </div>
                 
-                <div style="flex: 2; border-left: 1px solid rgba(197, 168, 128, 0.2); padding-left: 25px; z-index: 2;">
-                    <div style="font-family: 'Bebas Neue', sans-serif; color: #C5A880; font-size: 18px; margin-bottom: 15px; letter-spacing: 1px;">🚛 FLOTA I KIEROWCA</div>
-                    <table style="width: 100%; font-size: 14px; line-height: 1.8;">
-                        <tr><td style="color: #A39B8F; width: 40%;">REJESTRACJA</td><td style="font-weight: 600; color: #FDFBF7;">{str(row.get('Pojazd', '')).split('/')[0].strip() if '/' in str(row.get('Pojazd', '')) else str(row.get('Pojazd', '-'))}</td></tr>
-                        <tr><td style="color: #A39B8F;">NACZEPA</td><td style="font-weight: 600; color: #FDFBF7;">{row.get('Naczepa', '-')}</td></tr>
-                        <tr><td style="color: #A39B8F;">KIEROWCA</td><td style="font-weight: 800; color: #FDFBF7;">{row.get('Kierowca', '-')}</td></tr>
-                        <tr><td style="color: #A39B8F;">TELEFON</td><td style="font-weight: 600; color: #FDFBF7;">{row.get('Telefon', '-')}</td></tr>
+                <!-- Kolumna 2: Auto -->
+                <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
+                    <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">🚛 DANE AUTA</div>
+                    <table style="width: 100%; font-size: 12px; color: #4A5568;">
+                        <tr><td style="padding-bottom: 6px; width: 40%;">REJESTRACJA</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{rej}</td></tr>
+                        <tr><td style="padding-bottom: 6px;">TYP</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{typ}</td></tr>
+                        <tr><td style="padding-bottom: 6px;">NACZEPA</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{row.get('Naczepa', '-')}</td></tr>
+                        <tr><td>TYP NACZEPY</td><td style="font-weight: 700; color: #050A15;">{row.get('Typ_Naczepy', '-')}</td></tr>
                     </table>
+                </div>
+
+                <!-- Kolumna 3: Kierowca -->
+                <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
+                    <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">👤 DANE KIEROWCY</div>
+                    <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">IMIĘ I NAZWISKO</div>
+                    <div style="font-size: 14px; font-weight: 800; color: #050A15; margin-bottom: 8px;">{row.get('Kierowca', '-')}</div>
+                    <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">TELEFON</div>
+                    <div style="font-size: 13px; font-weight: 600; color: #050A15; margin-bottom: 8px;">{row.get('Telefon', '-')}</div>
+                    <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">E-MAIL</div>
+                    <div style="font-size: 13px; font-weight: 600; color: #050A15;">{row.get('Email', '-')}</div>
                 </div>
             </div>
             """
             
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown(html_panel, unsafe_allow_html=True)
             
-            # --- Przyciski Akcji pod Panelem ---
+            # Tworzymy kolumny do wyświetlenia Panelu HTML + Przycisków AKCJI z prawej strony (jak w mockupie)
+            col_info, col_akcje = st.columns([8.5, 1.5])
+            
+            with col_info:
+                st.markdown(html_panel, unsafe_allow_html=True)
+                
+                # Dolny pasek pod panelem
+                c_text, c_close = st.columns([8, 2])
+                c_text.markdown("<p style='color: #8C8477; font-size: 12px; margin-top: 15px; text-align: center;'>⤢ Przeciągnij rezerwację w kalendarzu, aby zmienić godzinę lub rampę</p>", unsafe_allow_html=True)
+                if c_close.button("✖ ZAMKNIJ", use_container_width=True):
+                    st.session_state.wybrana_rezerwacja = None
+                    st.rerun()
+                    
+            with col_akcje:
+                st.markdown("<div style='background-color: #FDFBF7; border: 1px solid #C5A880; border-radius: 6px; padding: 15px; height: 100%; box-shadow: 0 5px 15px rgba(0,0,0,0.3);'>", unsafe_allow_html=True)
+                st.markdown("<div style='font-family: \"Bebas Neue\", sans-serif; color: #8C8477; font-size: 16px; margin-bottom: 10px; text-align: center; letter-spacing: 2px;'>AKCJE</div>", unsafe_allow_html=True)
+                
+                if st.button("✏️ EDYTUJ", use_container_width=True): 
+                    st.session_state.pokaz_formularz = "EDYCJA"
+                    st.rerun()
+                    
+                if st.button("📄 DUPLIKUJ", use_container_width=True): 
+                    st.session_state.pokaz_formularz = "DUPLIKUJ"
+                    st.rerun()
+                    
+                st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.3);'>", unsafe_allow_html=True)
+                if st.button("🗑️ USUŃ", use_container_width=True):
+                    gs_row = int(row['sheet_row'])
+                    db.delete_row("DB_Rampy", gs_row)
+                    st.session_state.wybrana_rezerwacja = None
+                    st.success("Rezerwacja usunięta!")
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            # ==========================================
+            # INTELIGENTNE PRZYCISKI: ROZPOCZNIJ / ZWOLNIJ RAMPĘ
+            # ==========================================
             st.markdown("<br>", unsafe_allow_html=True)
-            b1, b2, b3, b4 = st.columns([2.5, 2.5, 1, 1])
+            b1, b2, _ = st.columns([3, 3, 4])
             
             is_loading = str(row.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK"
             is_done = str(row.get('Zakonczono', 'NIE')).upper() == "TAK"
@@ -413,26 +420,26 @@ def render(sh):
             with b1:
                 if not is_done:
                     if not is_loading:
-                        if st.button("▶ ROZPOCZNIJ ZAŁADUNEK", use_container_width=True):
+                        if st.button("▶ ROZPOCZNIJ ZAŁADUNEK", type="primary", use_container_width=True):
                             idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
                             df_rampy.at[idx, 'Trwa_Zaladunek'] = "TAK"
+                            # Jeśli nie oznaczono podjazdu, zaznacz go automatycznie teraz
                             if not podjazd_db or podjazd_db in ["nan", "None"]:
                                 df_rampy.at[idx, 'Faktyczny_Podjazd'] = datetime.now().strftime("%Y-%m-%d %H:%M")
                             gs_row = int(df_rampy.at[idx, 'sheet_row'])
                             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                            st.success("Załadunek rozpoczęty!")
                             st.rerun()
                     else:
                         st.button("⏳ ZAŁADUNEK W TOKU...", disabled=True, use_container_width=True)
 
             with b2:
                 if not is_done and is_loading:
-                    if st.button("🟢 ZWOLNIJ RAMPĘ (ZAKOŃCZ)", type="primary", use_container_width=True):
+                    if st.button("🟢 ZWOLNIJ RAMPĘ (ZAKOŃCZ)", use_container_width=True):
                         now = datetime.now()
                         today = now.date()
                         start_dt = now
                         
-                        # Obliczanie czasu (uwzględnienie pauzy od wczoraj)
+                        # Pobranie czasu z bazy
                         if podjazd_db and podjazd_db not in ["nan", "None"]:
                             if len(podjazd_db) > 5:
                                 try: start_dt = datetime.strptime(podjazd_db, "%Y-%m-%d %H:%M")
@@ -444,18 +451,22 @@ def render(sh):
                                     start_dt = datetime.combine(r_date, r_time)
                                 except: pass
                                 
-                        # Logika: Jeśli stał od wczoraj, licz załadunek od 07:00 dzisiaj
+                        # INTELIGENTNA LOGIKA 07:00
+                        # Jeśli auto przyjechało wczoraj, czas startuje dopiero o 07:00 dzisiaj
                         if start_dt.date() < today:
                             start_dt = datetime.combine(today, datetime.time(7, 0))
+                        # Jeśli podjechało dzisiaj rano, ale przed 07:00 (np. 05:30), startuje o 07:00
                         elif start_dt.date() == today and start_dt.time() < datetime.time(7, 0):
                             start_dt = datetime.combine(today, datetime.time(7, 0))
                             
+                        # Obliczanie spędzonego czasu
                         delta = now - start_dt
                         total_minutes = int(delta.total_seconds() / 60)
                         if total_minutes < 0: total_minutes = 0
                         hours, minutes = total_minutes // 60, total_minutes % 60
                         duration_str = f"{hours}h {minutes}m"
                         
+                        # Zapis wyników
                         idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
                         df_rampy.at[idx, 'Trwa_Zaladunek'] = "NIE"
                         df_rampy.at[idx, 'Zakonczono'] = "TAK"
@@ -470,28 +481,19 @@ def render(sh):
                         st.success(f"Rampa zwolniona! Zarejestrowany czas operacji: {duration_str}")
                         st.rerun()
 
-            with b3:
-                if st.button("✏️ EDYTUJ", use_container_width=True): 
-                    st.session_state.pokaz_formularz = "EDYCJA"
-                    st.rerun()
-            with b4:
-                if st.button("✖ ZAMKNIJ", use_container_width=True):
-                    st.session_state.wybrana_rezerwacja = None
-                    st.rerun()
-
         except Exception as e:
             st.error(f"Błąd ładowania szczegółów: {e}")
 
     # ==========================================
-    # 8. FORMULARZ (DODAJ / EDYTUJ)
+    # 7. FORMULARZ (DODAJ / EDYTUJ / DUPLIKUJ)
     # ==========================================
-    if st.session_state.get("pokaz_formularz") in ["NOWA", "EDYCJA"]:
+    if st.session_state.get("pokaz_formularz") in ["NOWA", "EDYCJA", "DUPLIKUJ"]:
         st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.1); margin: 20px 0;'>", unsafe_allow_html=True)
-        tytul = "➕ Nowa Rezerwacja" if st.session_state.pokaz_formularz == "NOWA" else "✏️ Edycja Rezerwacji"
+        tytul = "➕ Nowa Rezerwacja" if st.session_state.pokaz_formularz == "NOWA" else ("📄 Duplikowanie Rezerwacji" if st.session_state.pokaz_formularz == "DUPLIKUJ" else "✏️ Edycja Rezerwacji")
         st.markdown(f"<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>{tytul}</h3>", unsafe_allow_html=True)
         
         dane_edycja = {}
-        if st.session_state.pokaz_formularz == "EDYCJA" and st.session_state.wybrana_rezerwacja:
+        if st.session_state.pokaz_formularz in ["EDYCJA", "DUPLIKUJ"] and st.session_state.wybrana_rezerwacja:
             dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
 
         with st.form("form_rampy", clear_on_submit=True):
@@ -524,10 +526,8 @@ def render(sh):
                 f_email = st.text_input("E-mail", value=dane_edycja.get('Email', ''))
                 
             with fc3:
-                st.markdown("<div style='background: rgba(10, 20, 40, 0.5); padding: 15px; border-radius: 8px; border: 1px solid #1C2D4A;'>", unsafe_allow_html=True)
-                st.markdown("<p style='color: #8C8477; font-weight: bold; margin-bottom: 5px;'>Status Operacji na Rampie</p>", unsafe_allow_html=True)
-                
-                podj_baza = str(dane_edycja.get('Faktyczny_Podjazd', '')).strip()
+                # W przypadku duplikowania czyścimy statusy, auto nie podjechało 2 razy w to samo miejsce
+                podj_baza = "" if st.session_state.pokaz_formularz == "DUPLIKUJ" else str(dane_edycja.get('Faktyczny_Podjazd', '')).strip()
                 val_podj_d, val_podj_t = None, None
                 
                 if podj_baza and podj_baza not in ["nan", "None"]:
@@ -543,25 +543,28 @@ def render(sh):
                             val_podj_d = datetime.strptime(str(dane_edycja.get('Data', st.session_state.rampy_data)), "%Y-%m-%d").date()
                         except: pass
                 
+                st.markdown("<div style='background: rgba(10, 20, 40, 0.5); padding: 15px; border-radius: 8px; border: 1px solid #1C2D4A;'>", unsafe_allow_html=True)
+                st.markdown("<p style='color: #8C8477; font-weight: bold; margin-bottom: 5px;'>Status Operacji na Rampie</p>", unsafe_allow_html=True)
+                
                 dp_col1, dp_col2 = st.columns(2)
                 f_podjazd_data = dp_col1.date_input("Data podjazdu", value=val_podj_d if val_podj_d else val_data)
                 f_podjazd_czas = dp_col2.time_input("Godzina (Puste = czeka)", value=val_podj_t)
                 usun_podjazd = st.checkbox("Wyczyść podjazd (Cofnij status)", value=(val_podj_t is None))
                 
-                f_trwa = st.selectbox("Czy trwa załadunek/rozładunek?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK" else 0)
-                f_koniec = st.selectbox("Czy zakończono całkowicie?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Zakonczono', 'NIE')).upper() == "TAK" else 0)
+                f_trwa = st.selectbox("Czy trwa załadunek/rozładunek?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK" and st.session_state.pokaz_formularz != "DUPLIKUJ" else 0)
+                f_koniec = st.selectbox("Czy zakończono całkowicie?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Zakonczono', 'NIE')).upper() == "TAK" and st.session_state.pokaz_formularz != "DUPLIKUJ" else 0)
                 st.markdown("</div>", unsafe_allow_html=True)
                 
-                f_notatki = st.text_area("Dodatkowe notatki", value=dane_edycja.get('Notatki', ''))
+                f_notatki = st.text_area("Dodatkowe notatki", value="" if st.session_state.pokaz_formularz == "DUPLIKUJ" else dane_edycja.get('Notatki', ''))
             
             sc1, sc2 = st.columns([1, 1])
-            if sc1.form_submit_button("💾 ZAPISZ ZMIANY", type="primary", use_container_width=True):
+            if sc1.form_submit_button("💾 ZAPISZ", type="primary", use_container_width=True):
                 if not f_impreza:
                     st.error("Nazwa Imprezy jest obowiązkowa!")
                 else:
                     final_podjazd = "" if usun_podjazd else (f"{f_podjazd_data.strftime('%Y-%m-%d')} {f_podjazd_czas.strftime('%H:%M')}" if f_podjazd_czas else "")
                     
-                    if st.session_state.pokaz_formularz == "NOWA":
+                    if st.session_state.pokaz_formularz in ["NOWA", "DUPLIKUJ"]:
                         new_id = f"RMP-{int(time.time())}"
                         nowy_wiersz = [
                             new_id, f_rampa, str(f_data), f_od.strftime("%H:%M"), f_do.strftime("%H:%M"),
@@ -569,7 +572,7 @@ def render(sh):
                             f_naczepa, f_typ_naczepy, final_podjazd, f_trwa, f_koniec, f_notatki
                         ]
                         db.append_data("DB_Rampy", nowy_wiersz)
-                        st.success("Rezerwacja dodana pomyślnie!")
+                        st.success("Rezerwacja utworzona!")
                     else:
                         idx = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].index[0]
                         df_rampy.at[idx, 'Rampa'] = f_rampa
@@ -590,7 +593,7 @@ def render(sh):
                         
                         gs_row = int(df_rampy.at[idx, 'sheet_row'])
                         db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                        st.success("Zaktualizowano dane rezerwacji!")
+                        st.success("Zaktualizowano rezerwację!")
 
                     st.session_state.pokaz_formularz = None
                     st.session_state.pop("rampy_calendar_comp", None)
