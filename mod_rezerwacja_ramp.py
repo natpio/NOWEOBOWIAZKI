@@ -48,7 +48,7 @@ def render(sh):
         .l-blue { background-color: #3B82F6; }
         .l-gray { background-color: #718096; }
         </style>
-    """, unsafe_allow_html=True)
+    """.replace('\n', ''), unsafe_allow_html=True)
 
     # Nagłówek wizualny (jak w mockupie)
     st.markdown("""
@@ -59,7 +59,7 @@ def render(sh):
                 <div style="color: #A39B8F; font-size: 13px;">Zarządzaj rezerwacjami ramp – przeciągaj i upuszczaj, aby zmienić czas lub rampę</div>
             </div>
         </div>
-    """, unsafe_allow_html=True)
+    """.replace('\n', ''), unsafe_allow_html=True)
 
     # ==========================================
     # 2. BAZA DANYCH
@@ -93,8 +93,6 @@ def render(sh):
     with c1:
         if st.button("❮", use_container_width=True): st.session_state.rampy_data -= timedelta(days=1); st.rerun()
     with c2:
-        dni_tyg = ["Poniedziałek", "Wtorek", "Środa", "Czwartek", "Piątek", "Sobota", "Niedziela"]
-        nazwa_dnia = dni_tyg[st.session_state.rampy_data.weekday()]
         nowa_data = st.date_input("Data", value=st.session_state.rampy_data, label_visibility="collapsed")
         if nowa_data != st.session_state.rampy_data: st.session_state.rampy_data = nowa_data; st.rerun()
     with c3:
@@ -203,7 +201,7 @@ def render(sh):
         "slotLabelFormat": { "hour": "2-digit", "minute": "2-digit", "hour12": False }
     }
 
-    # CSS bezpośrednio dla kalendarza - replikuje wygląd Twojego zrzutu (cremowe bilety, przerywane krawędzie)
+    # CSS bezpośrednio dla kalendarza - replikuje wygląd Twojego zrzutu (kremowe bilety, przerywane krawędzie)
     cal_css = """
         .fc { background-color: transparent !important; color: #E2DCD3; font-family: 'Inter', sans-serif; }
         
@@ -261,7 +259,7 @@ def render(sh):
             <div class="legend-item"><div class="l-box l-blue"></div> Trwa załadunek</div>
             <div class="legend-item"><div class="l-box l-gray"></div> Zakończono</div>
         </div>
-    """, unsafe_allow_html=True)
+    """.replace('\n', ''), unsafe_allow_html=True)
 
     # ==========================================
     # 5. OBSŁUGA ZDARZEŃ (DRAG & DROP)
@@ -325,15 +323,12 @@ def render(sh):
             rej = pojazd_str.split('/')[0].strip() if '/' in pojazd_str else (pojazd_str if pojazd_str else '-')
             typ = pojazd_str.split('/')[1].strip() if '/' in pojazd_str else '-'
 
-            # Konstrukcja identycznego panelu z mockupu
+            # Konstrukcja identycznego panelu z mockupu. USUNIĘTO \n, BY ZAPOBIEC TWORZENIU BLOKU KODU.
             html_panel = f"""
             <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
-                
-                <!-- Kolumna 1: Impreza i Daty -->
                 <div style="flex: 3;">
                     <h2 style="color: #050A15; margin: 0; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif;">{row.get('Nazwa_Imprezy', '-')}</h2>
                     <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">RAMP A {row.get('Rampa', '-')}</h4>
-                    
                     <div style="display: flex; gap: 30px;">
                         <div>
                             <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PLANOWANA REZERWACJA</div>
@@ -347,8 +342,6 @@ def render(sh):
                         </div>
                     </div>
                 </div>
-                
-                <!-- Kolumna 2: Auto -->
                 <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
                     <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">🚛 DANE AUTA</div>
                     <table style="width: 100%; font-size: 12px; color: #4A5568;">
@@ -358,8 +351,6 @@ def render(sh):
                         <tr><td>TYP NACZEPY</td><td style="font-weight: 700; color: #050A15;">{row.get('Typ_Naczepy', '-')}</td></tr>
                     </table>
                 </div>
-
-                <!-- Kolumna 3: Kierowca -->
                 <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
                     <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">👤 DANE KIEROWCY</div>
                     <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">IMIĘ I NAZWISKO</div>
@@ -378,7 +369,7 @@ def render(sh):
             col_info, col_akcje = st.columns([8.5, 1.5])
             
             with col_info:
-                st.markdown(html_panel, unsafe_allow_html=True)
+                st.markdown(html_panel.replace('\n', ''), unsafe_allow_html=True)
                 
                 # Dolny pasek pod panelem
                 c_text, c_close = st.columns([8, 2])
@@ -404,7 +395,7 @@ def render(sh):
                     gs_row = int(row['sheet_row'])
                     db.delete_row("DB_Rampy", gs_row)
                     st.session_state.wybrana_rezerwacja = None
-                    st.success("Rezerwacja usunięta!")
+                    st.success("Rezerwacja trwale usunięta!")
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
