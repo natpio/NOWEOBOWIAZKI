@@ -129,8 +129,8 @@ def render(sh):
             sc2.form_submit_button("🔍")
     with c6:
         st.markdown('<div class="btn-action-auto">', unsafe_allow_html=True)
-        if st.button("🤖 AUTO-PLANUJ WSZYSTKO", use_container_width=True):
-            with st.spinner("Skanowanie bazy Eventów i alokacja 4h slotów..."):
+        if st.button("🔄 SYNCHRONIZUJ NOWE", use_container_width=True):
+            with st.spinner("Szukanie nowych zleceń i alokacja slotów..."):
                 ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
                 zmieniono = 0
                 if not df_ev.empty:
@@ -142,6 +142,7 @@ def render(sh):
                         ("14:00", "18:00") 
                     ]
                     dostepne_rampy = ["11", "12", "13", "14", "15"]
+                    dzisiaj = date.today()
 
                     for _, ev in df_aktywne_ev.iterrows():
                         ev_id = str(ev.get("ID_Zlecenia", "")).strip()
@@ -150,11 +151,14 @@ def render(sh):
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
-                        # Bezpiecznik na weekendy
+                        # Inteligentne omijanie: Przeszłości i Weekendów
                         try:
-                            if datetime.strptime(data_zal, "%Y-%m-%d").weekday() >= 5: continue
+                            data_zal_obj = datetime.strptime(data_zal, "%Y-%m-%d").date()
+                            if data_zal_obj < dzisiaj: continue # NIE PLANUJ DO TYŁU
+                            if data_zal_obj.weekday() >= 5: continue # OMIJAJ WEEKENDY
                         except: pass
                             
+                        # Sprawdzamy czy to zlecenie już istnieje (Aktualizacja, nie nadpisywanie wszystkiego)
                         is_scheduled = False
                         if not df_rampy.empty and 'Notatki' in df_rampy.columns:
                             if df_rampy['Notatki'].astype(str).str.contains(ev_id).any():
@@ -202,11 +206,11 @@ def render(sh):
                                         
                 if zmieniono > 0:
                     st.cache_data.clear() # CACHE WIPE
-                    st.toast(f"✅ Auto-Planowanie zakończone: Zarezerwowano {zmieniono} nowych slotów (4h)!", icon="🤖")
+                    st.toast(f"✅ Synchronizacja zakończona: Zarezerwowano {zmieniono} nowych slotów!", icon="🔄")
                     time.sleep(1.5)
                     st.rerun()
                 else:
-                    st.toast("ℹ️ Brak nowych załadunków do zaplanowania.", icon="🤖")
+                    st.toast("ℹ️ Brak nowych załadunków do zaplanowania.", icon="✔️")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c7:
@@ -218,6 +222,7 @@ def render(sh):
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Ostrzeżenie weekendowe
     if st.session_state.rampy_data.weekday() >= 5:
         st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
@@ -323,6 +328,7 @@ def render(sh):
         .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
         .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
         
+        /* Baseball ticket style */
         .fc-event {
             border-left: 5px dashed var(--fc-border-color) !important;
             border-right: 5px dashed var(--fc-border-color) !important;
@@ -355,6 +361,7 @@ def render(sh):
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Legenda pod kalendarzem
     st.markdown("""
         <div class="legend-container">
             <div class="legend-item"><div class="l-box l-yellow"></div> Planowana rezerwacja</div>
@@ -390,7 +397,7 @@ def render(sh):
             
             st.session_state.pop("rampy_calendar_comp", None)
             st.cache_data.clear() # CACHE WIPE
-            st.toast(f"✅ Rezerwacja zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
+            st.toast(f"✅ Rezerwacja Zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
             time.sleep(0.5)
             st.rerun()
         except Exception as e:
@@ -574,7 +581,7 @@ def render(sh):
             st.error(f"Błąd ładowania szczegółów: {e}")
 
     # ==========================================
-    # 8. FORMULARZ (DODAJ / EDYTUJ / DUPLIKUJ)
+    # 7. FORMULARZ (DODAJ / EDYTUJ / DUPLIKUJ)
     # ==========================================
     if st.session_state.get("pokaz_formularz") in ["NOWA", "EDYCJA", "DUPLIKUJ"]:
         st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.1); margin: 20px 0;'>", unsafe_allow_html=True)
