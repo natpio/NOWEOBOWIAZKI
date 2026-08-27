@@ -80,7 +80,6 @@ def render(sh):
         st.warning("⚠️ Zbyt wiele zapytań do Google Sheets. Odczekaj chwilę i odśwież.")
         return
 
-    # Inicjalizacja bazy jeśli całkowicie pusta
     if df_rampy.empty and len(df_rampy.columns) <= 1:
         headers = [
             "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
@@ -91,7 +90,6 @@ def render(sh):
         st.cache_data.clear()
         worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
 
-    # TARCZA OCHRONNA: Wymuszenie 16 kolumn, nawet jeśli stary plik GS ma ich mniej
     expected_cols = [
         "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
         "Nazwa_Imprezy", "Pojazd", "Kierowca", "Telefon", "Email", 
@@ -151,14 +149,12 @@ def render(sh):
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
-                        # Inteligentne omijanie: Przeszłości i Weekendów
                         try:
                             data_zal_obj = datetime.strptime(data_zal, "%Y-%m-%d").date()
-                            if data_zal_obj < dzisiaj: continue # NIE PLANUJ DO TYŁU
-                            if data_zal_obj.weekday() >= 5: continue # OMIJAJ WEEKENDY
+                            if data_zal_obj < dzisiaj: continue 
+                            if data_zal_obj.weekday() >= 5: continue 
                         except: pass
                             
-                        # Sprawdzamy czy to zlecenie już istnieje (Aktualizacja, nie nadpisywanie wszystkiego)
                         is_scheduled = False
                         if not df_rampy.empty and 'Notatki' in df_rampy.columns:
                             if df_rampy['Notatki'].astype(str).str.contains(ev_id).any():
@@ -172,7 +168,6 @@ def render(sh):
                                 for rampa_test in dostepne_rampy:
                                     overlap = False
                                     if not df_rampy.empty:
-                                        # Bezpieczne sprawdzanie zajętości
                                         zajete = df_rampy[(df_rampy['Data'].astype(str).str.strip() == data_zal) & (df_rampy['Rampa'].astype(str).str.strip() == rampa_test)]
                                         for _, z in zajete.iterrows():
                                             z_od = str(z.get('Godzina_Od', '00:00')).strip()
@@ -187,7 +182,6 @@ def render(sh):
                                         pojazd_comb = f"{rej} / {typ}" if rej != "nan" and typ != "nan" and rej and typ else (rej if rej != "nan" else typ)
                                         kier = str(ev.get('Kierowca', '')).strip()
                                         
-                                        # Unikalne ID oparte na losowym sufiksie
                                         nowy_id = f"RMP-{int(time.time())}-{random.randint(1000, 9999)}"
                                         nowy_wiersz = [
                                             nowy_id, str(rampa_test), data_zal, test_od, test_do,
@@ -205,7 +199,7 @@ def render(sh):
                                         break
                                         
                 if zmieniono > 0:
-                    st.cache_data.clear() # CACHE WIPE
+                    st.cache_data.clear()
                     st.toast(f"✅ Synchronizacja zakończona: Zarezerwowano {zmieniono} nowych slotów!", icon="🔄")
                     time.sleep(1.5)
                     st.rerun()
@@ -222,16 +216,14 @@ def render(sh):
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Ostrzeżenie weekendowe
     if st.session_state.rampy_data.weekday() >= 5:
         st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
     # ==========================================
-    # 4. SILNIK KALENDARZA (Z wyglądem biletów)
+    # 4. SILNIK KALENDARZA (Z dynamicznym kluczem!)
     # ==========================================
     events = []
     if not df_rampy.empty:
-        # Bezpieczne formatowanie tekstu, zapobiega znikaniu danych
         df_dzien = df_rampy[df_rampy['Data'].astype(str).str.strip() == str(st.session_state.rampy_data)]
         
         if szukana_fraza:
@@ -256,7 +248,6 @@ def render(sh):
             pojazd = str(row.get('Pojazd', ''))
             kierowca = str(row.get('Kierowca', ''))
             
-            # Bezpieczne łapanie numeru rampy (niweluje ew. ".0" z pandas)
             r_id = str(row.get('Rampa', '')).strip()
             if r_id.endswith(".0"): r_id = r_id[:-2]
             if not r_id or r_id == "nan": r_id = "11" 
@@ -316,52 +307,41 @@ def render(sh):
 
     cal_css = """
         .fc { background-color: transparent !important; color: #E2DCD3; font-family: 'Inter', sans-serif; }
-        
         .fc-col-header-cell {
             background-color: #0A1428 !important; border-bottom: 1px solid rgba(197, 168, 128, 0.2) !important;
             font-family: 'Bebas Neue', sans-serif !important; font-size: 18px !important; letter-spacing: 2px !important;
             color: #E2DCD3 !important; padding: 10px 0 !important;
         }
-        
         .fc-timegrid-slot { height: 45px !important; border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important; }
         .fc-timegrid-slot-label { font-size: 12px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
         .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
         .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
         
-        /* Baseball ticket style */
         .fc-event {
-            border-left: 5px dashed var(--fc-border-color) !important;
-            border-right: 5px dashed var(--fc-border-color) !important;
-            border-top: 1px solid rgba(0,0,0,0.1) !important;
-            border-bottom: 1px solid rgba(0,0,0,0.1) !important;
-            border-radius: 4px !important;
-            box-shadow: 2px 4px 10px rgba(0,0,0,0.6) !important;
-            padding: 6px !important;
-            cursor: grab !important;
+            border-left: 5px dashed var(--fc-border-color) !important; border-right: 5px dashed var(--fc-border-color) !important;
+            border-top: 1px solid rgba(0,0,0,0.1) !important; border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+            border-radius: 4px !important; box-shadow: 2px 4px 10px rgba(0,0,0,0.6) !important;
+            padding: 6px !important; cursor: grab !important;
         }
         .fc-event:active { cursor: grabbing !important; }
         .fc-event-main { padding: 0 !important; height: 100% !important; }
-        .fc-event-title {
-            white-space: pre-wrap !important; 
-            font-size: 11px !important;
-            font-weight: 700 !important;
-            line-height: 1.4 !important;
-            color: #1A2530 !important;
-        }
+        .fc-event-title { white-space: pre-wrap !important; font-size: 11px !important; font-weight: 700 !important; line-height: 1.4 !important; color: #1A2530 !important; }
     """
 
     st.markdown('<div style="background: #11151E; border-top: 2px solid #BA4949; padding: 10px; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8);">', unsafe_allow_html=True)
+    
+    # MAGIC FIX: Dynamiczny klucz zmusza komponent kalendarza do narysowania się od nowa, aktualizując widok daty
+    cal_key = f"rampy_cal_{st.session_state.rampy_data.strftime('%Y%m%d')}"
     
     cal_state = calendar(
         events=events, 
         options=calendar_options, 
         custom_css=cal_css,
         callbacks=["eventClick", "eventChange"], 
-        key="rampy_calendar_comp"
+        key=cal_key
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Legenda pod kalendarzem
     st.markdown("""
         <div class="legend-container">
             <div class="legend-item"><div class="l-box l-yellow"></div> Planowana rezerwacja</div>
@@ -372,7 +352,7 @@ def render(sh):
     """.replace('\n', ''), unsafe_allow_html=True)
 
     # ==========================================
-    # 5. OBSŁUGA ZDARZEŃ (DRAG & DROP ORAZ RESIZE)
+    # 5. OBSŁUGA ZDARZEŃ
     # ==========================================
     if cal_state.get("eventChange"):
         zmieniony = cal_state["eventChange"]["event"]
@@ -395,8 +375,8 @@ def render(sh):
             gs_row = int(df_rampy.at[idx, 'sheet_row'])
             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
             
-            st.session_state.pop("rampy_calendar_comp", None)
-            st.cache_data.clear() # CACHE WIPE
+            st.session_state.pop(cal_key, None)
+            st.cache_data.clear() 
             st.toast(f"✅ Rezerwacja Zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
             time.sleep(0.5)
             st.rerun()
@@ -408,7 +388,7 @@ def render(sh):
         if st.session_state.wybrana_rezerwacja != klikniete_id:
             st.session_state.wybrana_rezerwacja = klikniete_id
             st.session_state.pokaz_formularz = None
-            st.session_state.pop("rampy_calendar_comp", None)
+            st.session_state.pop(cal_key, None)
             st.rerun()
 
     # ==========================================
@@ -504,8 +484,8 @@ def render(sh):
                     gs_row = int(row['sheet_row'])
                     db.delete_row("DB_Rampy", gs_row)
                     st.session_state.wybrana_rezerwacja = None
-                    st.cache_data.clear() # CACHE WIPE
-                    st.success("Rezerwacja usunięta!")
+                    st.cache_data.clear() 
+                    st.success("Rezerwacja trwale usunięta!")
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -528,7 +508,7 @@ def render(sh):
                                 df_rampy.at[idx, 'Faktyczny_Podjazd'] = datetime.now().strftime("%Y-%m-%d %H:%M")
                             gs_row = int(df_rampy.at[idx, 'sheet_row'])
                             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                            st.cache_data.clear() # CACHE WIPE
+                            st.cache_data.clear() 
                             st.rerun()
                     else:
                         st.button("⏳ ZAŁADUNEK W TOKU...", disabled=True, use_container_width=True)
@@ -573,7 +553,7 @@ def render(sh):
                         gs_row = int(df_rampy.at[idx, 'sheet_row'])
                         db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
                         st.session_state.wybrana_rezerwacja = None
-                        st.cache_data.clear() # CACHE WIPE
+                        st.cache_data.clear() 
                         st.success(f"Rampa zwolniona! Zarejestrowany czas operacji: {duration_str}")
                         st.rerun()
 
@@ -704,7 +684,7 @@ def render(sh):
                             f_naczepa, f_typ_naczepy, final_podjazd, f_trwa, f_koniec, f_notatki
                         ]
                         db.append_data("DB_Rampy", [str(x) for x in nowy_wiersz])
-                        st.cache_data.clear() # CACHE WIPE
+                        st.cache_data.clear() 
                         st.success("Rezerwacja utworzona!")
                     else:
                         idx = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].index[0]
@@ -726,11 +706,11 @@ def render(sh):
                         
                         gs_row = int(df_rampy.at[idx, 'sheet_row'])
                         db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                        st.cache_data.clear() # CACHE WIPE
+                        st.cache_data.clear() 
                         st.success("Zaktualizowano rezerwację!")
 
                     st.session_state.pokaz_formularz = None
-                    st.session_state.pop("rampy_calendar_comp", None)
+                    st.session_state.pop(cal_key, None)
                     time.sleep(0.5)
                     st.rerun()
             if sc2.form_submit_button("✖ ANULUJ", use_container_width=True):
