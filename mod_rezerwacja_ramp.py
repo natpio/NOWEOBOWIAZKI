@@ -487,6 +487,41 @@ def render(sh):
         if st.session_state.pokaz_formularz in ["EDYCJA", "DUPLIKUJ"] and st.session_state.wybrana_rezerwacja:
             dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
 
+        # --- NOWOŚĆ: MOST Z BAZĄ EVENTÓW ---
+        ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
+        if st.session_state.pokaz_formularz == "NOWA" and not df_ev.empty:
+            df_akt_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
+            if not df_akt_ev.empty:
+                st.markdown("<div style='background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.3); padding: 15px; border-radius: 6px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                opcje_dict = {"-- Wypełnij formularz ręcznie --": None}
+                for _, r in df_akt_ev.iterrows():
+                    opcje_dict[f"🚛 {r.get('ID_Zlecenia', 'Brak')} | {r.get('Nazwa_Targow', 'Brak')}"] = r
+                
+                wybrany_import = st.selectbox("🔗 Opcjonalnie: Zaimportuj dane z aktywnego zlecenia z modułu Eventy PRO:", list(opcje_dict.keys()))
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                if wybrany_import != "-- Wypełnij formularz ręcznie --":
+                    ev_data = opcje_dict[wybrany_import]
+                    rej = str(ev_data.get('Nr_Rejestracyjny', '')).strip()
+                    typ = str(ev_data.get('Typ_Pojazdu', '')).strip()
+                    if rej == "nan": rej = ""
+                    if typ == "nan": typ = ""
+                    pojazd_comb = f"{rej} / {typ}" if rej and typ else (rej if rej else typ)
+                    
+                    data_ev = str(ev_data.get('Data_Zlecenia_Tr', '')).strip()
+                    if data_ev in ["nan", "None", "NaT"]: data_ev = ""
+                    kier_ev = str(ev_data.get('Kierowca', '')).strip()
+                    if kier_ev == "nan": kier_ev = ""
+
+                    dane_edycja = {
+                        'Nazwa_Imprezy': str(ev_data.get('Nazwa_Targow', '')).strip(),
+                        'Pojazd': pojazd_comb,
+                        'Kierowca': kier_ev,
+                        'Data': data_ev,
+                        'Notatki': f"Powiązane z: {ev_data.get('ID_Zlecenia', '')}"
+                    }
+        # -----------------------------------
+
         with st.form("form_rampy", clear_on_submit=True):
             fc1, fc2, fc3 = st.columns([1, 1, 1])
             with fc1:
@@ -517,18 +552,17 @@ def render(sh):
                 f_email = st.text_input("E-mail", value=dane_edycja.get('Email', ''))
                 
             with fc3:
-                # W przypadku duplikowania czyścimy statusy, auto nie podjechało 2 razy w to samo miejsce
                 podj_baza = "" if st.session_state.pokaz_formularz == "DUPLIKUJ" else str(dane_edycja.get('Faktyczny_Podjazd', '')).strip()
                 val_podj_d, val_podj_t = None, None
                 
                 if podj_baza and podj_baza not in ["nan", "None"]:
-                    if len(podj_baza) > 5: # YYYY-MM-DD HH:MM
+                    if len(podj_baza) > 5:
                         try:
                             dt_obj = datetime.strptime(podj_baza, "%Y-%m-%d %H:%M")
                             val_podj_d = dt_obj.date()
                             val_podj_t = dt_obj.time()
                         except: pass
-                    else: # Tylko HH:MM
+                    else:
                         try:
                             val_podj_t = datetime.strptime(podj_baza, "%H:%M").time()
                             val_podj_d = datetime.strptime(str(dane_edycja.get('Data', st.session_state.rampy_data)), "%Y-%m-%d").date()
