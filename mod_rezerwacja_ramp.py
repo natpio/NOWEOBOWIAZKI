@@ -7,11 +7,11 @@ import db
 
 def render(sh):
     # ==========================================
-    # 1. NAPRAWA WYDAJNOŚCI (LAG PODCZAS PISANIA) ORAZ STYLIZACJA 100% MOCKUP
+    # 1. NAPRAWA WYDAJNOŚCI (LAG PODCZAS PISANIA)
     # ==========================================
+    # Usunięcie efektu blur na polach tekstowych drastycznie poprawia wydajność wpisywania.
     st.markdown("""
         <style>
-        /* CRITICAL PERFORMANCE FIX: Usunięcie blur'a i wymuszenie akceleracji sprzętowej na polach tekstowych */
         div[data-testid="stTextInput"] input, 
         div[data-testid="stTextArea"] textarea, 
         div[data-testid="stNumberInput"] input {
@@ -22,40 +22,6 @@ def render(sh):
             border: 1px solid #1C2D4A !important;
         }
         
-        /* Główne tło i usuwanie marginesów w kontenerach kalendarza */
-        .fc { background-color: transparent !important; color: #E2DCD3; font-family: 'Inter', sans-serif; }
-        
-        /* Stylizacja nagłówków kolumn (RAMP A 11, itp.) */
-        .fc-col-header-cell {
-            background-color: #12100E !important;
-            border-bottom: 2px solid rgba(197, 168, 128, 0.2) !important;
-            font-family: 'Bebas Neue', sans-serif !important;
-            font-size: 20px !important;
-            letter-spacing: 2px !important;
-            color: #E2DCD3 !important;
-            padding: 12px 0 !important;
-        }
-        
-        /* Stylizacja siatki godzinowej i tła */
-        .fc-timegrid-slot { height: 50px !important; border-bottom: 1px dashed rgba(197, 168, 128, 0.1) !important; }
-        .fc-timegrid-slot-label {
-            font-size: 13px !important; color: #C5A880 !important; font-weight: 600 !important;
-            border-right: 1px solid rgba(197, 168, 128, 0.1) !important;
-            vertical-align: top !important; padding-top: 5px !important;
-        }
-        .fc-theme-standard td, .fc-theme-standard th { border-right: 1px solid rgba(197, 168, 128, 0.1) !important; }
-        
-        /* Całkowite wyczyszczenie domyślnych stylów FullCalendar dla zdarzeń */
-        .fc-event {
-            background: transparent !important;
-            border: none !important;
-            padding: 2px 6px !important; /* Daje miejsce na cień biletu */
-            cursor: grab !important;
-        }
-        .fc-event:active { cursor: grabbing !important; }
-        .fc-event-main { padding: 0 !important; height: 100% !important; }
-        
-        /* Legenda poniżej kalendarza */
         .legend-container {
             display: flex; gap: 20px; align-items: center; margin: 15px 0 30px 0;
             font-size: 13px; color: #A39B8F; font-weight: 600;
@@ -96,7 +62,7 @@ def render(sh):
         st.warning("⚠️ Zbyt wiele zapytań do Google Sheets. Odczekaj chwilę i odśwież.")
         return
 
-    # Jeśli baza jest pusta, inicjalizujemy ją nowym zestawem kolumn z mockupu
+    # Inicjalizacja pustej bazy
     if df_rampy.empty and len(df_rampy.columns) <= 1:
         headers = [
             "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
@@ -107,13 +73,13 @@ def render(sh):
         st.cache_data.clear()
         worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
 
-    # Ustawienie stanu sesji do kontroli interfejsu
+    # Ustawienie stanu sesji
     if "rampy_data" not in st.session_state: st.session_state.rampy_data = date.today()
     if "wybrana_rezerwacja" not in st.session_state: st.session_state.wybrana_rezerwacja = None
     if "pokaz_formularz" not in st.session_state: st.session_state.pokaz_formularz = None
 
     # ==========================================
-    # 3. GÓRNY PASEK NAWIGACYJNY (100% Mockup)
+    # 3. GÓRNY PASEK NAWIGACYJNY
     # ==========================================
     st.markdown('<div class="top-bar-btn">', unsafe_allow_html=True)
     c1, c2, c3, c4, c5, c6, c7 = st.columns([0.5, 2, 0.5, 1.2, 2, 3.5, 2], vertical_alignment="center")
@@ -130,20 +96,19 @@ def render(sh):
     with c5:
         pokaz_moje = st.toggle("POKAŻ TYLKO MOJE")
     with c6:
-        # Formularz wyszukiwania zablokuje niepotrzebne przeładowywanie co literę!
         with st.form("search_form", border=False):
             sc1, sc2 = st.columns([5, 1])
             szukana_fraza = sc1.text_input("Szukaj", placeholder="🔍 Szukaj rezerwacji, auta, kierowcy...", label_visibility="collapsed")
             sc2.form_submit_button("Szukaj")
     with c7:
-        st.markdown('</div>', unsafe_allow_html=True) # Zamykamy klasę szarych przycisków przed czerwonym
+        st.markdown('</div>', unsafe_allow_html=True) 
         if st.button("➕ NOWA REZERWACJA", type="primary", use_container_width=True):
             st.session_state.pokaz_formularz = "NOWA"
             st.session_state.wybrana_rezerwacja = None
             st.rerun()
 
     # ==========================================
-    # 4. SILNIK KALENDARZA I WIZUALIZACJA
+    # 4. SILNIK KALENDARZA (Bezpieczny)
     # ==========================================
     events = []
     if not df_rampy.empty:
@@ -158,22 +123,38 @@ def render(sh):
             trwa_zaladunek = str(row.get('Trwa_Zaladunek', '')).strip().upper() == "TAK"
             zakonczono = str(row.get('Zakonczono', '')).strip().upper() == "TAK"
             
+            impreza = str(row.get('Nazwa_Imprezy', ''))
+            pojazd = str(row.get('Pojazd', ''))
+            kierowca = str(row.get('Kierowca', ''))
+            
+            # Weryfikacja statusów dla ramki
+            if zakonczono:
+                kolor_ramki = "#718096" # Szary
+                status_txt = "⬛ Zakończono"
+            elif trwa_zaladunek:
+                kolor_ramki = "#3B82F6" # Niebieski
+                status_txt = "⏳ Trwa załadunek..."
+            elif podjazd and podjazd not in ["nan", "None", ""]:
+                kolor_ramki = "#10B981" # Zielony
+                status_txt = f"✔ Podjechał: {podjazd}"
+            else:
+                kolor_ramki = "#C5A880" # Żółty/Złoty
+                status_txt = "🕒 Podjechał: –"
+
+            # Tytuł wyświetli się warstwami dzięki \n i 'white-space: pre-wrap' w CSS
+            tytul_eventu = f"{impreza.upper()}\n{pojazd}\n{kierowca}\n\n{status_txt}"
+
             events.append({
                 "id": str(row.get('ID_Rezerwacji', '')),
                 "resourceId": str(row.get('Rampa', '')),
                 "start": f"{row['Data']}T{row.get('Godzina_Od', '00:00')}:00",
                 "end": f"{row['Data']}T{row.get('Godzina_Do', '01:00')}:00",
-                "title": str(row.get('Nazwa_Imprezy', '')),
-                "extendedProps": {
-                    "pojazd": str(row.get('Pojazd', '')),
-                    "kierowca": str(row.get('Kierowca', '')),
-                    "podjazd": podjazd,
-                    "trwa_zaladunek": "TAK" if trwa_zaladunek else "NIE",
-                    "zakonczono": "TAK" if zakonczono else "NIE"
-                }
+                "title": tytul_eventu,
+                "borderColor": kolor_ramki,
+                "textColor": "#1A2530",
+                "extendedProps": {"podjazd": podjazd}
             })
 
-    # Konfiguracja struktury siatki
     calendar_options = {
         "initialView": "resourceTimeGridDay",
         "initialDate": str(st.session_state.rampy_data),
@@ -184,62 +165,73 @@ def render(sh):
             {"id": "14", "title": "RAMP A  14"},
             {"id": "15", "title": "RAMP A  15"}
         ],
-        "slotMinTime": "07:00:00",
-        "slotMaxTime": "19:00:00",
+        "slotMinTime": "06:00:00",
+        "slotMaxTime": "22:00:00",
         "slotDuration": "00:30:00",
         "allDaySlot": False,
-        "editable": True,         # Włącza DRAG & DROP!
+        "editable": True,         # Włącza DRAG & DROP
         "droppable": True,
         "selectable": True,
-        "headerToolbar": False,   # Ukrywamy brzydki pasek nawigacji
+        "headerToolbar": False,   # Wyłączamy pasek
         "height": "auto",
         "slotLabelFormat": { "hour": "2-digit", "minute": "2-digit", "hour12": False }
     }
 
-    # JAVASCRIPT: Magiczny generator biletów. Tworzy idealne "Dashed borders" wg makiety!
-    js_event_content = """function(arg) {
-        let props = arg.event.extendedProps;
-        let podjazd = props.podjazd;
-        let isZaladunek = props.trwa_zaladunek === 'TAK';
-        let isDone = props.zakonczono === 'TAK';
+    # Czysty CSS wstrzykiwany bezpośrednio do ramki iframe kalendarza
+    cal_css = """
+        .fc { background-color: transparent !important; color: #E2DCD3; font-family: 'Inter', sans-serif; }
         
-        let statusHtml = '';
-        let borderColor = '#C5A880'; // Żółty - Planowana rezerwacja
-        
-        if (isDone) {
-            borderColor = '#718096'; // Szary - Zakończono
-            statusHtml = `<div style='color: #718096; font-size: 11px; margin-top: 4px;'><span style='margin-right: 4px;'>⬛</span> Zakończono</div>`;
-        } else if (isZaladunek) {
-            borderColor = '#3B82F6'; // Niebieski - Trwa załadunek
-            statusHtml = `<div style='color: #3B82F6; font-size: 11px; margin-top: 4px;'><span style='margin-right: 4px;'>⏳</span> Trwa załadunek...</div>`;
-        } else if (podjazd && podjazd !== 'nan' && podjazd !== 'None' && podjazd !== '') {
-            borderColor = '#10B981'; // Zielony - Podjechał pod rampę
-            statusHtml = `<div style='color: #10B981; font-size: 11px; margin-top: 4px;'><span style='margin-right: 4px;'>✔</span> Podjechał: ${podjazd}</div>`;
-        } else {
-            statusHtml = `<div style='color: #A0AEC0; font-size: 11px; margin-top: 4px;'><span style='margin-right: 4px;'>🕒</span> Podjechał: –</div>`;
+        .fc-col-header-cell {
+            background-color: #12100E !important;
+            border-bottom: 2px solid rgba(197, 168, 128, 0.2) !important;
+            font-family: 'Bebas Neue', sans-serif !important;
+            font-size: 20px !important;
+            letter-spacing: 2px !important;
+            color: #E2DCD3 !important;
+            padding: 12px 0 !important;
         }
+        
+        .fc-timegrid-slot { height: 50px !important; border-bottom: 1px dashed rgba(197, 168, 128, 0.1) !important; }
+        .fc-timegrid-slot-label {
+            font-size: 13px !important; color: #C5A880 !important; font-weight: 600 !important;
+            border-right: 1px solid rgba(197, 168, 128, 0.1) !important;
+            vertical-align: top !important; padding-top: 5px !important;
+        }
+        .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
+        .fc-timegrid-col { background: rgba(5, 10, 21, 0.4) !important; }
+        
+        /* Styl biletów baseballowych */
+        .fc-event {
+            background-color: #FDFBF7 !important;
+            border-left: 5px dashed var(--fc-border-color) !important;
+            border-right: 5px dashed var(--fc-border-color) !important;
+            border-top: 1px solid rgba(0,0,0,0.1) !important;
+            border-bottom: 1px solid rgba(0,0,0,0.1) !important;
+            border-radius: 4px !important;
+            box-shadow: 2px 4px 10px rgba(0,0,0,0.4) !important;
+            padding: 6px !important;
+            cursor: grab !important;
+        }
+        .fc-event:active { cursor: grabbing !important; }
+        .fc-event-main { padding: 0 !important; height: 100% !important; }
+        
+        .fc-event-title {
+            white-space: pre-wrap !important; 
+            font-size: 12px !important;
+            font-weight: 600 !important;
+            line-height: 1.4 !important;
+            color: #1A2530 !important;
+        }
+    """
 
-        let html = `
-            <div style='height: 100%; width: 100%; background-color: #FDFBF7; border-left: 5px dashed ${borderColor}; border-right: 5px dashed ${borderColor}; box-sizing: border-box; padding: 6px 10px; display: flex; flex-direction: column; justify-content: space-between; color: #1A2530; font-family: "Inter", sans-serif; box-shadow: inset 0px 0px 5px rgba(0,0,0,0.05);'>
-                <div>
-                    <div style='font-size: 10px; color: #718096; margin-bottom: 2px; font-weight: 600;'>${arg.timeText}</div>
-                    <div style='font-size: 13px; font-weight: 800; color: #050A15; text-transform: uppercase; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;'>${arg.event.title}</div>
-                    <div style='font-size: 11px; color: #4A5568; margin-bottom: 1px;'>${props.pojazd}</div>
-                    <div style='font-size: 11px; color: #4A5568;'>${props.kierowca}</div>
-                </div>
-                ${statusHtml}
-            </div>
-        `;
-        return { html: html };
-    }"""
-
-    # Tło pod kalendarz
     st.markdown('<div style="background: rgba(18, 16, 14, 0.9); padding: 15px; border-radius: 8px; border: 1px solid rgba(197, 168, 128, 0.2); margin-top: 15px;">', unsafe_allow_html=True)
     
+    # Przekazujemy listę zdarzeń ['eventClick', 'eventChange'] w formie tablicy – zapobiega błędowi "a.includes"!
     cal_state = calendar(
         events=events, 
         options=calendar_options, 
-        callbacks={"eventContent": js_event_content},
+        custom_css=cal_css,
+        callbacks=["eventClick", "eventChange"], 
         key="rampy_calendar_comp"
     )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -283,9 +275,9 @@ def render(sh):
             gs_row = int(df_rampy.at[idx, 'sheet_row'])
             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
             
-            # Czyścimy bufor, by zmiana załadowała się poprawnie
             st.session_state.pop("rampy_calendar_comp", None)
             st.toast(f"✅ Przypisano do Rampy {nowa_rampa} ({nowy_od} - {nowy_do})")
+            time.sleep(0.5)
             st.rerun()
         except Exception as e:
             st.error(f"Błąd przesunięcia: {e}")
@@ -293,7 +285,6 @@ def render(sh):
     # Kliknięcie w bilet
     if cal_state.get("eventClick"):
         klikniete_id = cal_state["eventClick"]["event"]["id"]
-        # Aktualizujemy stan i robimy rerun by wyświetlić panel na dole
         if st.session_state.wybrana_rezerwacja != klikniete_id:
             st.session_state.wybrana_rezerwacja = klikniete_id
             st.session_state.pokaz_formularz = None
@@ -305,7 +296,6 @@ def render(sh):
     # ==========================================
     if st.session_state.get("wybrana_rezerwacja") and st.session_state.get("pokaz_formularz") != "NOWA":
         rez_id = st.session_state.wybrana_rezerwacja
-        # Pobieramy najświeższe dane z df (odświeżanego regularnie przez Streamlit)
         try:
             row = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].iloc[0]
             
@@ -351,7 +341,7 @@ def render(sh):
             st.markdown("<br>", unsafe_allow_html=True)
             col_info, col_btn = st.columns([8.5, 1.5])
             with col_info:
-                st.markdown(html_content, unsafe_allow_html=True)
+                st.markdown(html_panel, unsafe_allow_html=True)
                 
                 c_text, c_close = st.columns([8, 2])
                 c_text.markdown("<p style='color: #8C8477; font-size: 12px; margin-top: 15px; text-align: center;'>⤢ Przeciągnij rezerwację w kalendarzu, aby zmienić godzinę lub rampę</p>", unsafe_allow_html=True)
@@ -382,7 +372,6 @@ def render(sh):
         tytul = "➕ Nowa Rezerwacja" if st.session_state.pokaz_formularz == "NOWA" else "✏️ Edycja Rezerwacji"
         st.markdown(f"<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>{tytul}</h3>", unsafe_allow_html=True)
         
-        # Pobieranie istniejących danych jeśli edycja
         dane_edycja = {}
         if st.session_state.pokaz_formularz == "EDYCJA" and st.session_state.wybrana_rezerwacja:
             dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
@@ -394,13 +383,19 @@ def render(sh):
                 f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15"], index=["11", "12", "13", "14", "15"].index(dane_edycja.get('Rampa', '11')) if dane_edycja.get('Rampa') in ["11", "12", "13", "14", "15"] else 0)
                 
                 dt_str = str(dane_edycja.get('Data', st.session_state.rampy_data))
-                f_data = st.date_input("Data rezerwacji", value=datetime.strptime(dt_str, "%Y-%m-%d").date() if dt_str else st.session_state.rampy_data)
+                try: val_data = datetime.strptime(dt_str, "%Y-%m-%d").date() if dt_str and dt_str not in ["nan", "None"] else st.session_state.rampy_data
+                except: val_data = st.session_state.rampy_data
+                f_data = st.date_input("Data rezerwacji", value=val_data)
                 
                 od_str = str(dane_edycja.get('Godzina_Od', '08:00')).strip()
-                f_od = st.time_input("Godzina Od", value=datetime.strptime(od_str, "%H:%M").time() if od_str and od_str not in ["nan", "None"] else datetime.strptime("08:00", "%H:%M").time())
+                try: val_od = datetime.strptime(od_str, "%H:%M").time() if od_str and od_str not in ["nan", "None"] else datetime.strptime("08:00", "%H:%M").time()
+                except: val_od = datetime.strptime("08:00", "%H:%M").time()
+                f_od = st.time_input("Godzina Od", value=val_od)
                 
                 do_str = str(dane_edycja.get('Godzina_Do', '10:00')).strip()
-                f_do = st.time_input("Godzina Do", value=datetime.strptime(do_str, "%H:%M").time() if do_str and do_str not in ["nan", "None"] else datetime.strptime("10:00", "%H:%M").time())
+                try: val_do = datetime.strptime(do_str, "%H:%M").time() if do_str and do_str not in ["nan", "None"] else datetime.strptime("10:00", "%H:%M").time()
+                except: val_do = datetime.strptime("10:00", "%H:%M").time()
+                f_do = st.time_input("Godzina Do", value=val_do)
                 
             with fc2:
                 f_pojazd = st.text_input("Pojazd (Rejestracja / Typ)", value=dane_edycja.get('Pojazd', ''))
@@ -415,7 +410,9 @@ def render(sh):
                 st.markdown("<p style='color: #8C8477; font-weight: bold; margin-bottom: 5px;'>Status Operacji na Rampie</p>", unsafe_allow_html=True)
                 
                 podj_baza = str(dane_edycja.get('Faktyczny_Podjazd', '')).strip()
-                val_podj = datetime.strptime(podj_baza, "%H:%M").time() if podj_baza and podj_baza not in ["nan", "None"] else None
+                try: val_podj = datetime.strptime(podj_baza, "%H:%M").time() if podj_baza and podj_baza not in ["nan", "None"] else None
+                except: val_podj = None
+                
                 f_podjazd = st.time_input("Kiedy podjechał? (Zostaw puste = czeka)", value=val_podj)
                 usun_podjazd = st.checkbox("Wyczyść datę podjazdu (Cofnij)")
                 
