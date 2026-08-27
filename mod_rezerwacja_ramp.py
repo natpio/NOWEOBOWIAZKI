@@ -59,7 +59,7 @@ def render(sh):
             <div style="font-size: 42px;">📅</div>
             <div>
                 <h1 style="color: #FDFBF7; margin: 0; font-size: 34px; font-weight: 800; font-family: 'Bebas Neue', sans-serif; letter-spacing: 2px; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);">REZERWACJA RAMPY</h1>
-                <div style="color: #A39B8F; font-size: 13px;">Zarządzaj rezerwacjami ramp – przeciągaj i upuszczaj, aby zmienić czas lub rampę</div>
+                <div style="color: #A39B8F; font-size: 13px;">Zarządzaj rezerwacjami ramp. Przeciągnij bilet za środek by zmienić czas. <b>Złap za dolną krawędź biletu, aby go wydłużyć lub skrócić.</b></div>
             </div>
         </div>
     """.replace('\n', ''), unsafe_allow_html=True)
@@ -91,7 +91,7 @@ def render(sh):
     # 3. GÓRNY PASEK NAWIGACYJNY I AUTO-PLANOWANIE
     # ==========================================
     st.markdown('<div class="top-bar-btn">', unsafe_allow_html=True)
-    c1, c2, c3, c4, c5, c6, c7 = st.columns([0.5, 2.0, 0.5, 1.0, 3.5, 2.2, 2.2], vertical_alignment="center")
+    c1, c2, c3, c4, c5, c6, c7 = st.columns([0.5, 2.0, 0.5, 2.0, 3.0, 2.0, 2.0], vertical_alignment="center")
     
     with c1:
         if st.button("❮", use_container_width=True): st.session_state.rampy_data -= timedelta(days=1); st.rerun()
@@ -101,26 +101,28 @@ def render(sh):
     with c3:
         if st.button("❯", use_container_width=True): st.session_state.rampy_data += timedelta(days=1); st.rerun()
     with c4:
-        if st.button("DZIŚ", use_container_width=True): st.session_state.rampy_data = date.today(); st.rerun()
+        sc4_1, sc4_2 = st.columns(2)
+        if sc4_1.button("DZIŚ", use_container_width=True): st.session_state.rampy_data = date.today(); st.rerun()
+        if sc4_2.button("+7 DNI", use_container_width=True): st.session_state.rampy_data += timedelta(days=7); st.rerun()
     with c5:
         with st.form("search_form", border=False):
-            sc1, sc2 = st.columns([5, 1])
-            szukana_fraza = sc1.text_input("Szukaj", placeholder="🔍 Szukaj rezerwacji, auta, kierowcy...", label_visibility="collapsed")
-            sc2.form_submit_button("Szukaj")
+            sc1, sc2 = st.columns([4, 1])
+            szukana_fraza = sc1.text_input("Szukaj", placeholder="🔍 Szukaj...", label_visibility="collapsed")
+            sc2.form_submit_button("🔍")
     with c6:
         st.markdown('<div class="btn-action-auto">', unsafe_allow_html=True)
-        if st.button("🤖 AUTO-PLANUJ Z EVENTÓW", use_container_width=True):
-            # SILNIK INTELIGENTNEGO PLANOWANIA
-            with st.spinner("Skanowanie bazy Eventów i alokacja slotów..."):
+        if st.button("🤖 AUTO-PLANUJ WSZYSTKO", use_container_width=True):
+            with st.spinner("Skanowanie bazy Eventów i alokacja 4h slotów..."):
                 ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
                 zmieniono = 0
                 if not df_ev.empty:
                     df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
                     
-                    # Definiujemy standardowe dwugodzinne okna
+                    # Definiujemy standardowe 4-godzinne okna
                     dostepne_sloty = [
-                        ("07:00", "09:00"), ("09:00", "11:00"), 
-                        ("11:00", "13:00"), ("13:00", "15:00"), ("15:00", "17:00")
+                        ("07:00", "11:00"), 
+                        ("11:00", "15:00"), 
+                        ("14:00", "18:00") 
                     ]
                     dostepne_rampy = ["11", "12", "13", "14", "15"]
 
@@ -131,7 +133,13 @@ def render(sh):
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
-                        # Sprawdzamy, czy ten Event nie ma już przypisanej rampy
+                        # Bezpiecznik: Omijamy weekendy w auto-planowaniu
+                        try:
+                            if datetime.strptime(data_zal, "%Y-%m-%d").weekday() >= 5:
+                                continue
+                        except:
+                            pass
+                            
                         is_scheduled = False
                         if not df_rampy.empty and 'Notatki' in df_rampy.columns:
                             if df_rampy['Notatki'].astype(str).str.contains(ev_id).any():
@@ -143,7 +151,6 @@ def render(sh):
                                 if przypisano: break
                                 
                                 for rampa_test in dostepne_rampy:
-                                    # Sprawdzamy czy dany slot jest wolny
                                     overlap = False
                                     if not df_rampy.empty:
                                         zajete = df_rampy[(df_rampy['Data'] == data_zal) & (df_rampy['Rampa'] == rampa_test)]
@@ -155,7 +162,6 @@ def render(sh):
                                                 break
                                                 
                                     if not overlap:
-                                        # ZNALEZIONO WOLNĄ LUKĘ!
                                         rej = str(ev.get('Nr_Rejestracyjny', '')).strip()
                                         typ = str(ev.get('Typ_Pojazdu', '')).strip()
                                         pojazd_comb = f"{rej} / {typ}" if rej != "nan" and typ != "nan" and rej and typ else (rej if rej != "nan" else typ)
@@ -170,7 +176,6 @@ def render(sh):
                                         ]
                                         db.append_data("DB_Rampy", nowy_wiersz)
                                         
-                                        # BEZPIECZNE DODANIE DO DF (naprawia błąd "mismatched columns")
                                         kolumny = [
                                             "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
                                             "Nazwa_Imprezy", "Pojazd", "Kierowca", "Telefon", "Email", 
@@ -184,7 +189,7 @@ def render(sh):
                                         break
                                         
                 if zmieniono > 0:
-                    st.toast(f"✅ Auto-Planowanie zakończone: Zarezerwowano {zmieniono} nowych slotów!", icon="🤖")
+                    st.toast(f"✅ Auto-Planowanie zakończone: Zarezerwowano {zmieniono} nowych slotów (4h)!", icon="🤖")
                     time.sleep(1.5)
                     st.rerun()
                 else:
@@ -202,7 +207,7 @@ def render(sh):
 
     # Ostrzeżenie weekendowe
     if st.session_state.rampy_data.weekday() >= 5:
-        st.error("⚠️ Magazyn w weekendy jest zamknięty. Dodawaj rezerwacje tylko po wcześniejszym uzgodnieniu z pracownikami magazynu.")
+        st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
     # ==========================================
     # 4. SILNIK KALENDARZA (Z wyglądem biletów)
@@ -220,7 +225,7 @@ def render(sh):
             trwa_zaladunek = str(row.get('Trwa_Zaladunek', '')).strip().upper() == "TAK"
             zakonczono = str(row.get('Zakonczono', '')).strip().upper() == "TAK"
             
-            # Formatowanie czasu podjazdu
+            # Formatowanie czasu podjazdu (rozbicie na dni, żeby wyłapać, czy auto jest z wczoraj)
             podj_display = ""
             if podjazd_db and podjazd_db not in ["nan", "None", ""]:
                 if len(podjazd_db) > 5:
@@ -252,6 +257,7 @@ def render(sh):
                 status_txt = "🕒 Podjechał: –"
                 kolor_tla = "#FDFBF7"
 
+            # Białe znaki (\n) pozwalają formatować treść wewnątrz kalendarza
             tytul_eventu = f"{impreza}\n{pojazd}\n{kierowca}\n\n{status_txt}"
 
             events.append({
@@ -280,6 +286,7 @@ def render(sh):
         "slotDuration": "00:30:00",
         "allDaySlot": False,
         "editable": True,         
+        "eventDurationEditable": True, # POZWALA NA ZMIANĘ DŁUGOŚCI TRWANIA (RESIZE)
         "droppable": True,
         "selectable": True,
         "headerToolbar": False,   
@@ -336,7 +343,7 @@ def render(sh):
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Legenda pod kalendarzem
+    # Legenda pod kalendarzem (100% Mockup)
     st.markdown("""
         <div class="legend-container">
             <div class="legend-item"><div class="l-box l-yellow"></div> Planowana rezerwacja</div>
@@ -347,7 +354,7 @@ def render(sh):
     """.replace('\n', ''), unsafe_allow_html=True)
 
     # ==========================================
-    # 5. OBSŁUGA ZDARZEŃ (DRAG & DROP)
+    # 5. OBSŁUGA ZDARZEŃ (DRAG & DROP ORAZ RESIZE)
     # ==========================================
     if cal_state.get("eventChange"):
         zmieniony = cal_state["eventChange"]["event"]
@@ -371,7 +378,7 @@ def render(sh):
             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
             
             st.session_state.pop("rampy_calendar_comp", None)
-            st.toast(f"✅ Przypisano do Rampy {nowa_rampa} ({nowy_od} - {nowy_do})")
+            st.toast(f"✅ Rezerwacja Zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
             time.sleep(0.5)
             st.rerun()
         except Exception as e:
@@ -520,6 +527,7 @@ def render(sh):
                                     start_dt = datetime.combine(r_date, r_time)
                                 except: pass
                                 
+                        # Logika zliczania czasu (od 7 rano)
                         if start_dt.date() < today:
                             start_dt = datetime.combine(today, datetime.time(7, 0))
                         elif start_dt.date() == today and start_dt.time() < datetime.time(7, 0):
@@ -571,14 +579,14 @@ def render(sh):
                 except: val_data = st.session_state.rampy_data
                 f_data = st.date_input("Data rezerwacji", value=val_data)
                 
-                od_str = str(dane_edycja.get('Godzina_Od', '08:00')).strip()
-                try: val_od = datetime.strptime(od_str, "%H:%M").time() if od_str and od_str not in ["nan", "None"] else datetime.strptime("08:00", "%H:%M").time()
-                except: val_od = datetime.strptime("08:00", "%H:%M").time()
+                od_str = str(dane_edycja.get('Godzina_Od', '07:00')).strip()
+                try: val_od = datetime.strptime(od_str, "%H:%M").time() if od_str and od_str not in ["nan", "None"] else datetime.strptime("07:00", "%H:%M").time()
+                except: val_od = datetime.strptime("07:00", "%H:%M").time()
                 f_od = st.time_input("Godzina Od", value=val_od)
                 
-                do_str = str(dane_edycja.get('Godzina_Do', '10:00')).strip()
-                try: val_do = datetime.strptime(do_str, "%H:%M").time() if do_str and do_str not in ["nan", "None"] else datetime.strptime("10:00", "%H:%M").time()
-                except: val_do = datetime.strptime("10:00", "%H:%M").time()
+                do_str = str(dane_edycja.get('Godzina_Do', '11:00')).strip()
+                try: val_do = datetime.strptime(do_str, "%H:%M").time() if do_str and do_str not in ["nan", "None"] else datetime.strptime("11:00", "%H:%M").time()
+                except: val_do = datetime.strptime("11:00", "%H:%M").time()
                 f_do = st.time_input("Godzina Do", value=val_do)
                 
             with fc2:
