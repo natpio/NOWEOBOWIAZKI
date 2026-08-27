@@ -128,27 +128,39 @@ def render(sh):
     with c6:
         st.markdown('<div class="btn-action-auto">', unsafe_allow_html=True)
         if st.button("🔄 SYNCHRONIZUJ NOWE", use_container_width=True):
-            with st.spinner("Szukanie nowych zleceń i alokacja slotów..."):
+            with st.spinner("Szukanie nowych zleceń i inteligentna alokacja slotów..."):
                 ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
                 zmieniono = 0
                 if not df_ev.empty:
                     df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
                     
-                    dostepne_sloty = [
+                    # Definicje slotów i ramp w zależności od typu pojazdu
+                    dostepne_sloty_ciezarowe = [
                         ("07:00", "11:00"), 
                         ("11:00", "15:00"), 
                         ("14:00", "18:00") 
                     ]
-                    dostepne_rampy = ["11", "12", "13", "14", "15"]
+                    dostepne_rampy_ciezarowe = ["11", "12", "13", "14", "15"]
+
+                    dostepne_sloty_bus = [
+                        ("07:00", "08:00"), ("08:00", "09:00"), ("09:00", "10:00"), 
+                        ("10:00", "11:00"), ("11:00", "12:00"), ("12:00", "13:00"), 
+                        ("13:00", "14:00"), ("14:00", "15:00"), ("15:00", "16:00"), 
+                        ("16:00", "17:00"), ("17:00", "18:00")
+                    ]
+                    dostepne_rampy_bus = ["BUS"]
+
                     dzisiaj = date.today()
 
                     for _, ev in df_aktywne_ev.iterrows():
                         ev_id = str(ev.get("ID_Zlecenia", "")).strip()
                         data_zal = str(ev.get("Data_Zlecenia_Tr", "")).strip()
+                        typ_poj = str(ev.get("Typ_Pojazdu", "")).strip().upper()
                         
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
+                        # Bezpiecznik na wsteczne planowanie i weekendy
                         try:
                             data_zal_obj = datetime.strptime(data_zal, "%Y-%m-%d").date()
                             if data_zal_obj < dzisiaj: continue 
@@ -162,10 +174,16 @@ def render(sh):
                                 
                         if not is_scheduled:
                             przypisano = False
-                            for test_od, test_do in dostepne_sloty:
+                            
+                            # LOGIKA: Wybór slotów na bazie typu auta
+                            is_bus = "BUS" in typ_poj
+                            akt_sloty = dostepne_sloty_bus if is_bus else dostepne_sloty_ciezarowe
+                            akt_rampy = dostepne_rampy_bus if is_bus else dostepne_rampy_ciezarowe
+                            
+                            for test_od, test_do in akt_sloty:
                                 if przypisano: break
                                 
-                                for rampa_test in dostepne_rampy:
+                                for rampa_test in akt_rampy:
                                     overlap = False
                                     if not df_rampy.empty:
                                         zajete = df_rampy[(df_rampy['Data'].astype(str).str.strip() == data_zal) & (df_rampy['Rampa'].astype(str).str.strip() == rampa_test)]
@@ -220,7 +238,7 @@ def render(sh):
         st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
     # ==========================================
-    # 4. SILNIK KALENDARZA (Z wyglądem biletów i powiększoną czcionką)
+    # 4. SILNIK KALENDARZA
     # ==========================================
     events = []
     if not df_rampy.empty:
@@ -290,7 +308,8 @@ def render(sh):
             {"id": "12", "title": "RAMP A  12"},
             {"id": "13", "title": "RAMP A  13"},
             {"id": "14", "title": "RAMP A  14"},
-            {"id": "15", "title": "RAMP A  15"}
+            {"id": "15", "title": "RAMP A  15"},
+            {"id": "BUS", "title": "RAMPA BUS"}
         ],
         "slotMinTime": "07:00:00",
         "slotMaxTime": "18:00:00",
@@ -313,7 +332,7 @@ def render(sh):
             color: #E2DCD3 !important; padding: 10px 0 !important;
         }
         .fc-timegrid-slot { height: 45px !important; border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important; }
-        .fc-timegrid-slot-label { font-size: 13px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
+        .fc-timegrid-slot-label { font-size: 12px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
         .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
         .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
         
@@ -324,31 +343,10 @@ def render(sh):
             padding: 8px !important; cursor: grab !important;
         }
         .fc-event:active { cursor: grabbing !important; }
+        .fc-event-main { padding: 0 !important; height: 100% !important; display: flex; flex-direction: column; gap: 4px; }
         
-        /* Flexbox dla wnętrza biletu by wymusić odpowiednie marginesy */
-        .fc-event-main { 
-            padding: 0 !important; 
-            height: 100% !important; 
-            display: flex; 
-            flex-direction: column; 
-            gap: 4px; 
-        }
-        
-        /* Stylizacja górnego zakresu godzin (np. 7:00 - 11:00) */
-        .fc-event-time {
-            font-size: 13px !important;
-            font-weight: 800 !important;
-            color: #8C8477 !important;
-        }
-        
-        /* Stylizacja głównego tekstu na bilecie (zwiększona czcionka) */
-        .fc-event-title { 
-            white-space: pre-wrap !important; 
-            font-size: 15px !important; 
-            font-weight: 700 !important; 
-            line-height: 1.5 !important; 
-            color: #1A2530 !important; 
-        }
+        .fc-event-time { font-size: 13px !important; font-weight: 800 !important; color: #8C8477 !important; }
+        .fc-event-title { white-space: pre-wrap !important; font-size: 15px !important; font-weight: 700 !important; line-height: 1.5 !important; color: #1A2530 !important; }
     """
 
     st.markdown('<div style="background: #11151E; border-top: 2px solid #BA4949; padding: 10px; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8);">', unsafe_allow_html=True)
@@ -437,12 +435,14 @@ def render(sh):
             
             rampa_disp = str(row.get('Rampa', '11'))
             if rampa_disp.endswith(".0"): rampa_disp = rampa_disp[:-2]
+            
+            rampa_nazwa = f"RAMPA {rampa_disp}" if rampa_disp == "BUS" else f"RAMP A  {rampa_disp}"
 
             html_panel = f"""
             <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
                 <div style="flex: 3;">
                     <h2 style="color: #050A15; margin: 0; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif;">{row.get('Nazwa_Imprezy', '-')}</h2>
-                    <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">RAMP A {rampa_disp}</h4>
+                    <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">{rampa_nazwa}</h4>
                     <div style="display: flex; gap: 30px;">
                         <div>
                             <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PLANOWANA REZERWACJA</div>
@@ -635,7 +635,7 @@ def render(sh):
                 
                 r_id = str(dane_edycja.get('Rampa', '11'))
                 if r_id.endswith(".0"): r_id = r_id[:-2]
-                f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15"], index=["11", "12", "13", "14", "15"].index(r_id) if r_id in ["11", "12", "13", "14", "15"] else 0)
+                f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15", "BUS"], index=["11", "12", "13", "14", "15", "BUS"].index(r_id) if r_id in ["11", "12", "13", "14", "15", "BUS"] else 0)
                 
                 dt_str = str(dane_edycja.get('Data', st.session_state.rampy_data))
                 try: val_data = datetime.strptime(dt_str, "%Y-%m-%d").date() if dt_str and dt_str not in ["nan", "None"] else st.session_state.rampy_data
