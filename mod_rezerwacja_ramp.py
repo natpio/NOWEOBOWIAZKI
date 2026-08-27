@@ -2,16 +2,26 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 import time
+import random
+import os
+import base64
 from streamlit_calendar import calendar
 import db
 
+def get_b64(filepath):
+    if os.path.exists(filepath):
+        with open(filepath, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    return ""
+
 def render(sh):
     # ==========================================
-    # 1. NAPRAWA WYDAJNOŚCI I CSS 100% ZGODNY Z MOCKUPEM
+    # 1. NAPRAWA WYDAJNOŚCI I KOSMICZNA STYLIZACJA
     # ==========================================
+    b64_ftl = get_b64("ftl.png")
+    
     st.markdown("""
         <style>
-        /* NAPRAWA WYDAJNOŚCI (ZERO LAGÓW) */
         div[data-testid="stTextInput"] input, 
         div[data-testid="stTextArea"] textarea, 
         div[data-testid="stNumberInput"] input,
@@ -25,7 +35,6 @@ def render(sh):
             color: #FDFBF7 !important;
         }
 
-        /* Pasek górny (Top Bar) */
         .top-bar-btn button {
             background-color: #12100E !important; border: 1px solid rgba(197, 168, 128, 0.3) !important;
             color: #C5A880 !important; font-weight: bold !important; font-family: 'Bebas Neue', sans-serif !important; letter-spacing: 1px !important;
@@ -39,7 +48,6 @@ def render(sh):
         .btn-action-auto button { background-color: rgba(197, 168, 128, 0.15) !important; border: 1px solid #C5A880 !important; color: #C5A880 !important; }
         .btn-action-auto button:hover { background-color: #C5A880 !important; color: #12100E !important; }
 
-        /* Legenda */
         .legend-container {
             display: flex; gap: 20px; align-items: center; margin: 15px 0 20px 0;
             font-size: 12px; color: #A39B8F; font-weight: 600;
@@ -53,7 +61,6 @@ def render(sh):
         </style>
     """.replace('\n', ''), unsafe_allow_html=True)
 
-    # Nagłówek wizualny
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
             <div style="font-size: 42px;">📅</div>
@@ -73,6 +80,7 @@ def render(sh):
         st.warning("⚠️ Zbyt wiele zapytań do Google Sheets. Odczekaj chwilę i odśwież.")
         return
 
+    # Inicjalizacja bazy jeśli całkowicie pusta
     if df_rampy.empty and len(df_rampy.columns) <= 1:
         headers = [
             "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
@@ -82,6 +90,16 @@ def render(sh):
         worksheet_rampy.append_row(headers)
         st.cache_data.clear()
         worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
+
+    # TARCZA OCHRONNA: Wymuszenie 16 kolumn, nawet jeśli stary plik GS ma ich mniej
+    expected_cols = [
+        "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
+        "Nazwa_Imprezy", "Pojazd", "Kierowca", "Telefon", "Email", 
+        "Naczepa", "Typ_Naczepy", "Faktyczny_Podjazd", "Trwa_Zaladunek", "Zakonczono", "Notatki"
+    ]
+    for col in expected_cols:
+        if col not in df_rampy.columns:
+            df_rampy[col] = ""
 
     if "rampy_data" not in st.session_state: st.session_state.rampy_data = date.today()
     if "wybrana_rezerwacja" not in st.session_state: st.session_state.wybrana_rezerwacja = None
@@ -118,7 +136,6 @@ def render(sh):
                 if not df_ev.empty:
                     df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
                     
-                    # Definiujemy standardowe 4-godzinne okna
                     dostepne_sloty = [
                         ("07:00", "11:00"), 
                         ("11:00", "15:00"), 
@@ -133,12 +150,10 @@ def render(sh):
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
-                        # Bezpiecznik: Omijamy weekendy w auto-planowaniu
+                        # Bezpiecznik na weekendy
                         try:
-                            if datetime.strptime(data_zal, "%Y-%m-%d").weekday() >= 5:
-                                continue
-                        except:
-                            pass
+                            if datetime.strptime(data_zal, "%Y-%m-%d").weekday() >= 5: continue
+                        except: pass
                             
                         is_scheduled = False
                         if not df_rampy.empty and 'Notatki' in df_rampy.columns:
@@ -153,7 +168,8 @@ def render(sh):
                                 for rampa_test in dostepne_rampy:
                                     overlap = False
                                     if not df_rampy.empty:
-                                        zajete = df_rampy[(df_rampy['Data'] == data_zal) & (df_rampy['Rampa'] == rampa_test)]
+                                        # Bezpieczne sprawdzanie zajętości
+                                        zajete = df_rampy[(df_rampy['Data'].astype(str).str.strip() == data_zal) & (df_rampy['Rampa'].astype(str).str.strip() == rampa_test)]
                                         for _, z in zajete.iterrows():
                                             z_od = str(z.get('Godzina_Od', '00:00')).strip()
                                             z_do = str(z.get('Godzina_Do', '00:00')).strip()
@@ -167,21 +183,17 @@ def render(sh):
                                         pojazd_comb = f"{rej} / {typ}" if rej != "nan" and typ != "nan" and rej and typ else (rej if rej != "nan" else typ)
                                         kier = str(ev.get('Kierowca', '')).strip()
                                         
-                                        nowy_id = f"RMP-{int(time.time())}-{ev_id[-4:]}"
+                                        # Unikalne ID oparte na losowym sufiksie
+                                        nowy_id = f"RMP-{int(time.time())}-{random.randint(1000, 9999)}"
                                         nowy_wiersz = [
-                                            nowy_id, rampa_test, data_zal, test_od, test_do,
+                                            nowy_id, str(rampa_test), data_zal, test_od, test_do,
                                             str(ev.get('Nazwa_Targow', '')).strip(), pojazd_comb, 
                                             kier if kier != "nan" else "", "", "", "", "", "", "NIE", "NIE", 
                                             f"Powiązane z: {ev_id}"
                                         ]
-                                        db.append_data("DB_Rampy", nowy_wiersz)
+                                        db.append_data("DB_Rampy", [str(x) for x in nowy_wiersz])
                                         
-                                        kolumny = [
-                                            "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
-                                            "Nazwa_Imprezy", "Pojazd", "Kierowca", "Telefon", "Email", 
-                                            "Naczepa", "Typ_Naczepy", "Faktyczny_Podjazd", "Trwa_Zaladunek", "Zakonczono", "Notatki"
-                                        ]
-                                        nowy_dict = dict(zip(kolumny, nowy_wiersz))
+                                        nowy_dict = dict(zip(expected_cols, nowy_wiersz))
                                         df_rampy = pd.concat([df_rampy, pd.DataFrame([nowy_dict])], ignore_index=True)
                                         
                                         przypisano = True
@@ -189,6 +201,7 @@ def render(sh):
                                         break
                                         
                 if zmieniono > 0:
+                    st.cache_data.clear() # CACHE WIPE
                     st.toast(f"✅ Auto-Planowanie zakończone: Zarezerwowano {zmieniono} nowych slotów (4h)!", icon="🤖")
                     time.sleep(1.5)
                     st.rerun()
@@ -205,7 +218,6 @@ def render(sh):
         st.markdown('</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Ostrzeżenie weekendowe
     if st.session_state.rampy_data.weekday() >= 5:
         st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
@@ -214,7 +226,8 @@ def render(sh):
     # ==========================================
     events = []
     if not df_rampy.empty:
-        df_dzien = df_rampy[df_rampy['Data'] == str(st.session_state.rampy_data)]
+        # Bezpieczne formatowanie tekstu, zapobiega znikaniu danych
+        df_dzien = df_rampy[df_rampy['Data'].astype(str).str.strip() == str(st.session_state.rampy_data)]
         
         if szukana_fraza:
             mask = df_dzien.astype(str).apply(lambda row: row.str.contains(szukana_fraza, case=False, na=False).any(), axis=1)
@@ -225,7 +238,6 @@ def render(sh):
             trwa_zaladunek = str(row.get('Trwa_Zaladunek', '')).strip().upper() == "TAK"
             zakonczono = str(row.get('Zakonczono', '')).strip().upper() == "TAK"
             
-            # Formatowanie czasu podjazdu (rozbicie na dni, żeby wyłapać, czy auto jest z wczoraj)
             podj_display = ""
             if podjazd_db and podjazd_db not in ["nan", "None", ""]:
                 if len(podjazd_db) > 5:
@@ -235,10 +247,14 @@ def render(sh):
                 else:
                     podj_display = podjazd_db
 
-            # Konstruowanie zawartości biletu
             impreza = str(row.get('Nazwa_Imprezy', ''))
             pojazd = str(row.get('Pojazd', ''))
             kierowca = str(row.get('Kierowca', ''))
+            
+            # Bezpieczne łapanie numeru rampy (niweluje ew. ".0" z pandas)
+            r_id = str(row.get('Rampa', '')).strip()
+            if r_id.endswith(".0"): r_id = r_id[:-2]
+            if not r_id or r_id == "nan": r_id = "11" 
             
             if zakonczono:
                 kolor_ramki = "#718096"
@@ -257,12 +273,11 @@ def render(sh):
                 status_txt = "🕒 Podjechał: –"
                 kolor_tla = "#FDFBF7"
 
-            # Białe znaki (\n) pozwalają formatować treść wewnątrz kalendarza
             tytul_eventu = f"{impreza}\n{pojazd}\n{kierowca}\n\n{status_txt}"
 
             events.append({
                 "id": str(row.get('ID_Rezerwacji', '')),
-                "resourceId": str(row.get('Rampa', '')),
+                "resourceId": r_id,
                 "start": f"{row['Data']}T{row.get('Godzina_Od', '00:00')}:00",
                 "end": f"{row['Data']}T{row.get('Godzina_Do', '01:00')}:00",
                 "title": tytul_eventu,
@@ -286,7 +301,7 @@ def render(sh):
         "slotDuration": "00:30:00",
         "allDaySlot": False,
         "editable": True,         
-        "eventDurationEditable": True, # POZWALA NA ZMIANĘ DŁUGOŚCI TRWANIA (RESIZE)
+        "eventDurationEditable": True,
         "droppable": True,
         "selectable": True,
         "headerToolbar": False,   
@@ -306,10 +321,8 @@ def render(sh):
         .fc-timegrid-slot { height: 45px !important; border-bottom: 1px dashed rgba(255, 255, 255, 0.08) !important; }
         .fc-timegrid-slot-label { font-size: 12px !important; color: #C5A880 !important; font-weight: 600 !important; border-right: 1px solid rgba(197, 168, 128, 0.1) !important; vertical-align: top !important; padding-top: 5px !important; }
         .fc-theme-standard td, .fc-theme-standard th { border-color: rgba(197, 168, 128, 0.15) !important; }
-        
         .fc-timegrid-col { background: rgba(5, 10, 21, 0.6) !important; }
         
-        /* Baseball ticket style */
         .fc-event {
             border-left: 5px dashed var(--fc-border-color) !important;
             border-right: 5px dashed var(--fc-border-color) !important;
@@ -322,7 +335,6 @@ def render(sh):
         }
         .fc-event:active { cursor: grabbing !important; }
         .fc-event-main { padding: 0 !important; height: 100% !important; }
-        
         .fc-event-title {
             white-space: pre-wrap !important; 
             font-size: 11px !important;
@@ -343,7 +355,6 @@ def render(sh):
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Legenda pod kalendarzem (100% Mockup)
     st.markdown("""
         <div class="legend-container">
             <div class="legend-item"><div class="l-box l-yellow"></div> Planowana rezerwacja</div>
@@ -359,7 +370,7 @@ def render(sh):
     if cal_state.get("eventChange"):
         zmieniony = cal_state["eventChange"]["event"]
         ev_id = zmieniony["id"]
-        nowa_rampa = zmieniony.get("resourceId", "")
+        nowa_rampa = zmieniony.get("resourceId", "11")
         try:
             start_dt = datetime.fromisoformat(zmieniony["start"].replace("Z", "+00:00"))
             nowa_data = start_dt.strftime("%Y-%m-%d")
@@ -370,7 +381,7 @@ def render(sh):
             else: nowy_do = ""
             
             idx = df_rampy[df_rampy['ID_Rezerwacji'] == ev_id].index[0]
-            df_rampy.at[idx, 'Rampa'] = nowa_rampa
+            df_rampy.at[idx, 'Rampa'] = str(nowa_rampa)
             df_rampy.at[idx, 'Data'] = nowa_data
             df_rampy.at[idx, 'Godzina_Od'] = nowy_od
             df_rampy.at[idx, 'Godzina_Do'] = nowy_do
@@ -378,7 +389,8 @@ def render(sh):
             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
             
             st.session_state.pop("rampy_calendar_comp", None)
-            st.toast(f"✅ Rezerwacja Zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
+            st.cache_data.clear() # CACHE WIPE
+            st.toast(f"✅ Rezerwacja zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
             time.sleep(0.5)
             st.rerun()
         except Exception as e:
@@ -413,12 +425,15 @@ def render(sh):
             pojazd_str = str(row.get('Pojazd', ''))
             rej = pojazd_str.split('/')[0].strip() if '/' in pojazd_str else (pojazd_str if pojazd_str else '-')
             typ = pojazd_str.split('/')[1].strip() if '/' in pojazd_str else '-'
+            
+            rampa_disp = str(row.get('Rampa', '11'))
+            if rampa_disp.endswith(".0"): rampa_disp = rampa_disp[:-2]
 
             html_panel = f"""
             <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
                 <div style="flex: 3;">
                     <h2 style="color: #050A15; margin: 0; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif;">{row.get('Nazwa_Imprezy', '-')}</h2>
-                    <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">RAMP A {row.get('Rampa', '-')}</h4>
+                    <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">RAMP A {rampa_disp}</h4>
                     <div style="display: flex; gap: 30px;">
                         <div>
                             <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PLANOWANA REZERWACJA</div>
@@ -482,7 +497,8 @@ def render(sh):
                     gs_row = int(row['sheet_row'])
                     db.delete_row("DB_Rampy", gs_row)
                     st.session_state.wybrana_rezerwacja = None
-                    st.success("Rezerwacja trwale usunięta!")
+                    st.cache_data.clear() # CACHE WIPE
+                    st.success("Rezerwacja usunięta!")
                     st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
@@ -505,6 +521,7 @@ def render(sh):
                                 df_rampy.at[idx, 'Faktyczny_Podjazd'] = datetime.now().strftime("%Y-%m-%d %H:%M")
                             gs_row = int(df_rampy.at[idx, 'sheet_row'])
                             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
+                            st.cache_data.clear() # CACHE WIPE
                             st.rerun()
                     else:
                         st.button("⏳ ZAŁADUNEK W TOKU...", disabled=True, use_container_width=True)
@@ -527,7 +544,6 @@ def render(sh):
                                     start_dt = datetime.combine(r_date, r_time)
                                 except: pass
                                 
-                        # Logika zliczania czasu (od 7 rano)
                         if start_dt.date() < today:
                             start_dt = datetime.combine(today, datetime.time(7, 0))
                         elif start_dt.date() == today and start_dt.time() < datetime.time(7, 0):
@@ -550,6 +566,7 @@ def render(sh):
                         gs_row = int(df_rampy.at[idx, 'sheet_row'])
                         db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
                         st.session_state.wybrana_rezerwacja = None
+                        st.cache_data.clear() # CACHE WIPE
                         st.success(f"Rampa zwolniona! Zarejestrowany czas operacji: {duration_str}")
                         st.rerun()
 
@@ -557,7 +574,7 @@ def render(sh):
             st.error(f"Błąd ładowania szczegółów: {e}")
 
     # ==========================================
-    # 7. FORMULARZ (DODAJ / EDYTUJ / DUPLIKUJ)
+    # 8. FORMULARZ (DODAJ / EDYTUJ / DUPLIKUJ)
     # ==========================================
     if st.session_state.get("pokaz_formularz") in ["NOWA", "EDYCJA", "DUPLIKUJ"]:
         st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.1); margin: 20px 0;'>", unsafe_allow_html=True)
@@ -568,11 +585,48 @@ def render(sh):
         if st.session_state.pokaz_formularz in ["EDYCJA", "DUPLIKUJ"] and st.session_state.wybrana_rezerwacja:
             dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
 
+        # --- MOST Z BAZĄ EVENTÓW ---
+        ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
+        if st.session_state.pokaz_formularz == "NOWA" and not df_ev.empty:
+            df_akt_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
+            if not df_akt_ev.empty:
+                st.markdown("<div style='background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.3); padding: 15px; border-radius: 6px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+                opcje_dict = {"-- Wypełnij formularz ręcznie --": None}
+                for _, r in df_akt_ev.iterrows():
+                    opcje_dict[f"🚛 {r.get('ID_Zlecenia', 'Brak')} | {r.get('Nazwa_Targow', 'Brak')}"] = r
+                
+                wybrany_import = st.selectbox("🔗 Opcjonalnie: Zaimportuj dane z aktywnego zlecenia z modułu Eventy PRO:", list(opcje_dict.keys()))
+                st.markdown("</div>", unsafe_allow_html=True)
+                
+                if wybrany_import != "-- Wypełnij formularz ręcznie --":
+                    ev_data = opcje_dict[wybrany_import]
+                    rej = str(ev_data.get('Nr_Rejestracyjny', '')).strip()
+                    typ = str(ev_data.get('Typ_Pojazdu', '')).strip()
+                    if rej == "nan": rej = ""
+                    if typ == "nan": typ = ""
+                    pojazd_comb = f"{rej} / {typ}" if rej and typ else (rej if rej else typ)
+                    
+                    data_ev = str(ev_data.get('Data_Zlecenia_Tr', '')).strip()
+                    if data_ev in ["nan", "None", "NaT"]: data_ev = ""
+                    kier_ev = str(ev_data.get('Kierowca', '')).strip()
+                    if kier_ev == "nan": kier_ev = ""
+
+                    dane_edycja = {
+                        'Nazwa_Imprezy': str(ev_data.get('Nazwa_Targow', '')).strip(),
+                        'Pojazd': pojazd_comb,
+                        'Kierowca': kier_ev,
+                        'Data': data_ev,
+                        'Notatki': f"Powiązane z: {ev_data.get('ID_Zlecenia', '')}"
+                    }
+
         with st.form("form_rampy", clear_on_submit=True):
             fc1, fc2, fc3 = st.columns([1, 1, 1])
             with fc1:
                 f_impreza = st.text_input("Nazwa Imprezy *", value=dane_edycja.get('Nazwa_Imprezy', ''))
-                f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15"], index=["11", "12", "13", "14", "15"].index(dane_edycja.get('Rampa', '11')) if dane_edycja.get('Rampa') in ["11", "12", "13", "14", "15"] else 0)
+                
+                r_id = str(dane_edycja.get('Rampa', '11'))
+                if r_id.endswith(".0"): r_id = r_id[:-2]
+                f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15"], index=["11", "12", "13", "14", "15"].index(r_id) if r_id in ["11", "12", "13", "14", "15"] else 0)
                 
                 dt_str = str(dane_edycja.get('Data', st.session_state.rampy_data))
                 try: val_data = datetime.strptime(dt_str, "%Y-%m-%d").date() if dt_str and dt_str not in ["nan", "None"] else st.session_state.rampy_data
@@ -636,13 +690,14 @@ def render(sh):
                     final_podjazd = "" if usun_podjazd else (f"{f_podjazd_data.strftime('%Y-%m-%d')} {f_podjazd_czas.strftime('%H:%M')}" if f_podjazd_czas else "")
                     
                     if st.session_state.pokaz_formularz in ["NOWA", "DUPLIKUJ"]:
-                        new_id = f"RMP-{int(time.time())}"
+                        new_id = f"RMP-{int(time.time())}-{random.randint(100,999)}"
                         nowy_wiersz = [
                             new_id, f_rampa, str(f_data), f_od.strftime("%H:%M"), f_do.strftime("%H:%M"),
                             f_impreza, f_pojazd, f_kierowca, f_tel, f_email,
                             f_naczepa, f_typ_naczepy, final_podjazd, f_trwa, f_koniec, f_notatki
                         ]
-                        db.append_data("DB_Rampy", nowy_wiersz)
+                        db.append_data("DB_Rampy", [str(x) for x in nowy_wiersz])
+                        st.cache_data.clear() # CACHE WIPE
                         st.success("Rezerwacja utworzona!")
                     else:
                         idx = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].index[0]
@@ -664,10 +719,12 @@ def render(sh):
                         
                         gs_row = int(df_rampy.at[idx, 'sheet_row'])
                         db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
+                        st.cache_data.clear() # CACHE WIPE
                         st.success("Zaktualizowano rezerwację!")
 
                     st.session_state.pokaz_formularz = None
                     st.session_state.pop("rampy_calendar_comp", None)
+                    time.sleep(0.5)
                     st.rerun()
             if sc2.form_submit_button("✖ ANULUJ", use_container_width=True):
                 st.session_state.pokaz_formularz = None
