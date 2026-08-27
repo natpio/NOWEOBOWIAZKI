@@ -53,7 +53,7 @@ def render(sh):
         </style>
     """.replace('\n', ''), unsafe_allow_html=True)
 
-    # Nagłówek wizualny (jak w mockupie)
+    # Nagłówek wizualny
     st.markdown("""
         <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 25px;">
             <div style="font-size: 42px;">📅</div>
@@ -131,7 +131,7 @@ def render(sh):
                         if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
                             continue
                             
-                        # Sprawdzamy, czy ten Event nie ma już przypisanej rampy (szukamy po ID w notatkach Rampy)
+                        # Sprawdzamy, czy ten Event nie ma już przypisanej rampy
                         is_scheduled = False
                         if not df_rampy.empty and 'Notatki' in df_rampy.columns:
                             if df_rampy['Notatki'].astype(str).str.contains(ev_id).any():
@@ -143,14 +143,13 @@ def render(sh):
                                 if przypisano: break
                                 
                                 for rampa_test in dostepne_rampy:
-                                    # Sprawdzamy czy dany slot na danej rampie w danym dniu jest wolny
+                                    # Sprawdzamy czy dany slot jest wolny
                                     overlap = False
                                     if not df_rampy.empty:
                                         zajete = df_rampy[(df_rampy['Data'] == data_zal) & (df_rampy['Rampa'] == rampa_test)]
                                         for _, z in zajete.iterrows():
                                             z_od = str(z.get('Godzina_Od', '00:00')).strip()
                                             z_do = str(z.get('Godzina_Do', '00:00')).strip()
-                                            # Proste sprawdzenie krzyżowania się czasów (stringi formatu HH:MM pozwalają na porównania logiczne)
                                             if test_od < z_do and test_do > z_od:
                                                 overlap = True
                                                 break
@@ -170,8 +169,16 @@ def render(sh):
                                             f"Powiązane z: {ev_id}"
                                         ]
                                         db.append_data("DB_Rampy", nowy_wiersz)
-                                        # Dodajemy do df lokalnego by pętla 'wiedziała', że slot jest już zajęty
-                                        df_rampy.loc[len(df_rampy)] = nowy_wiersz
+                                        
+                                        # BEZPIECZNE DODANIE DO DF (naprawia błąd "mismatched columns")
+                                        kolumny = [
+                                            "ID_Rezerwacji", "Rampa", "Data", "Godzina_Od", "Godzina_Do", 
+                                            "Nazwa_Imprezy", "Pojazd", "Kierowca", "Telefon", "Email", 
+                                            "Naczepa", "Typ_Naczepy", "Faktyczny_Podjazd", "Trwa_Zaladunek", "Zakonczono", "Notatki"
+                                        ]
+                                        nowy_dict = dict(zip(kolumny, nowy_wiersz))
+                                        df_rampy = pd.concat([df_rampy, pd.DataFrame([nowy_dict])], ignore_index=True)
+                                        
                                         przypisano = True
                                         zmieniono += 1
                                         break
@@ -213,7 +220,7 @@ def render(sh):
             trwa_zaladunek = str(row.get('Trwa_Zaladunek', '')).strip().upper() == "TAK"
             zakonczono = str(row.get('Zakonczono', '')).strip().upper() == "TAK"
             
-            # Formatowanie czasu podjazdu (rozbicie na dni, żeby wyłapać, czy auto jest z wczoraj)
+            # Formatowanie czasu podjazdu
             podj_display = ""
             if podjazd_db and podjazd_db not in ["nan", "None", ""]:
                 if len(podjazd_db) > 5:
@@ -245,7 +252,6 @@ def render(sh):
                 status_txt = "🕒 Podjechał: –"
                 kolor_tla = "#FDFBF7"
 
-            # Białe znaki (\n) pozwalają formatować treść wewnątrz kalendarza
             tytul_eventu = f"{impreza}\n{pojazd}\n{kierowca}\n\n{status_txt}"
 
             events.append({
@@ -281,7 +287,6 @@ def render(sh):
         "slotLabelFormat": { "hour": "2-digit", "minute": "2-digit", "hour12": False }
     }
 
-    # CSS bezpośrednio dla kalendarza - replikuje wygląd Twojego zrzutu (kremowe bilety, przerywane krawędzie)
     cal_css = """
         .fc { background-color: transparent !important; color: #E2DCD3; font-family: 'Inter', sans-serif; }
         
@@ -331,7 +336,7 @@ def render(sh):
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Legenda pod kalendarzem (100% Mockup)
+    # Legenda pod kalendarzem
     st.markdown("""
         <div class="legend-container">
             <div class="legend-item"><div class="l-box l-yellow"></div> Planowana rezerwacja</div>
