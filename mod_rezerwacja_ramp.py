@@ -35,6 +35,9 @@ def render(sh):
         
         .btn-action-primary button { background-color: #8B2635 !important; border: 1px solid #BA4949 !important; color: #FDFBF7 !important; }
         .btn-action-primary button:hover { background-color: #BA4949 !important; border-color: #FDFBF7 !important; }
+        
+        .btn-action-auto button { background-color: rgba(197, 168, 128, 0.15) !important; border: 1px solid #C5A880 !important; color: #C5A880 !important; }
+        .btn-action-auto button:hover { background-color: #C5A880 !important; color: #12100E !important; }
 
         /* Legenda */
         .legend-container {
@@ -85,10 +88,10 @@ def render(sh):
     if "pokaz_formularz" not in st.session_state: st.session_state.pokaz_formularz = None
 
     # ==========================================
-    # 3. GÓRNY PASEK NAWIGACYJNY (100% Mockup)
+    # 3. GÓRNY PASEK NAWIGACYJNY I AUTO-PLANOWANIE
     # ==========================================
     st.markdown('<div class="top-bar-btn">', unsafe_allow_html=True)
-    c1, c2, c3, c4, c5, c6 = st.columns([0.5, 2.5, 0.5, 1.5, 4.5, 2.5], vertical_alignment="center")
+    c1, c2, c3, c4, c5, c6, c7 = st.columns([0.5, 2.0, 0.5, 1.0, 3.5, 2.2, 2.2], vertical_alignment="center")
     
     with c1:
         if st.button("❮", use_container_width=True): st.session_state.rampy_data -= timedelta(days=1); st.rerun()
@@ -105,6 +108,83 @@ def render(sh):
             szukana_fraza = sc1.text_input("Szukaj", placeholder="🔍 Szukaj rezerwacji, auta, kierowcy...", label_visibility="collapsed")
             sc2.form_submit_button("Szukaj")
     with c6:
+        st.markdown('<div class="btn-action-auto">', unsafe_allow_html=True)
+        if st.button("🤖 AUTO-PLANUJ Z EVENTÓW", use_container_width=True):
+            # SILNIK INTELIGENTNEGO PLANOWANIA
+            with st.spinner("Skanowanie bazy Eventów i alokacja slotów..."):
+                ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
+                zmieniono = 0
+                if not df_ev.empty:
+                    df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
+                    
+                    # Definiujemy standardowe dwugodzinne okna
+                    dostepne_sloty = [
+                        ("07:00", "09:00"), ("09:00", "11:00"), 
+                        ("11:00", "13:00"), ("13:00", "15:00"), ("15:00", "17:00")
+                    ]
+                    dostepne_rampy = ["11", "12", "13", "14", "15"]
+
+                    for _, ev in df_aktywne_ev.iterrows():
+                        ev_id = str(ev.get("ID_Zlecenia", "")).strip()
+                        data_zal = str(ev.get("Data_Zlecenia_Tr", "")).strip()
+                        
+                        if not ev_id or not data_zal or data_zal in ["nan", "None", "NaT", "Brak danych"]:
+                            continue
+                            
+                        # Sprawdzamy, czy ten Event nie ma już przypisanej rampy (szukamy po ID w notatkach Rampy)
+                        is_scheduled = False
+                        if not df_rampy.empty and 'Notatki' in df_rampy.columns:
+                            if df_rampy['Notatki'].astype(str).str.contains(ev_id).any():
+                                is_scheduled = True
+                                
+                        if not is_scheduled:
+                            przypisano = False
+                            for test_od, test_do in dostepne_sloty:
+                                if przypisano: break
+                                
+                                for rampa_test in dostepne_rampy:
+                                    # Sprawdzamy czy dany slot na danej rampie w danym dniu jest wolny
+                                    overlap = False
+                                    if not df_rampy.empty:
+                                        zajete = df_rampy[(df_rampy['Data'] == data_zal) & (df_rampy['Rampa'] == rampa_test)]
+                                        for _, z in zajete.iterrows():
+                                            z_od = str(z.get('Godzina_Od', '00:00')).strip()
+                                            z_do = str(z.get('Godzina_Do', '00:00')).strip()
+                                            # Proste sprawdzenie krzyżowania się czasów (stringi formatu HH:MM pozwalają na porównania logiczne)
+                                            if test_od < z_do and test_do > z_od:
+                                                overlap = True
+                                                break
+                                                
+                                    if not overlap:
+                                        # ZNALEZIONO WOLNĄ LUKĘ!
+                                        rej = str(ev.get('Nr_Rejestracyjny', '')).strip()
+                                        typ = str(ev.get('Typ_Pojazdu', '')).strip()
+                                        pojazd_comb = f"{rej} / {typ}" if rej != "nan" and typ != "nan" and rej and typ else (rej if rej != "nan" else typ)
+                                        kier = str(ev.get('Kierowca', '')).strip()
+                                        
+                                        nowy_id = f"RMP-{int(time.time())}-{ev_id[-4:]}"
+                                        nowy_wiersz = [
+                                            nowy_id, rampa_test, data_zal, test_od, test_do,
+                                            str(ev.get('Nazwa_Targow', '')).strip(), pojazd_comb, 
+                                            kier if kier != "nan" else "", "", "", "", "", "", "NIE", "NIE", 
+                                            f"Powiązane z: {ev_id}"
+                                        ]
+                                        db.append_data("DB_Rampy", nowy_wiersz)
+                                        # Dodajemy do df lokalnego by pętla 'wiedziała', że slot jest już zajęty
+                                        df_rampy.loc[len(df_rampy)] = nowy_wiersz
+                                        przypisano = True
+                                        zmieniono += 1
+                                        break
+                                        
+                if zmieniono > 0:
+                    st.toast(f"✅ Auto-Planowanie zakończone: Zarezerwowano {zmieniono} nowych slotów!", icon="🤖")
+                    time.sleep(1.5)
+                    st.rerun()
+                else:
+                    st.toast("ℹ️ Brak nowych załadunków do zaplanowania.", icon="🤖")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with c7:
         st.markdown('<div class="btn-action-primary">', unsafe_allow_html=True)
         if st.button("➕ NOWA REZERWACJA", use_container_width=True):
             st.session_state.pokaz_formularz = "NOWA"
@@ -301,7 +381,7 @@ def render(sh):
             st.rerun()
 
     # ==========================================
-    # 6. KREMOWY PANEL SZCZEGÓŁÓW (Wzorowany 1:1 na grafice z załącznika)
+    # 6. KREMOWY PANEL SZCZEGÓŁÓW
     # ==========================================
     if st.session_state.get("wybrana_rezerwacja") and st.session_state.get("pokaz_formularz") != "NOWA":
         rez_id = st.session_state.wybrana_rezerwacja
@@ -318,12 +398,10 @@ def render(sh):
             else:
                 podj_data_disp, podj_czas_disp = "📅 –", "🕒 –"
 
-            # Rozbijanie rejestracji i typu (jeśli wpisane z ukośnikiem np. WGM 12345 / Volvo FH)
             pojazd_str = str(row.get('Pojazd', ''))
             rej = pojazd_str.split('/')[0].strip() if '/' in pojazd_str else (pojazd_str if pojazd_str else '-')
             typ = pojazd_str.split('/')[1].strip() if '/' in pojazd_str else '-'
 
-            # Konstrukcja identycznego panelu z mockupu. USUNIĘTO \n, BY ZAPOBIEC TWORZENIU BLOKU KODU.
             html_panel = f"""
             <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
                 <div style="flex: 3;">
@@ -364,14 +442,11 @@ def render(sh):
             """
             
             st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Tworzymy kolumny do wyświetlenia Panelu HTML + Przycisków AKCJI z prawej strony (jak w mockupie)
             col_info, col_akcje = st.columns([8.5, 1.5])
             
             with col_info:
                 st.markdown(html_panel.replace('\n', ''), unsafe_allow_html=True)
                 
-                # Dolny pasek pod panelem
                 c_text, c_close = st.columns([8, 2])
                 c_text.markdown("<p style='color: #8C8477; font-size: 12px; margin-top: 15px; text-align: center;'>⤢ Przeciągnij rezerwację w kalendarzu, aby zmienić godzinę lub rampę</p>", unsafe_allow_html=True)
                 if c_close.button("✖ ZAMKNIJ", use_container_width=True):
@@ -414,7 +489,6 @@ def render(sh):
                         if st.button("▶ ROZPOCZNIJ ZAŁADUNEK", type="primary", use_container_width=True):
                             idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
                             df_rampy.at[idx, 'Trwa_Zaladunek'] = "TAK"
-                            # Jeśli nie oznaczono podjazdu, zaznacz go automatycznie teraz
                             if not podjazd_db or podjazd_db in ["nan", "None"]:
                                 df_rampy.at[idx, 'Faktyczny_Podjazd'] = datetime.now().strftime("%Y-%m-%d %H:%M")
                             gs_row = int(df_rampy.at[idx, 'sheet_row'])
@@ -430,7 +504,6 @@ def render(sh):
                         today = now.date()
                         start_dt = now
                         
-                        # Pobranie czasu z bazy
                         if podjazd_db and podjazd_db not in ["nan", "None"]:
                             if len(podjazd_db) > 5:
                                 try: start_dt = datetime.strptime(podjazd_db, "%Y-%m-%d %H:%M")
@@ -442,22 +515,17 @@ def render(sh):
                                     start_dt = datetime.combine(r_date, r_time)
                                 except: pass
                                 
-                        # INTELIGENTNA LOGIKA 07:00
-                        # Jeśli auto przyjechało wczoraj, czas startuje dopiero o 07:00 dzisiaj
                         if start_dt.date() < today:
                             start_dt = datetime.combine(today, datetime.time(7, 0))
-                        # Jeśli podjechało dzisiaj rano, ale przed 07:00 (np. 05:30), startuje o 07:00
                         elif start_dt.date() == today and start_dt.time() < datetime.time(7, 0):
                             start_dt = datetime.combine(today, datetime.time(7, 0))
                             
-                        # Obliczanie spędzonego czasu
                         delta = now - start_dt
                         total_minutes = int(delta.total_seconds() / 60)
                         if total_minutes < 0: total_minutes = 0
                         hours, minutes = total_minutes // 60, total_minutes % 60
                         duration_str = f"{hours}h {minutes}m"
                         
-                        # Zapis wyników
                         idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
                         df_rampy.at[idx, 'Trwa_Zaladunek'] = "NIE"
                         df_rampy.at[idx, 'Zakonczono'] = "TAK"
@@ -486,41 +554,6 @@ def render(sh):
         dane_edycja = {}
         if st.session_state.pokaz_formularz in ["EDYCJA", "DUPLIKUJ"] and st.session_state.wybrana_rezerwacja:
             dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
-
-        # --- NOWOŚĆ: MOST Z BAZĄ EVENTÓW ---
-        ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
-        if st.session_state.pokaz_formularz == "NOWA" and not df_ev.empty:
-            df_akt_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
-            if not df_akt_ev.empty:
-                st.markdown("<div style='background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.3); padding: 15px; border-radius: 6px; margin-bottom: 20px;'>", unsafe_allow_html=True)
-                opcje_dict = {"-- Wypełnij formularz ręcznie --": None}
-                for _, r in df_akt_ev.iterrows():
-                    opcje_dict[f"🚛 {r.get('ID_Zlecenia', 'Brak')} | {r.get('Nazwa_Targow', 'Brak')}"] = r
-                
-                wybrany_import = st.selectbox("🔗 Opcjonalnie: Zaimportuj dane z aktywnego zlecenia z modułu Eventy PRO:", list(opcje_dict.keys()))
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                if wybrany_import != "-- Wypełnij formularz ręcznie --":
-                    ev_data = opcje_dict[wybrany_import]
-                    rej = str(ev_data.get('Nr_Rejestracyjny', '')).strip()
-                    typ = str(ev_data.get('Typ_Pojazdu', '')).strip()
-                    if rej == "nan": rej = ""
-                    if typ == "nan": typ = ""
-                    pojazd_comb = f"{rej} / {typ}" if rej and typ else (rej if rej else typ)
-                    
-                    data_ev = str(ev_data.get('Data_Zlecenia_Tr', '')).strip()
-                    if data_ev in ["nan", "None", "NaT"]: data_ev = ""
-                    kier_ev = str(ev_data.get('Kierowca', '')).strip()
-                    if kier_ev == "nan": kier_ev = ""
-
-                    dane_edycja = {
-                        'Nazwa_Imprezy': str(ev_data.get('Nazwa_Targow', '')).strip(),
-                        'Pojazd': pojazd_comb,
-                        'Kierowca': kier_ev,
-                        'Data': data_ev,
-                        'Notatki': f"Powiązane z: {ev_data.get('ID_Zlecenia', '')}"
-                    }
-        # -----------------------------------
 
         with st.form("form_rampy", clear_on_submit=True):
             fc1, fc2, fc3 = st.columns([1, 1, 1])
