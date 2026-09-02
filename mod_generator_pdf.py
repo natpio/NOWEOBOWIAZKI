@@ -830,7 +830,7 @@ def render(sh):
                             wiersz_poboczne = [
                                 str(nr_zlecenia), str(nazwa_przewoznika), f"PROJEKT: {projekt} | {instrukcje}",  
                                 str(data_zal), str(data_roz_combined), str(termin_dni),                       
-                                str(data_platnosci.strftime('%d.%m.%Y')), "PLANOWANIE", "NIE", "NIE", "NIE"                                  
+                                str(data_platnosci.strftime('%d.%m.%Y')), "PLANOWANIE", "NIE", "NIE", "NIE", ""                                  
                             ]
                             db.append_data("Zlecenia Poboczne", wiersz_poboczne)
                             
