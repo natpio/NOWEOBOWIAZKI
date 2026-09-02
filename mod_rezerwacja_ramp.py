@@ -151,6 +151,11 @@ def render(sh):
 
                     dzisiaj = date.today()
 
+                    # ZOPTYMALIZOWANY PANCERNY SYSTEM PRZECIWDZIAŁANIA DUPLIKATOM
+                    df_rampy_text = ""
+                    if not df_rampy.empty:
+                        df_rampy_text = " | ".join(df_rampy.astype(str).fillna("").values.flatten())
+
                     for _, ev in df_aktywne_ev.iterrows():
                         ev_id = str(ev.get("ID_Zlecenia", "")).strip()
                         data_zal = str(ev.get("Data_Zlecenia_Tr", "")).strip()
@@ -165,17 +170,15 @@ def render(sh):
                             if data_zal_obj.weekday() >= 5: continue 
                         except: pass
                             
-                        # PANCERNY SYSTEM PRZECIWDZIAŁANIA DUPLIKATOM
+                        # Błyskawiczne przeszukiwanie tekstu zamiast iteracji po komórkach Pandas
                         is_scheduled = False
-                        if not df_rampy.empty:
-                            search_str = f"Powiązane z: {ev_id}"
-                            # Przeszukujemy wszystkie komórki w Dataframe, niezależnie jak ułożone są kolumny w Google Sheets
-                            is_scheduled = df_rampy.astype(str).apply(lambda col: col.str.contains(search_str, regex=False, na=False)).any().any()
+                        search_str = f"Powiązane z: {ev_id}"
+                        if df_rampy_text and search_str in df_rampy_text:
+                            is_scheduled = True
                                 
                         if not is_scheduled:
                             przypisano = False
                             
-                            # Rozszerzona logika dla BUS / VAN
                             is_bus = "BUS" in typ_poj or "VAN" in typ_poj
                             akt_sloty = dostepne_sloty_bus if is_bus else dostepne_sloty_ciezarowe
                             akt_rampy = dostepne_rampy_bus if is_bus else dostepne_rampy_ciezarowe
@@ -205,12 +208,15 @@ def render(sh):
                                             nowy_id, str(rampa_test), data_zal, test_od, test_do,
                                             str(ev.get('Nazwa_Targow', '')).strip(), pojazd_comb, 
                                             kier if kier != "nan" else "", "", "", "", "", "", "NIE", "NIE", 
-                                            f"Powiązane z: {ev_id}"
+                                            search_str
                                         ]
                                         db.append_data("DB_Rampy", [str(x) for x in nowy_wiersz])
                                         
                                         nowy_dict = dict(zip(expected_cols, nowy_wiersz))
                                         df_rampy = pd.concat([df_rampy, pd.DataFrame([nowy_dict])], ignore_index=True)
+                                        
+                                        # Zabezpieczenie przed podwójnym dodaniem tego samego eventu w jednej sesji
+                                        df_rampy_text += f" | {search_str}"
                                         
                                         przypisano = True
                                         zmieniono += 1
