@@ -622,7 +622,7 @@ def render(sh):
             # --- LOGIKA: INICJALIZACJA DANYCH Z MODUŁU EVENTY ---
             if import_data:
                 st.success(f"📥 **Wczytano dane z modułu Eventy:** {import_data.get('Nazwa_Targow', '')} ({import_data.get('ID_Zlecenia', '')}). Uzupełnij braki, by wygenerować Zlecenie PRO.")
-                if st.button("✖ Anuluj import i wyczyść formularz", size="small"):
+                if st.button("✖ Anuluj import i wyczyść formularz"):
                     del st.session_state['import_z_eventu']
                     st.rerun()
                 
