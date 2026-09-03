@@ -475,9 +475,15 @@ def render(sh):
     tab1, tab2 = st.tabs(["📝 Formularz / Generator PDF", "📂 Baza Zleceń PRO"])
 
     with tab1:
+        # --- SPRAWDZENIE CZY MAMY DANE DO IMPORTU ---
+        import_data = st.session_state.get('import_z_eventu', None)
+        
         c1, c2 = st.columns(2)
-        with c1: tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
-        with c2: kategoria_zlecenia = st.radio("Kategoria zlecenia (gdzie zapisać?):", ["Zlecenie Poboczne (Eksport do rejestru)", "Zlecenie Eventowe (Pomiń rejestr poboczny)"], horizontal=True)
+        with c1: 
+            tryb_pracy = st.radio("Wybierz tryb pracy:", ["Nowe Zlecenie", "Edycja Istniejącego Zlecenia"], horizontal=True)
+        with c2: 
+            # Jeśli importujemy, domyślnie ustawiamy Zlecenie Eventowe
+            kategoria_zlecenia = st.radio("Kategoria zlecenia (gdzie zapisać?):", ["Zlecenie Poboczne (Eksport do rejestru)", "Zlecenie Eventowe (Pomiń rejestr poboczny)"], index=1 if import_data else 0, horizontal=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
         wybrane_zlecenie_nr, gs_row_index = None, None
@@ -612,6 +618,49 @@ def render(sh):
                         val_detale_przewoznika = "Zweryfikuj dane adresowe z giełdy..."
             else:
                 st.warning("Baza zleceń jest pusta - brak danych do edycji."); st.stop()
+        else:
+            # --- LOGIKA: INICJALIZACJA DANYCH Z MODUŁU EVENTY ---
+            if import_data:
+                st.success(f"📥 **Wczytano dane z modułu Eventy:** {import_data.get('Nazwa_Targow', '')} ({import_data.get('ID_Zlecenia', '')}). Uzupełnij braki, by wygenerować Zlecenie PRO.")
+                if st.button("✖ Anuluj import i wyczyść formularz", size="small"):
+                    del st.session_state['import_z_eventu']
+                    st.rerun()
+                
+                val_typ_zlecenia = "Pełny event"
+                
+                nazwa_przew = str(import_data.get('Przewoznik', '')).strip()
+                if nazwa_przew and nazwa_przew != "nan":
+                    val_nazwa_przewoznika = nazwa_przew
+                    lista_firm_db = df_przewoznicy['Skrócona Nazwa'].dropna().tolist() if not df_przewoznicy.empty else []
+                    if val_nazwa_przewoznika in lista_firm_db:
+                        val_zrodlo = "Przewoźnik stały (Baza)"
+                    else:
+                        val_zrodlo = "Przewoźnik z giełdy (Jednorazowy)"
+                        
+                dest = str(import_data.get('Miejsce_Przeznaczenia', '')).strip()
+                if dest and dest != "nan":
+                    val_miejsca_rozladunku_raw = [dest]
+                    
+                auto_nr = str(import_data.get('Nr_Rejestracyjny', '')).replace("nan", "").strip()
+                if auto_nr: val_c_auto_nr = auto_nr
+                
+                kier = str(import_data.get('Kierowca', '')).replace("nan", "").strip()
+                if kier: val_c_kierowca = kier
+                
+                try: val_waga = int(float(str(import_data.get('Waga', '1000')).replace(',', '.')))
+                except: pass
+                
+                try: val_data_zal = datetime.strptime(str(import_data.get('Data_Zlecenia_Tr', '')), "%Y-%m-%d").date()
+                except: pass
+                
+                try: 
+                    dt_zak = str(import_data.get('Data_Zakonczenia_Uslugi', ''))
+                    if dt_zak and dt_zak != "nan":
+                        val_data_odbior_pelnych = datetime.strptime(dt_zak, "%Y-%m-%d").date()
+                except: pass
+                
+                try: val_stawka_final = float(str(import_data.get('Koszt_Transportu_EUR', '0')).replace(',', '.'))
+                except: pass
 
         with st.expander("🔍 Przeglądaj i wyszukaj miejsca z Bazy Lokalizacji"):
             wyszukiwana_fraza = st.text_input("Wpisz szukaną frazę (nazwa, miasto, ulica, kod):", placeholder="np. Messe Berlin...")
@@ -797,7 +846,6 @@ def render(sh):
                         prefix = "ZLP" if kategoria_zlecenia == "Zlecenie Poboczne (Eksport do rejestru)" else "EVT"
                         nr_zlecenia = f"{prefix}{datetime.now().strftime('%y/%m%d')}/{podpis}{idx:02d}"
                     
-                    # --- KLUCZOWA POPRAWKA ZAPOBIEGAJĄCA BŁĘDOM RATE LIMIT (429) ---
                     if nr_cmr_do_zapisu:
                         nr_cmr_zapisany = nr_cmr_do_zapisu
                     else:
@@ -835,6 +883,9 @@ def render(sh):
                             db.append_data("Zlecenia Poboczne", wiersz_poboczne)
                             
                     if operacja_sukces:
+                        if 'import_z_eventu' in st.session_state:
+                            del st.session_state['import_z_eventu']
+                            
                         pdf_bytes = generate_pro_pdf(paczka_pdf)
                         miasto_zal_val = get_cmr_city_format(z_sel, z_man, df_miejsca)
                         odbiorca_cmr_text = "SQM Prosta Spółka Akcyjna ;\nul. Poznańska 165, 62-052 Komorniki,\nNIP: 7792361182" if odbiorca_cmr_ui == "SQM (Wysyłka na własne stoisko/event)" else full_roz_pdf
