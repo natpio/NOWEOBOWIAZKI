@@ -263,7 +263,6 @@ def generate_cmr_excel(dane):
         safe_set_cell(sheet, 'T6', dane.get('nr_cmr', ''))
         
         # Prawa strona (Rubryka 16) - Przewoźnik, Auto, Kierowca
-        # Wszystko ląduje idealnie w jednym pionowym bloku, bez dublowania na formularzu.
         safe_set_cell(sheet, 'L13', dane.get('przewoznik', ''))
         safe_set_cell(sheet, 'L14', dane.get('auto', ''))
         safe_set_cell(sheet, 'L15', dane.get('kierowca', ''))
@@ -626,7 +625,14 @@ def render(sh):
                     del st.session_state['import_z_eventu']
                     st.rerun()
                 
-                val_typ_zlecenia = "Pełny event"
+                # --- INTELIGENTNE ROZPOZNAWANIE TYPU ZLECENIA ---
+                dt_zak = str(import_data.get('Data_Zakonczenia_Uslugi', '')).strip()
+                if dt_zak and dt_zak not in ["nan", "None"]:
+                    val_typ_zlecenia = "Pełny event"
+                    try: val_data_odbior_pelnych = datetime.strptime(dt_zak, "%Y-%m-%d").date()
+                    except: pass
+                else:
+                    val_typ_zlecenia = "Tylko dostawa"
                 
                 nazwa_przew = str(import_data.get('Przewoznik', '')).strip()
                 if nazwa_przew and nazwa_przew != "nan":
@@ -651,12 +657,6 @@ def render(sh):
                 except: pass
                 
                 try: val_data_zal = datetime.strptime(str(import_data.get('Data_Zlecenia_Tr', '')), "%Y-%m-%d").date()
-                except: pass
-                
-                try: 
-                    dt_zak = str(import_data.get('Data_Zakonczenia_Uslugi', ''))
-                    if dt_zak and dt_zak != "nan":
-                        val_data_odbior_pelnych = datetime.strptime(dt_zak, "%Y-%m-%d").date()
                 except: pass
                 
                 try: val_stawka_final = float(str(import_data.get('Koszt_Transportu_EUR', '0')).replace(',', '.'))
