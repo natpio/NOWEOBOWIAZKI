@@ -452,6 +452,15 @@ def render(sh):
                             except Exception as e:
                                 st.error("Szablon CMR niedostępny.")
 
+                        if not is_sqm:
+                            st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'>", unsafe_allow_html=True)
+                            st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🚀 Pełne zlecenie transportowe</p>", unsafe_allow_html=True)
+                            
+                            if st.button("📄 Przekaż do Generatora Zleceń PRO", type="primary", use_container_width=True, key=f"bridge_pro_{dane_eventu['ID_Zlecenia']}"):
+                                st.session_state['import_z_eventu'] = dane_eventu.to_dict()
+                                st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO"
+                                st.rerun()
+
                     with c_dup:
                         if st.button("📋 Klonuj", key=f"clone_{dane_eventu.get('ID_Zlecenia', '')}", use_container_width=True):
                             nowy_wiersz = dane_eventu.copy().to_dict()
