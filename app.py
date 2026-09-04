@@ -15,7 +15,8 @@ import mod_finanse
 import mod_bazy_danych
 import mod_generator_pdf 
 import mod_empties
-import mod_rezerwacja_ramp # Import nowego modułu rezerwacji ramp
+import mod_rezerwacja_ramp
+import mod_timeline_targow
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="⚾", layout="wide")
@@ -194,7 +195,7 @@ def main():
     
     # Ładowanie grafik menu
     b64_cmd = get_base64_image("command.jpg")
-    b64_rmp = get_base64_image("rezerwacja rampy.png") # Zaktualizowana, dedykowana grafika
+    b64_rmp = get_base64_image("rezerwacja rampy.png") 
     b64_gantt = get_base64_image("harmonogram.jpg")
     b64_gen = get_base64_image("GENERATOR.jpg")
     b64_evt = get_base64_image("eventy.jpg")
@@ -218,9 +219,9 @@ def main():
 </div>""", unsafe_allow_html=True)
         
         opcje_menu = [
-            "COMMAND CENTER", "REZERWACJA RAMPY", "HARMONOGRAM (GANTT)", "GENERATOR ZLECEŃ PRO", 
-            "EVENTY / TARGI", "EMPTIES TOWER", "ZLECENIA POBOCZNE", "SUBRENTY", 
-            "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
+            "COMMAND CENTER", "REZERWACJA RAMPY", "HARMONOGRAM (GANTT)", "TIMELINE EVENTÓW", 
+            "GENERATOR ZLECEŃ PRO", "EVENTY / TARGI", "EMPTIES TOWER", "ZLECENIA POBOCZNE", 
+            "SUBRENTY", "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
         ]
 
         if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
@@ -269,17 +270,18 @@ def main():
         [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_cmd}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_rmp}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gantt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_gen}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_evt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_emp}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_pob}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_sub}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_yes}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_baz}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(13) button {{ background-image: url('{b64_fin}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_evt}') !important; }} /* Użyto grafiki eventów do osi czasu */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_gen}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_evt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_emp}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_pob}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_sub}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_yes}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(13) button {{ background-image: url('{b64_baz}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_fin}') !important; }}
         
-        [data-testid="stSidebar"] div.element-container:nth-of-type(15) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(16) button {{ background-image: url('{b64_btn_logout}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(16) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(17) button {{ background-image: url('{b64_btn_logout}') !important; }}
         </style>
         """, unsafe_allow_html=True)
 
@@ -290,6 +292,8 @@ def main():
             st.session_state["menu_option"] = "REZERWACJA RAMPY"; st.rerun()
         if st.button("HARMONOGRAM (GANTT)", use_container_width=True): 
             st.session_state["menu_option"] = "HARMONOGRAM (GANTT)"; st.rerun()
+        if st.button("TIMELINE EVENTÓW", use_container_width=True): 
+            st.session_state["menu_option"] = "TIMELINE EVENTÓW"; st.rerun()
         if st.button("GENERATOR ZLECEŃ PRO", use_container_width=True): 
             st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"; st.rerun()
         if st.button("EVENTY / TARGI", use_container_width=True): 
@@ -339,6 +343,7 @@ def main():
     if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
     elif wybrany_modul == "REZERWACJA RAMPY": mod_rezerwacja_ramp.render(sh)
     elif wybrany_modul == "HARMONOGRAM (GANTT)": mod_harmonogram.render(sh)
+    elif wybrany_modul == "TIMELINE EVENTÓW": mod_timeline_targow.render(sh)
     elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
     elif wybrany_modul == "EVENTY / TARGI": mod_eventy.render(sh)
     elif wybrany_modul == "EMPTIES TOWER": mod_empties.render(sh)
