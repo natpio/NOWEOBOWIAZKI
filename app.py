@@ -197,6 +197,7 @@ def main():
     b64_cmd = get_base64_image("command.jpg")
     b64_rmp = get_base64_image("rezerwacja rampy.png") 
     b64_gantt = get_base64_image("harmonogram.jpg")
+    b64_time = get_base64_image("timeline.png")
     b64_gen = get_base64_image("GENERATOR.jpg")
     b64_evt = get_base64_image("eventy.jpg")
     b64_emp = get_base64_image("empties.jpg")
@@ -270,7 +271,7 @@ def main():
         [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_cmd}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_rmp}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gantt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_evt}') !important; }} /* Użyto grafiki eventów do osi czasu */
+        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_time}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_gen}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_evt}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_emp}') !important; }}
