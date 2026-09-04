@@ -195,13 +195,13 @@ def main():
     
     # Ładowanie grafik menu
     b64_cmd = get_base64_image("command.jpg")
+    b64_evt = get_base64_image("eventy.jpg")
+    b64_gen = get_base64_image("GENERATOR.jpg")
+    b64_pob = get_base64_image("zlecenia poboczne.jpg")
     b64_rmp = get_base64_image("rezerwacja rampy.png") 
     b64_gantt = get_base64_image("harmonogram.jpg")
     b64_time = get_base64_image("timeline.png")
-    b64_gen = get_base64_image("GENERATOR.jpg")
-    b64_evt = get_base64_image("eventy.jpg")
     b64_emp = get_base64_image("empties.jpg")
-    b64_pob = get_base64_image("zlecenia poboczne.jpg")
     b64_sub = get_base64_image("subrenty.jpg")
     b64_yes = get_base64_image("yestech.jpg")
     b64_baz = get_base64_image("bazy danych.jpg")
@@ -220,9 +220,9 @@ def main():
 </div>""", unsafe_allow_html=True)
         
         opcje_menu = [
-            "COMMAND CENTER", "REZERWACJA RAMPY", "HARMONOGRAM (GANTT)", "TIMELINE EVENTÓW", 
-            "GENERATOR ZLECEŃ PRO", "EVENTY / TARGI", "EMPTIES TOWER", "ZLECENIA POBOCZNE", 
-            "SUBRENTY", "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
+            "COMMAND CENTER", "EVENTY / TARGI", "GENERATOR ZLECEŃ PRO", "ZLECENIA POBOCZNE",
+            "REZERWACJA RAMPY", "HARMONOGRAM (GANTT)", "TIMELINE EVENTÓW", 
+            "EMPTIES TOWER", "SUBRENTY", "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY"
         ]
 
         if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
@@ -269,13 +269,13 @@ def main():
         }}
 
         [data-testid="stSidebar"] div.element-container:nth-of-type(3) button {{ background-image: url('{b64_cmd}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_rmp}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gantt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_time}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_gen}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_evt}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_emp}') !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_pob}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(4) button {{ background-image: url('{b64_evt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(5) button {{ background-image: url('{b64_gen}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(6) button {{ background-image: url('{b64_pob}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(7) button {{ background-image: url('{b64_rmp}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(8) button {{ background-image: url('{b64_gantt}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(9) button {{ background-image: url('{b64_time}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(10) button {{ background-image: url('{b64_emp}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(11) button {{ background-image: url('{b64_sub}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(12) button {{ background-image: url('{b64_yes}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(13) button {{ background-image: url('{b64_baz}') !important; }}
@@ -289,20 +289,20 @@ def main():
         # Rysowanie przycisków MENU
         if st.button("COMMAND CENTER", use_container_width=True): 
             st.session_state["menu_option"] = "COMMAND CENTER"; st.rerun()
+        if st.button("EVENTY / TARGI", use_container_width=True): 
+            st.session_state["menu_option"] = "EVENTY / TARGI"; st.rerun()
+        if st.button("GENERATOR ZLECEŃ PRO", use_container_width=True): 
+            st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"; st.rerun()
+        if st.button("ZLECENIA POBOCZNE", use_container_width=True): 
+            st.session_state["menu_option"] = "ZLECENIA POBOCZNE"; st.rerun()
         if st.button("REZERWACJA RAMPY", use_container_width=True): 
             st.session_state["menu_option"] = "REZERWACJA RAMPY"; st.rerun()
         if st.button("HARMONOGRAM (GANTT)", use_container_width=True): 
             st.session_state["menu_option"] = "HARMONOGRAM (GANTT)"; st.rerun()
         if st.button("TIMELINE EVENTÓW", use_container_width=True): 
             st.session_state["menu_option"] = "TIMELINE EVENTÓW"; st.rerun()
-        if st.button("GENERATOR ZLECEŃ PRO", use_container_width=True): 
-            st.session_state["menu_option"] = "GENERATOR ZLECEŃ PRO"; st.rerun()
-        if st.button("EVENTY / TARGI", use_container_width=True): 
-            st.session_state["menu_option"] = "EVENTY / TARGI"; st.rerun()
         if st.button("EMPTIES TOWER", use_container_width=True): 
             st.session_state["menu_option"] = "EMPTIES TOWER"; st.rerun()
-        if st.button("ZLECENIA POBOCZNE", use_container_width=True): 
-            st.session_state["menu_option"] = "ZLECENIA POBOCZNE"; st.rerun()
         if st.button("SUBRENTY", use_container_width=True): 
             st.session_state["menu_option"] = "SUBRENTY"; st.rerun()
         if st.button("YESTECH EXPORT", use_container_width=True): 
@@ -341,14 +341,15 @@ def main():
 
     wybrany_modul = st.session_state["menu_option"]
     
+    # Skorygowane mapowanie do nowego układu przycisków
     if wybrany_modul == "COMMAND CENTER": mod_command_center.render(sh)
+    elif wybrany_modul == "EVENTY / TARGI": mod_eventy.render(sh)
+    elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
+    elif wybrany_modul == "ZLECENIA POBOCZNE": mod_zlecenia_poboczne.render(sh)
     elif wybrany_modul == "REZERWACJA RAMPY": mod_rezerwacja_ramp.render(sh)
     elif wybrany_modul == "HARMONOGRAM (GANTT)": mod_harmonogram.render(sh)
     elif wybrany_modul == "TIMELINE EVENTÓW": mod_timeline_targow.render(sh)
-    elif wybrany_modul == "GENERATOR ZLECEŃ PRO": mod_generator_pdf.render(sh) 
-    elif wybrany_modul == "EVENTY / TARGI": mod_eventy.render(sh)
     elif wybrany_modul == "EMPTIES TOWER": mod_empties.render(sh)
-    elif wybrany_modul == "ZLECENIA POBOCZNE": mod_zlecenia_poboczne.render(sh)
     elif wybrany_modul == "SUBRENTY": mod_subrenty.render(sh)
     elif wybrany_modul == "YESTECH EXPORT": mod_yestech.render(sh)
     elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI": mod_bazy_danych.render(sh)
