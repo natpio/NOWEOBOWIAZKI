@@ -109,7 +109,10 @@ def render(sh):
         # --- BLOKI NIEZALEŻNE (Dla każdego pojazdu w ramach eventu) ---
         for _, row in group.iterrows():
             nr = str(row.get("ID_Zlecenia", ""))
-            auto = str(row.get("Typ_Pojazdu", "")).split()[0]  # Skrócona nazwa np. BUS, FTL
+            
+            # Bezpieczne pobieranie typu pojazdu (ZABEZPIECZENIE PRZED INDEX ERROR)
+            auto_parts = str(row.get("Typ_Pojazdu", "")).split()
+            auto = auto_parts[0] if auto_parts else "Pojazd"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
             powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
