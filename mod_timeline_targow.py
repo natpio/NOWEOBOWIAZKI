@@ -23,7 +23,7 @@ def extract_rozladunek(notatki, fallback):
     match = re.search(r'\[Rozładunki:\s*([^\]]+)\]', str(notatki))
     if match:
         dates = match.group(1).split(",")
-        d = parse_date(dates[0])
+        d = parse_date(dates[-1].strip()) # Bierzemy ostatni rozładunek
         if d: return d
     return fallback
 
@@ -35,17 +35,22 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. Pasek każdego projektu jest podzielony na odrębne fazy kolorystyczne. Uzupełnij daty na dole ekranu, aby wykres był kompletny.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. System automatycznie grupuje auta i ładunki przypisane do tego samego wydarzenia.</p>", unsafe_allow_html=True)
 
     # 1. Pobieranie danych
     with st.spinner("Ładowanie osi czasu..."):
-        _, df_ev = db.load_data(sh, "DB_Eventy")
-        _, df_etapy = db.load_data(sh, "DB_Event_Etapy")
+        try:
+            ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
+            ws_etapy, df_etapy = db.load_data(sh, "DB_Event_Etapy")
+        except Exception as e:
+            st.error(f"Błąd ładowania danych: {e}")
+            return
 
-        # Automatyczne utworzenie struktury nowej bazy, jeśli jeszcze nie istnieje
+        # Automatyczne utworzenie struktury nowej bazy
         if df_etapy.empty and len(df_etapy.columns) <= 1:
-            headers = ["ID_Zlecenia", "Targi_Start", "Targi_Koniec", "Demontaz_Start", "Demontaz_Koniec"]
-            sh.worksheet("DB_Event_Etapy").append_row(headers)
+            headers = ["Nazwa_Targow", "Targi_Start", "Targi_Koniec", "Demontaz_Start", "Demontaz_Koniec"]
+            ws_etapy.clear()
+            ws_etapy.append_row(headers)
             st.cache_data.clear()
             _, df_etapy = db.load_data(sh, "DB_Event_Etapy")
 
@@ -56,54 +61,88 @@ def render(sh):
         st.info("Brak aktywnych eventów w bazie.")
         return
 
+    # Normalizacja nazw targów
+    df_aktywne["Nazwa_Targow"] = df_aktywne["Nazwa_Targow"].astype(str).str.strip()
+
     # 3. Transformacja danych do kaskadowego wykresu Gantta
     gantt_data = []
 
-    for _, row in df_aktywne.iterrows():
-        id_zlecenia = str(row.get("ID_Zlecenia", ""))
-        nazwa = str(row.get("Nazwa_Targow", id_zlecenia))
-        
-        zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
-        powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
-        rozladunek = extract_rozladunek(row.get("Notatki"), zaladunek)
+    # GRUPOWANIE PO NAZWIE TARGÓW
+    grouped = df_aktywne.groupby("Nazwa_Targow")
 
-        if not zaladunek: continue
-
-        # Pobieranie dodatkowych etapów z DB_Event_Etapy
-        etapy_row = df_etapy[df_etapy["ID_Zlecenia"] == id_zlecenia] if not df_etapy.empty and "ID_Zlecenia" in df_etapy.columns else pd.DataFrame()
+    for nazwa, group in grouped:
+        if not nazwa or nazwa in ["nan", "None", ""]: 
+            continue
+            
+        # Pobieranie wspólnych etapów dla tych konkretnych targów
+        etapy_row = df_etapy[df_etapy.iloc[:, 0].astype(str).str.strip() == nazwa] if not df_etapy.empty else pd.DataFrame()
         
         targi_s, targi_k, demontaz_s, demontaz_k = None, None, None, None
         if not etapy_row.empty:
             r_et = etapy_row.iloc[0]
-            targi_s = parse_date(r_et.get("Targi_Start"))
-            targi_k = parse_date(r_et.get("Targi_Koniec"))
-            demontaz_s = parse_date(r_et.get("Demontaz_Start"))
-            demontaz_k = parse_date(r_et.get("Demontaz_Koniec"))
+            cols = df_etapy.columns.tolist()
+            targi_s = parse_date(r_et.get(cols[1])) if len(cols) > 1 else None
+            targi_k = parse_date(r_et.get(cols[2])) if len(cols) > 2 else None
+            demontaz_s = parse_date(r_et.get(cols[3])) if len(cols) > 3 else None
+            demontaz_k = parse_date(r_et.get(cols[4])) if len(cols) > 4 else None
 
-        # FAZA 1: Transport & Montaż (Niebieski)
-        end_ph1 = rozladunek if rozladunek else (targi_s if targi_s else zaladunek)
-        if end_ph1 < zaladunek: end_ph1 = zaladunek
-        gantt_data.append({"Zlecenie": nazwa, "Faza": "1. Transport & Montaż", "Start": zaladunek, "Koniec": end_ph1})
-
-        # FAZA 2: Dni Klienta (Czerwony)
+        # --- BLOKI WSPÓLNE (Dni Targowe i Demontaż) ---
+        # Dodawane tylko raz per wydarzenie (Event)
         if targi_s and targi_k:
-            start_ph2 = max(end_ph1, targi_s)
-            gantt_data.append({"Zlecenie": nazwa, "Faza": "2. Dni Targowe (Event)", "Start": start_ph2, "Koniec": targi_k})
-            end_ph2 = targi_k
-        else:
-            end_ph2 = end_ph1
-
-        # FAZA 3: Demontaż (Złoty)
+            gantt_data.append({
+                "Zlecenie": nazwa, 
+                "Faza": "2. Dni Targowe (Event)", 
+                "Start": targi_s, 
+                "Koniec": targi_k,
+                "Szczegoly": "DZIEŃ KLIENTA"
+            })
+            
         if demontaz_s and demontaz_k:
-            start_ph3 = max(end_ph2, demontaz_s)
-            gantt_data.append({"Zlecenie": nazwa, "Faza": "3. Demontaż", "Start": start_ph3, "Koniec": demontaz_k})
-            end_ph3 = demontaz_k
-        else:
-            end_ph3 = end_ph2
+            gantt_data.append({
+                "Zlecenie": nazwa, 
+                "Faza": "3. Demontaż", 
+                "Start": demontaz_s, 
+                "Koniec": demontaz_k,
+                "Szczegoly": "DEMONTAŻ"
+            })
 
-        # FAZA 4: Powrót (Zielony)
-        if powrot and powrot >= end_ph3:
-            gantt_data.append({"Zlecenie": nazwa, "Faza": "4. Powrót na bazę", "Start": end_ph3, "Koniec": powrot})
+        # --- BLOKI NIEZALEŻNE (Dla każdego pojazdu w ramach eventu) ---
+        for _, row in group.iterrows():
+            nr = str(row.get("ID_Zlecenia", ""))
+            auto = str(row.get("Typ_Pojazdu", "")).split()[0]  # Skrócona nazwa np. BUS, FTL
+            
+            zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
+            powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
+            rozladunek = extract_rozladunek(row.get("Notatki"), targi_s)
+
+            if not zaladunek: continue
+
+            # Faza 1: Transport IN (Załadunek -> Rozładunek lub Start Targów)
+            end_ph1 = rozladunek if rozladunek else (targi_s if targi_s else zaladunek)
+            if end_ph1 < zaladunek: end_ph1 = zaladunek
+            
+            gantt_data.append({
+                "Zlecenie": nazwa, 
+                "Faza": "1. Transport & Montaż", 
+                "Start": zaladunek, 
+                "Koniec": end_ph1,
+                "Szczegoly": f"{nr} [{auto}]"
+            })
+
+            # Faza 4: Transport OUT (Powrót)
+            if powrot:
+                # Kiedy auto wyjeżdża z powrotem? Po demontażu, po targach lub po prostu po załadunku.
+                start_ph4 = demontaz_k if demontaz_k else (targi_k if targi_k else end_ph1)
+                # Zapobieganie błędom logiki (cofa się w czasie)
+                if start_ph4 > powrot: start_ph4 = powrot
+                
+                gantt_data.append({
+                    "Zlecenie": nazwa, 
+                    "Faza": "4. Powrót na bazę", 
+                    "Start": start_ph4, 
+                    "Koniec": powrot,
+                    "Szczegoly": f"{nr} [{auto}]"
+                })
 
     # 4. Renderowanie wykresu Plotly
     if gantt_data:
@@ -122,7 +161,8 @@ def render(sh):
         }
 
         unikalne_zlecenia = len(df_gantt['Zlecenie'].unique())
-        height_calc = max(300, unikalne_zlecenia * 55 + 150)
+        # Wykres rośnie wraz z ilością unikalnych targów
+        height_calc = max(300, unikalne_zlecenia * 85 + 150)
 
         fig = px.timeline(
             df_gantt, 
@@ -131,18 +171,23 @@ def render(sh):
             y="Zlecenie", 
             color="Faza",
             color_discrete_map=color_map,
-            text="Faza",
-            hover_name="Zlecenie"
+            custom_data=["Faza", "Szczegoly"],
+            hover_name="Szczegoly"
         )
 
         fig.update_traces(
-            width=0.7,
-            textposition='inside',
-            insidetextanchor='middle',
-            textfont=dict(size=12, color='white', family="Inter", weight="bold"),
+            width=0.75,
+            hovertemplate="<b>%{hovertext}</b><br>%{customdata[0]}<br>Od: %{x[0]}<br>Do: %{x[1]}<extra></extra>",
             marker_line_width=1,
             marker_line_color='rgba(0,0,0,0.5)'
         )
+
+        # Magia: Wrzucamy fizycznie napis z kolumny "Szczegoly" do środka paska
+        for i, d in enumerate(fig.data):
+            d.text = d.customdata[:, 1]
+            d.textposition = 'inside'
+            d.insidetextanchor = 'middle'
+            d.textfont = dict(size=11, color='white', family="Inter", weight="bold")
 
         # Dodanie pionowej, przerywanej linii oznaczającej "Dzisiaj"
         fig.add_vline(
@@ -159,7 +204,7 @@ def render(sh):
         fig.update_yaxes(
             autorange="reversed", 
             title="",
-            tickfont=dict(size=14, color='#E2DCD3', family='Inter', weight="bold"),
+            tickfont=dict(size=16, color='#E2DCD3', family='Inter', weight="bold"),
             gridcolor='rgba(255, 255, 255, 0.05)'
         )
 
@@ -190,25 +235,25 @@ def render(sh):
     else:
         st.info("Brak wystarczających dat do wygenerowania osi czasu.")
 
-    # 5. Formularz uzupełniania brakujących etapów dla aktywnych eventów
+    # 5. Formularz uzupełniania brakujących etapów
     st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.2); margin: 35px 0 20px 0;'>", unsafe_allow_html=True)
-    st.markdown("<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>⚙️ Uzupełnij etapy dla logistyki</h3>", unsafe_allow_html=True)
-    st.markdown("<p style='color: #8C8477; font-size: 13px;'>Puste daty w tych polach są pomijane na wykresie. Wypełnij je, aby wykres nabrał kolorów.</p>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>⚙️ Uzupełnij etapy dla targów</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px;'>Ustaw daty raz dla wydarzenia. Puste pola powodują pominięcie etapu na wykresie.</p>", unsafe_allow_html=True)
 
     with st.form("form_etapy_targow"):
-        opcje_eventow = (df_aktywne["ID_Zlecenia"] + " | " + df_aktywne["Nazwa_Targow"]).tolist()
-        wybrany_ev = st.selectbox("Wybierz event do uzupełnienia dat:", ["Wybierz..."] + opcje_eventow)
+        opcje_targow = sorted(df_aktywne["Nazwa_Targow"].unique().tolist())
+        wybrany_ev = st.selectbox("Wybierz event (Nazwa Targów) do zsynchronizowania dat:", ["Wybierz..."] + opcje_targow)
         
         c1, c2 = st.columns(2)
         
         if wybrany_ev != "Wybierz...":
-            ev_id = wybrany_ev.split(" | ")[0]
-            akt_row = df_etapy[df_etapy["ID_Zlecenia"] == ev_id] if not df_etapy.empty and "ID_Zlecenia" in df_etapy.columns else pd.DataFrame()
+            akt_row = df_etapy[df_etapy.iloc[:, 0].astype(str).str.strip() == wybrany_ev] if not df_etapy.empty else pd.DataFrame()
+            cols = df_etapy.columns.tolist() if not df_etapy.empty else ["Nazwa_Targow", "Targi_Start", "Targi_Koniec", "Demontaz_Start", "Demontaz_Koniec"]
             
-            d_t_s = parse_date(akt_row.iloc[0].get("Targi_Start")) if not akt_row.empty else datetime.now().date()
-            d_t_k = parse_date(akt_row.iloc[0].get("Targi_Koniec")) if not akt_row.empty else datetime.now().date()
-            d_d_s = parse_date(akt_row.iloc[0].get("Demontaz_Start")) if not akt_row.empty else datetime.now().date()
-            d_d_k = parse_date(akt_row.iloc[0].get("Demontaz_Koniec")) if not akt_row.empty else datetime.now().date()
+            d_t_s = parse_date(akt_row.iloc[0].get(cols[1])) if not akt_row.empty and len(cols) > 1 else datetime.now().date()
+            d_t_k = parse_date(akt_row.iloc[0].get(cols[2])) if not akt_row.empty and len(cols) > 2 else datetime.now().date()
+            d_d_s = parse_date(akt_row.iloc[0].get(cols[3])) if not akt_row.empty and len(cols) > 3 else datetime.now().date()
+            d_d_k = parse_date(akt_row.iloc[0].get(cols[4])) if not akt_row.empty and len(cols) > 4 else datetime.now().date()
         else:
             d_t_s, d_t_k, d_d_s, d_d_k = datetime.now().date(), datetime.now().date(), datetime.now().date(), datetime.now().date()
             
@@ -229,20 +274,19 @@ def render(sh):
         st.markdown("<br>", unsafe_allow_html=True)
         if st.form_submit_button("💾 Zapisz Etapy do Kalendarza", type="primary", use_container_width=True):
             if wybrany_ev != "Wybierz...":
-                ev_id = wybrany_ev.split(" | ")[0]
-                
-                if not df_etapy.empty and ev_id in df_etapy["ID_Zlecenia"].values:
-                    idx = df_etapy[df_etapy["ID_Zlecenia"] == ev_id].index[0]
-                    df_etapy.at[idx, "Targi_Start"] = str(targi_start)
-                    df_etapy.at[idx, "Targi_Koniec"] = str(targi_koniec)
-                    df_etapy.at[idx, "Demontaz_Start"] = str(demontaz_start)
-                    df_etapy.at[idx, "Demontaz_Koniec"] = str(demontaz_koniec)
+                if not df_etapy.empty and wybrany_ev in df_etapy.iloc[:, 0].values:
+                    idx = df_etapy[df_etapy.iloc[:, 0] == wybrany_ev].index[0]
+                    cols = df_etapy.columns.tolist()
+                    df_etapy.at[idx, cols[1]] = str(targi_start)
+                    df_etapy.at[idx, cols[2]] = str(targi_koniec)
+                    df_etapy.at[idx, cols[3]] = str(demontaz_start)
+                    df_etapy.at[idx, cols[4]] = str(demontaz_koniec)
                     gs_row = int(df_etapy.at[idx, "sheet_row"])
                     db.update_single_row_safe("DB_Event_Etapy", gs_row, df_etapy.loc[idx])
                 else:
-                    nowy_wiersz = [ev_id, str(targi_start), str(targi_koniec), str(demontaz_start), str(demontaz_koniec)]
+                    nowy_wiersz = [wybrany_ev, str(targi_start), str(targi_koniec), str(demontaz_start), str(demontaz_koniec)]
                     db.append_data("DB_Event_Etapy", nowy_wiersz)
-                st.success("Zaktualizowano wykres osi czasu!")
+                st.success(f"Zaktualizowano wykres osi czasu dla: {wybrany_ev}!")
                 st.rerun()
             else:
-                st.error("Wybierz event z listy, aby zapisać jego etapy.")
+                st.error("Wybierz targi z listy, aby zapisać ich etapy.")
