@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja " + '"PRO 999"'+ ". Kaskadowy układ projektów z wykorzystaniem wirtualnych mapowań osi czasu.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja \"PRO 999\". Prawidłowy układ: Główne targi, a bezpośrednio pod nimi dedykowane osie czasu dla poszczególnych przewoźników.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -102,7 +102,6 @@ def render(sh):
             demontaz_k = parse_date(r_et.get(cols[4])) if len(cols) > 4 else None
 
         # 1. Główny wiersz eventu (Parent)
-        # UID (Unique ID) jest ukryte przed użytkownikiem, ale to ono układa oś Y.
         p_uid = f"PARENT_{nazwa_bazy}"
         p_label = f"<b style='color: #E2DCD3; font-size: 14px;'>📌 {nazwa_bazy.upper()}</b>"
         sort_base = f"{nazwa_bazy.upper()}_0"
@@ -238,7 +237,6 @@ def render(sh):
             hovertemplate=hovertemplate_html
         )
 
-        # Magia nr 2: Wrzucamy czysty, dedykowany tekst do wnętrza paska (bez ID)
         for i, d in enumerate(fig.data):
             d.text = d.customdata[:, 5]
             d.textposition = 'inside'
@@ -247,8 +245,10 @@ def render(sh):
 
         fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        # Magia nr 3: Mówimy Plotly "Zignoruj to co masz na osi Y (brzydkie UID). Wyświetl zamiast nich sformatowane tagi HTML!"
+        # KLUCZOWY FIX: Wymuszamy na Plotly ułożenie osi Y DOKŁADNIE w takiej kolejności, jak podaliśmy
         fig.update_yaxes(
+            categoryorder="array",           
+            categoryarray=ordered_uids,      
             tickmode='array',
             tickvals=ordered_uids,
             ticktext=ordered_labels,
