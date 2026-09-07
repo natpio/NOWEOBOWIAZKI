@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Kaskadowe odzwierciedlenie cyklu życia targów. Tło wydarzenia pochodzi ze Słownika (📌), a poszczególni przewoźnicy (↳) posiadają własne linie czasu.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Kaskadowe odzwierciedlenie cyklu życia targów. Tło wydarzenia pochodzi ze Słownika (📌), a poszczególni przewoźnicy (↳) posiadają własne, uporządkowane linie czasu.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -138,8 +138,9 @@ def render(sh):
             etykieta_pojazdu = f"{nazwa_wyswietlana} [{auto}]"
             if dopisek: etykieta_pojazdu += f" | {dopisek}"
             
-            nazwa_wiersza_auta = f"↳ {etykieta_pojazdu}"
-            sort_auto = f"{nazwa_bazy.upper()}_1_{etykieta_pojazdu}_{nr}"
+            # ABSOLUTNA UNIKALNOŚĆ WIERSZA: Event + Pojazd + ID Zlecenia
+            nazwa_wiersza_auta = f"{nazwa_bazy.upper()} ↳ {etykieta_pojazdu}  [{nr}]"
+            sort_auto = f"{nazwa_bazy.upper()}_1_{nr}"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
             powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
@@ -201,7 +202,7 @@ def render(sh):
         # Poszerzenie paska o 1 dzień dla widoczności jednodniowych zdarzeń
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
 
-        # Sortowanie logiczne (Targi na górze, potem auta alfabetycznie/chronologicznie)
+        # Logiczne sortowanie (Parent, potem Child z danego eventu)
         df_gantt = df_gantt.sort_values(by=['SortKey', 'Start'])
         kolejnosc_y = df_gantt['Zlecenie'].unique().tolist()
 
@@ -214,7 +215,7 @@ def render(sh):
         }
 
         unikalne_wiersze = len(kolejnosc_y)
-        height_calc = max(300, unikalne_wiersze * 50 + 150)
+        height_calc = max(300, unikalne_wiersze * 35 + 150)
 
         fig = px.timeline(
             df_gantt, 
@@ -242,13 +243,13 @@ def render(sh):
 
         fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        # Wymuszamy wyliczoną kolejność osi Y
+        # Wymuszamy wyliczoną kolejność osi Y, by zapobiec auto-sortowaniu przez Plotly
         fig.update_yaxes(
             autorange="reversed", 
             categoryorder="array",
             categoryarray=kolejnosc_y,
             title="", 
-            tickfont=dict(size=15, color='#E2DCD3', family='Inter', weight="bold"), 
+            tickfont=dict(size=13, color='#E2DCD3', family='Inter', weight="bold"), 
             gridcolor='rgba(255, 255, 255, 0.05)'
         )
         fig.update_xaxes(showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', tickformat="%d.%m", title="", tickfont=dict(size=12, color='#A39B8F'), side="top")
