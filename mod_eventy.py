@@ -463,36 +463,53 @@ def render(sh):
                                 
                                 waga_akt = str(dane_eventu.get('Waga', '0'))
                                 u_waga = st.number_input("Waga (kg)", min_value=0, value=int(float(waga_akt)) if waga_akt.replace('.', '', 1).isdigit() else 0, step=100)
-                                
                                 u_data_tr = st.date_input("Data Załadunku", value=parse_date_safe(dane_eventu.get("Data_Zlecenia_Tr")))
-                                
-                                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Kalendarz na trasie (Dla Wykresu Gantta):</p>", unsafe_allow_html=True)
-                                r_ed1, r_ed2, r_ed3 = st.columns(3)
-                                
-                                notatki_baza = str(dane_eventu.get('Notatki', ''))
-                                roz_1_val, roz_2_val, notatki_czyste = None, None, notatki_baza
-                                
-                                if "[Rozładunki:" in notatki_baza:
-                                    try:
-                                        roz_raw = notatki_baza.split("[Rozładunki:")[1].split("]")[0].strip()
-                                        notatki_czyste = re.sub(r'\[Rozładunki:.*?\]', '', notatki_baza).strip()
-                                        dates = [d.strip() for d in roz_raw.split(",")]
-                                        if len(dates) > 0: roz_1_val = parse_date_safe(dates[0])
-                                        if len(dates) > 1: roz_2_val = parse_date_safe(dates[1])
-                                    except: pass
-
-                                u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=roz_1_val)
-                                u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
-                                usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj datę", key=f"del_roz2_{dane_eventu['ID_Zlecenia']}")
-                                
-                                obecny_koniec = parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi"))
-                                u_data_zakonczenia = r_ed3.date_input("Koniec (Baza):", value=obecny_koniec if obecny_koniec else pd.Timestamp.today().date())
-                                usun_powrot = r_ed3.checkbox("🗑️ Skasuj datę powrotu", value=(obecny_koniec is None))
                                 
                                 mag_lista = ["Brak gotowości", "Częściowo", "100% Gotowe"]
                                 akt_mag = dane_eventu.get("Status_Magazyn", "Brak gotowości")
                                 u_status_mag = st.selectbox("Status Magazyn", mag_lista, index=mag_lista.index(akt_mag) if akt_mag in mag_lista else 0)
 
+                            st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px;'>Kalendarz na trasie (Rozładunki):</p>", unsafe_allow_html=True)
+                            r_ed1, r_ed2 = st.columns(2)
+                            
+                            notatki_baza = str(dane_eventu.get('Notatki', ''))
+                            roz_1_val, roz_2_val, notatki_czyste = None, None, notatki_baza
+                            dem_1_val, dem_2_val = None, None
+                            
+                            if "[Rozładunki:" in notatki_baza:
+                                try:
+                                    roz_raw = notatki_baza.split("[Rozładunki:")[1].split("]")[0].strip()
+                                    notatki_czyste = re.sub(r'\[Rozładunki:.*?\]', '', notatki_baza).strip()
+                                    dates = [d.strip() for d in roz_raw.split(",")]
+                                    if len(dates) > 0: roz_1_val = parse_date_safe(dates[0])
+                                    if len(dates) > 1: roz_2_val = parse_date_safe(dates[1])
+                                except: pass
+
+                            if "[DEM:" in notatki_czyste:
+                                try:
+                                    dem_raw = notatki_czyste.split("[DEM:")[1].split("]")[0].strip()
+                                    notatki_czyste = re.sub(r'\[DEM:.*?\]', '', notatki_czyste).strip()
+                                    dates = [d.strip() for d in dem_raw.split(",")]
+                                    if len(dates) > 0: dem_1_val = parse_date_safe(dates[0])
+                                    if len(dates) > 1: dem_2_val = parse_date_safe(dates[1])
+                                except: pass
+
+                            u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=roz_1_val)
+                            u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
+                            usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj rozładunek 2", key=f"del_roz2_{dane_eventu['ID_Zlecenia']}")
+                            
+                            st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px; margin-top: 10px;'>Kalendarz powrotny (Demontaż i Baza):</p>", unsafe_allow_html=True)
+                            r_dem1, r_dem2, r_pow = st.columns(3)
+                            
+                            u_dem_1 = r_dem1.date_input("Start demontażu (dla auta):", value=dem_1_val)
+                            usun_dem_1 = r_dem1.checkbox("🗑️ Skasuj start", key=f"del_dem1_{dane_eventu['ID_Zlecenia']}")
+                            u_dem_2 = r_dem2.date_input("Koniec demontażu (dla auta):", value=dem_2_val)
+                            usun_dem_2 = r_dem2.checkbox("🗑️ Skasuj koniec", key=f"del_dem2_{dane_eventu['ID_Zlecenia']}")
+                            
+                            obecny_koniec = parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi"))
+                            u_data_zakonczenia = r_pow.date_input("Powrót do bazy (Zakończenie):", value=obecny_koniec if obecny_koniec else pd.Timestamp.today().date())
+                            usun_powrot = r_pow.checkbox("🗑️ Skasuj powrót", value=(obecny_koniec is None))
+                            
                             u_notatki = st.text_area("Notatki", value=notatki_czyste)
                             
                             if st.form_submit_button("💾 Zapisz Zmiany"):
@@ -516,9 +533,16 @@ def render(sh):
                                 rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
                                 final_roz_2 = "" if usun_roz_2 else (str(u_data_roz_2) if u_data_roz_2 else "")
                                 if final_roz_2: rozładunki_str += f", {final_roz_2}"
-                                    
-                                if rozładunki_str: df.at[idx, 'Notatki'] = f"[Rozładunki: {rozładunki_str}] {str(u_notatki).strip()}"
-                                else: df.at[idx, 'Notatki'] = str(u_notatki).strip()
+                                
+                                final_dem_1 = "" if usun_dem_1 else (str(u_dem_1) if u_dem_1 else "")
+                                final_dem_2 = "" if usun_dem_2 else (str(u_dem_2) if u_dem_2 else "")
+                                dem_str = final_dem_1
+                                if final_dem_2: dem_str += f",{final_dem_2}"
+                                
+                                zlozona_notatka = str(u_notatki).strip()
+                                if dem_str: zlozona_notatka = f"[DEM: {dem_str}] {zlozona_notatka}"
+                                if rozładunki_str: zlozona_notatka = f"[Rozładunki: {rozładunki_str}] {zlozona_notatka}"
+                                df.at[idx, 'Notatki'] = zlozona_notatka.strip()
                                 
                                 final_powrot = "" if usun_powrot else (str(u_data_zakonczenia) if u_data_zakonczenia else "")
                                 df.at[idx, 'Data_Zakonczenia_Uslugi'] = final_powrot
@@ -622,14 +646,6 @@ def render(sh):
                 typ_pojazdu = st.text_input("Typ Pojazdu (np. FTL, SOLOWKA, BUS, VAN)")
                 data_zaladunku_nowa = st.date_input("Data Załadunku", value=None)
                 
-                st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Kalendarz na trasie (Dla Wykresu Gantta):</p>", unsafe_allow_html=True)
-                r_form1, r_form2, r_form3 = st.columns(3)
-                data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
-                data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
-                usun_roz_2_nowe = r_form2.checkbox("🗑️ Skasuj datę")
-                data_powrotu_baza = r_form3.date_input("Powrót do bazy (Koniec):", value=None)
-                usun_powrot_nowe = r_form3.checkbox("🗑️ Skasuj datę powrotu")
-                
             with f_col2:
                 przewoznik = st.text_input("Przewoźnik / Firma Transportowa *")
                 kierowca = st.text_input("Imię i Nazwisko Kierowcy (do CMR)")
@@ -638,6 +654,21 @@ def render(sh):
                 faza_procesu = st.selectbox("Faza Procesu", ["Planowanie", "Załadunek", "Trasa", "Zamknięte"])
                 status_magazyn = st.selectbox("Status Magazyn", ["Brak gotowości", "Częściowo", "100% Gotowe"])
 
+            st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Kalendarz na trasie (Rozładunki):</p>", unsafe_allow_html=True)
+            r_form1, r_form2 = st.columns(2)
+            data_rozladunku_1 = r_form1.date_input("Rozładunek 1:", value=None)
+            data_rozladunku_2 = r_form2.date_input("Rozładunek 2 (Opcjonalnie):", value=None)
+            usun_roz_2_nowe = r_form2.checkbox("🗑️ Skasuj datę rozładunku 2")
+            
+            st.markdown("<p style='font-size: 12px; color: #8C8477; margin-top: 5px; margin-bottom: 2px;'>Kalendarz powrotny (Demontaż i Baza):</p>", unsafe_allow_html=True)
+            r_dem1, r_dem2, r_pow = st.columns(3)
+            data_dem_1_nowa = r_dem1.date_input("Start demontażu (dla auta):", value=None)
+            usun_dem1_nowe = r_dem1.checkbox("🗑️ Skasuj start demontażu")
+            data_dem_2_nowa = r_dem2.date_input("Koniec demontażu (dla auta):", value=None)
+            usun_dem2_nowe = r_dem2.checkbox("🗑️ Skasuj koniec demontażu")
+            data_powrotu_baza = r_pow.date_input("Powrót do bazy (Zakończenie):", value=None)
+            usun_powrot_nowe = r_pow.checkbox("🗑️ Skasuj datę powrotu")
+            
             notatki = st.text_area("Notatki Dodatkowe")
             
             st.markdown("<hr style='border-color: rgba(255,255,255,0.05);'><h4 style='color: #C5A880;'>🛫 Status Logistyczny</h4>", unsafe_allow_html=True)
@@ -665,7 +696,15 @@ def render(sh):
                     roz_str = str(data_rozladunku_1) if data_rozladunku_1 else ""
                     if final_roz_2: roz_str += f", {final_roz_2}"
                     
-                    finalne_notatki = f"[Rozładunki: {roz_str}] {notatki}" if roz_str else notatki
+                    final_dem_1 = "" if usun_dem1_nowe else (str(data_dem_1_nowa) if data_dem_1_nowa else "")
+                    final_dem_2 = "" if usun_dem2_nowe else (str(data_dem_2_nowa) if data_dem_2_nowa else "")
+                    dem_str = final_dem_1
+                    if final_dem_2: dem_str += f",{final_dem_2}"
+                    
+                    zlozona_notatka = str(notatki).strip()
+                    if dem_str: zlozona_notatka = f"[DEM: {dem_str}] {zlozona_notatka}"
+                    if roz_str: zlozona_notatka = f"[Rozładunki: {roz_str}] {zlozona_notatka}"
+                    
                     finalne_miejsce_przeznaczenia = u_miejsce_man_c if u_miejsce_sel_c == "INNE (wpisz ręcznie)" else u_miejsce_sel_c
                     final_powrot_nowe = "" if usun_powrot_nowe else (str(data_powrotu_baza) if data_powrotu_baza else "")
                     
@@ -675,7 +714,7 @@ def render(sh):
                         "ID_Zlecenia": str(id_zlecenia_custom), "Nazwa_Targow": str(final_nazwa_targow), "Typ_Transportu": str(typ_transportu),
                         "Faza_Procesu": str(faza_procesu), "Typ_Pojazdu": str(typ_pojazdu), "Przewoznik": str(przewoznik),
                         "Data_Zlecenia_Tr": str(data_zaladunku_nowa) if data_zaladunku_nowa else "", "Status_Magazyn": str(status_magazyn),
-                        "Notatki": str(finalne_notatki), "Koszt_Transportu_EUR": str(koszt_transportu), "CMR_Gotowe": str(cmr_gotowe), 
+                        "Notatki": str(zlozona_notatka).strip(), "Koszt_Transportu_EUR": str(koszt_transportu), "CMR_Gotowe": str(cmr_gotowe), 
                         "CMR_Podpisane_POD": str(cmr_podpisane), "Nr_Zlecenia_Zewn": str(nr_zewn_final), "Nr_Faktury": str(nr_faktury), 
                         "Data_Zakonczenia_Uslugi": final_powrot_nowe, "Data_Platnosci": "N/A" if typ_transportu == "Własny SQM" else "",
                         "Faktura_Oplacona": str(faktura_opl), "PP_Otrzymane": str(pp_otrzymane), "Zakonczone_Arch": "NIE",
