@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Kaskadowe odzwierciedlenie cyklu życia targów. Tło wydarzenia pochodzi ze Słownika (📌), a poszczególni przewoźnicy (↳) posiadają własne, uporządkowane linie czasu.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja " + '"PRO 999"'+ ". Kaskadowy układ projektów z wykorzystaniem wirtualnych mapowań osi czasu.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -102,30 +102,28 @@ def render(sh):
             demontaz_k = parse_date(r_et.get(cols[4])) if len(cols) > 4 else None
 
         # 1. Główny wiersz eventu (Parent)
-        nazwa_glowna = f"📌 {nazwa_bazy.upper()}"
+        # UID (Unique ID) jest ukryte przed użytkownikiem, ale to ono układa oś Y.
+        p_uid = f"PARENT_{nazwa_bazy}"
+        p_label = f"<b style='color: #E2DCD3; font-size: 14px;'>📌 {nazwa_bazy.upper()}</b>"
         sort_base = f"{nazwa_bazy.upper()}_0"
 
         if klient_s and klient_k:
             gantt_data.append({
-                "Zlecenie": nazwa_glowna, 
-                "Faza": "2. Dni Targowe (Event)", 
-                "Start": klient_s, 
-                "Koniec": klient_k,
-                "Szczegoly": "DZIEŃ KLIENTA",
-                "SortKey": sort_base
+                "UID": p_uid, "Y_Label": p_label, "SortKey": sort_base,
+                "Faza": "2. Dni Targowe (Event)", "Start": klient_s, "Koniec": klient_k,
+                "BarText": "DNI KLIENTA", 
+                "HoverEvent": nazwa_bazy, "HoverID": "-", "HoverCarr": "-", "HoverDopisek": "-", "HoverFaza": "Dni Targowe"
             })
             
         if demontaz_s and demontaz_k:
             gantt_data.append({
-                "Zlecenie": nazwa_glowna, 
-                "Faza": "3. Demontaż (Słownik)", 
-                "Start": demontaz_s, 
-                "Koniec": demontaz_k,
-                "Szczegoly": "OFICJALNY DEMONTAŻ",
-                "SortKey": sort_base
+                "UID": p_uid, "Y_Label": p_label, "SortKey": sort_base,
+                "Faza": "3. Demontaż (Słownik)", "Start": demontaz_s, "Koniec": demontaz_k,
+                "BarText": "DEMONTAŻ", 
+                "HoverEvent": nazwa_bazy, "HoverID": "-", "HoverCarr": "-", "HoverDopisek": "-", "HoverFaza": "Demontaż"
             })
 
-        # 2. Wiersze dla aut (Child)
+        # 2. Wiersze dla poszczególnych aut (Child)
         for _, row in group.iterrows():
             nr = str(row.get("ID_Zlecenia", ""))
             przewoznik = str(row.get("Przewoznik", "")).strip()
@@ -135,12 +133,9 @@ def render(sh):
             auto = auto_parts[0] if auto_parts else "Pojazd"
             dopisek = str(row.get("Dopisek", ""))
             
-            etykieta_pojazdu = f"{nazwa_wyswietlana} [{auto}]"
-            if dopisek: etykieta_pojazdu += f" | {dopisek}"
-            
-            # ABSOLUTNA UNIKALNOŚĆ WIERSZA: Event + Pojazd + ID Zlecenia
-            nazwa_wiersza_auta = f"{nazwa_bazy.upper()} ↳ {etykieta_pojazdu}  [{nr}]"
-            sort_auto = f"{nazwa_bazy.upper()}_1_{nr}"
+            c_uid = f"CHILD_{nazwa_bazy}_{nr}"
+            c_label = f"<span style='color: #A39B8F; font-size: 13px;'>&nbsp;&nbsp;&nbsp;&nbsp;↳ {nazwa_wyswietlana} [{auto}]</span>"
+            sort_auto = f"{nazwa_bazy.upper()}_1_{nazwa_wyswietlana}_{nr}"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
             powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
@@ -150,18 +145,18 @@ def render(sh):
 
             if not zaladunek: continue
 
+            # Faza 1: DOSTAWA
             end_ph1 = rozladunek if rozladunek else (klient_s if klient_s else zaladunek)
             if end_ph1 < zaladunek: end_ph1 = zaladunek
             
             gantt_data.append({
-                "Zlecenie": nazwa_wiersza_auta, 
-                "Faza": "1. Transport & Montaż", 
-                "Start": zaladunek, 
-                "Koniec": end_ph1,
-                "Szczegoly": etykieta_pojazdu,
-                "SortKey": sort_auto
+                "UID": c_uid, "Y_Label": c_label, "SortKey": sort_auto,
+                "Faza": "1. Transport & Montaż", "Start": zaladunek, "Koniec": end_ph1,
+                "BarText": dopisek if dopisek else "DOSTAWA",
+                "HoverEvent": nazwa_bazy, "HoverID": nr, "HoverCarr": nazwa_wyswietlana, "HoverDopisek": dopisek, "HoverFaza": "1. Transport & Montaż"
             })
             
+            # Faza 3: DEMONTAŻ AUTO
             if not dem_auto_s: dem_auto_s = klient_k if klient_k else end_ph1
             if not dem_auto_k: dem_auto_k = dem_auto_s
                 
@@ -173,25 +168,22 @@ def render(sh):
                 if end_ph3 < start_ph3: end_ph3 = start_ph3
                 
                 gantt_data.append({
-                    "Zlecenie": nazwa_wiersza_auta, 
-                    "Faza": "3. Demontaż (Auto)", 
-                    "Start": start_ph3, 
-                    "Koniec": end_ph3,
-                    "Szczegoly": etykieta_pojazdu,
-                    "SortKey": sort_auto
+                    "UID": c_uid, "Y_Label": c_label, "SortKey": sort_auto,
+                    "Faza": "3. Demontaż (Auto)", "Start": start_ph3, "Koniec": end_ph3,
+                    "BarText": dopisek if dopisek else "DEMONTAŻ",
+                    "HoverEvent": nazwa_bazy, "HoverID": nr, "HoverCarr": nazwa_wyswietlana, "HoverDopisek": dopisek, "HoverFaza": "3. Demontaż i Załadunek"
                 })
 
+            # Faza 4: POWRÓT
             if powrot:
                 start_ph4 = end_ph3 if (end_ph3 and end_ph3 > end_ph1) else end_ph1
                 if start_ph4 > powrot: start_ph4 = powrot
                 
                 gantt_data.append({
-                    "Zlecenie": nazwa_wiersza_auta, 
-                    "Faza": "4. Powrót na bazę", 
-                    "Start": start_ph4, 
-                    "Koniec": powrot,
-                    "Szczegoly": etykieta_pojazdu,
-                    "SortKey": sort_auto
+                    "UID": c_uid, "Y_Label": c_label, "SortKey": sort_auto,
+                    "Faza": "4. Powrót na bazę", "Start": start_ph4, "Koniec": powrot,
+                    "BarText": "POWRÓT",
+                    "HoverEvent": nazwa_bazy, "HoverID": nr, "HoverCarr": nazwa_wyswietlana, "HoverDopisek": dopisek, "HoverFaza": "4. Powrót na bazę"
                 })
 
     if gantt_data:
@@ -199,12 +191,16 @@ def render(sh):
         df_gantt['Start'] = pd.to_datetime(df_gantt['Start'])
         df_gantt['Koniec'] = pd.to_datetime(df_gantt['Koniec'])
         
-        # Poszerzenie paska o 1 dzień dla widoczności jednodniowych zdarzeń
+        # Poszerzenie paska, by jednodniowe eventy były kwadratami
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
 
-        # Logiczne sortowanie (Parent, potem Child z danego eventu)
+        # Logiczne sortowanie 
         df_gantt = df_gantt.sort_values(by=['SortKey', 'Start'])
-        kolejnosc_y = df_gantt['Zlecenie'].unique().tolist()
+        
+        # Wyciągamy z posortowanego Dataframe unikalne ukryte UID oraz ich etykiety do wyświetlenia (bez zmiany kolejności)
+        unique_ordered = df_gantt[['UID', 'Y_Label']].drop_duplicates()
+        ordered_uids = unique_ordered['UID'].tolist()
+        ordered_labels = unique_ordered['Y_Label'].tolist()
 
         color_map = {
             "1. Transport & Montaż": "#3B82F6",    
@@ -214,44 +210,53 @@ def render(sh):
             "4. Powrót na bazę": "#10B981"         
         }
 
-        unikalne_wiersze = len(kolejnosc_y)
-        height_calc = max(300, unikalne_wiersze * 35 + 150)
+        height_calc = max(300, len(ordered_uids) * 45 + 150)
 
         fig = px.timeline(
             df_gantt, 
             x_start="Start", 
             x_end="Koniec_Viz", 
-            y="Zlecenie", 
+            y="UID",  # Używamy UKRYTEGO ID do prawidłowego i bezkolizyjnego grupowania!
             color="Faza",
             color_discrete_map=color_map,
-            custom_data=["Faza", "Szczegoly"],
-            hover_name="Szczegoly"
+            custom_data=["HoverEvent", "HoverID", "HoverCarr", "HoverDopisek", "HoverFaza", "BarText"]
+        )
+
+        # Profesjonalny, bogaty tooltip dla użytkownika (Hover Data)
+        hovertemplate_html = (
+            "<b style='font-size:14px;'>%{customdata[0]}</b><br><br>"
+            "<b>Zlecenie:</b> %{customdata[1]}<br>"
+            "<b>Przewoźnik:</b> %{customdata[2]}<br>"
+            "<b>Dopisek:</b> %{customdata[3]}<br>"
+            "<b>Faza:</b> %{customdata[4]}<br>"
+            "<extra></extra>"
         )
 
         fig.update_traces(
-            width=0.75,
-            hovertemplate="<b>%{hovertext}</b><br>%{customdata[0]}<br>Od: %{x[0]}<br>Do: %{x[1]}<extra></extra>",
             marker_line_width=1,
-            marker_line_color='rgba(0,0,0,0.5)'
+            marker_line_color='rgba(0,0,0,0.5)',
+            hovertemplate=hovertemplate_html
         )
 
+        # Magia nr 2: Wrzucamy czysty, dedykowany tekst do wnętrza paska (bez ID)
         for i, d in enumerate(fig.data):
-            d.text = d.customdata[:, 1]
+            d.text = d.customdata[:, 5]
             d.textposition = 'inside'
             d.insidetextanchor = 'middle'
             d.textfont = dict(size=11, color='white', family="Inter", weight="bold")
 
         fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        # Wymuszamy wyliczoną kolejność osi Y, by zapobiec auto-sortowaniu przez Plotly
+        # Magia nr 3: Mówimy Plotly "Zignoruj to co masz na osi Y (brzydkie UID). Wyświetl zamiast nich sformatowane tagi HTML!"
         fig.update_yaxes(
+            tickmode='array',
+            tickvals=ordered_uids,
+            ticktext=ordered_labels,
             autorange="reversed", 
-            categoryorder="array",
-            categoryarray=kolejnosc_y,
             title="", 
-            tickfont=dict(size=13, color='#E2DCD3', family='Inter', weight="bold"), 
             gridcolor='rgba(255, 255, 255, 0.05)'
         )
+        
         fig.update_xaxes(showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', tickformat="%d.%m", title="", tickfont=dict(size=12, color='#A39B8F'), side="top")
         fig.update_layout(plot_bgcolor='#1C1A18', paper_bgcolor='#12100E', font=dict(color='#E2DCD3', family='Inter'), margin=dict(l=10, r=20, t=60, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, title="", font=dict(color="#A39B8F", size=13)), height=height_calc)
         
