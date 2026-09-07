@@ -10,7 +10,6 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    # Główne zakładki nawigacyjne modułu - DODANO BAZĘ EVENTÓW
     tab_miejsca, tab_przewoznicy, tab_eventy = st.tabs([
         "🏢 Baza Lokalizacji (Miejsca)", 
         "🚚 Flota (Przewoźnicy)", 
@@ -183,18 +182,17 @@ def render(sh):
                                 st.rerun()
 
     # ==========================================
-    # SEKCJA 3: EVENTY / TARGI (NOWOŚĆ)
+    # SEKCJA 3: EVENTY / TARGI (SŁOWNIK)
     # ==========================================
     with tab_eventy:
         df_eventy = db.fetch_data("DB_Event_Etapy")
         
-        # Jeśli arkusz jest pusty, to musimy założyć nagłówki
+        # Inicjalizacja nowych nagłówków, jeśli arkusz jest pusty
         if df_eventy.empty or len(df_eventy.columns) <= 1:
-            # Wymuszamy ciche utworzenie nagłówków poprzez szybki strzał do bazy (niewidoczne dla użytkownika)
             try:
                 ws = sh.worksheet("DB_Event_Etapy")
                 ws.clear()
-                ws.append_row(["Nazwa_Targow", "Targi_Start", "Targi_Koniec", "Demontaz_Start", "Demontaz_Koniec"])
+                ws.append_row(["Nazwa_Targow", "Dzien_Klienta_Od", "Dzien_Klienta_Do", "Poczatek_Demontazu", "Koniec_Demontazu"])
                 st.cache_data.clear()
                 df_eventy = db.fetch_data("DB_Event_Etapy")
             except: pass
@@ -221,16 +219,15 @@ def render(sh):
                 
                 nazwa_eventu = st.text_input("Nazwa Eventu / Targów *", placeholder="np. IFA Berlin 2026")
                 
-                c1, c2 = st.columns(2)
-                st.markdown("<br><p style='color: #C5A880; font-size: 13px; font-weight: bold; margin-bottom: 2px;'>🎪 Czas trwania targów (Dni Klienta)</p>", unsafe_allow_html=True)
+                st.markdown("<br><p style='color: #C5A880; font-size: 13px; font-weight: bold; margin-bottom: 2px;'>🎪 Dzień klienta</p>", unsafe_allow_html=True)
                 r1, r2 = st.columns(2)
-                t_start = r1.date_input("Start Targów")
-                t_koniec = r2.date_input("Koniec Targów")
+                t_start = r1.date_input("Dzień klienta (Od)")
+                t_koniec = r2.date_input("Dzień klienta (Do)")
                 
-                st.markdown("<p style='color: #C5A880; font-size: 13px; font-weight: bold; margin-bottom: 2px;'>🛠️ Harmonogram Demontażu</p>", unsafe_allow_html=True)
+                st.markdown("<p style='color: #C5A880; font-size: 13px; font-weight: bold; margin-bottom: 2px;'>🛠️ Demontaż</p>", unsafe_allow_html=True)
                 r3, r4 = st.columns(2)
-                d_start = r3.date_input("Start Demontażu")
-                d_koniec = r4.date_input("Koniec Demontażu")
+                d_start = r3.date_input("Początek demontażu")
+                d_koniec = r4.date_input("Koniec demontażu")
                 
                 if st.form_submit_button("💾 Dodaj Event do słownika", type="primary"):
                     if nazwa_eventu:
@@ -255,21 +252,22 @@ def render(sh):
                         st.markdown(f"<p style='color: #C5A880; font-size: 14px;'>Tryb edycji rekordu: <b style='color: #E2DCD3;'>{wybrany_evt}</b></p>", unsafe_allow_html=True)
                         
                         e_nazwa = st.text_input("Nazwa Eventu", value=str(row_to_edit.get('Nazwa_Targow', '')))
+                        cols = df_eventy.columns.tolist()
                         
-                        try: val_t_s = pd.to_datetime(row_to_edit.get('Targi_Start')).date()
+                        try: val_t_s = pd.to_datetime(row_to_edit.get(cols[1])).date()
                         except: val_t_s = pd.Timestamp.today().date()
-                        try: val_t_k = pd.to_datetime(row_to_edit.get('Targi_Koniec')).date()
+                        try: val_t_k = pd.to_datetime(row_to_edit.get(cols[2])).date()
                         except: val_t_k = pd.Timestamp.today().date()
-                        try: val_d_s = pd.to_datetime(row_to_edit.get('Demontaz_Start')).date()
+                        try: val_d_s = pd.to_datetime(row_to_edit.get(cols[3])).date()
                         except: val_d_s = pd.Timestamp.today().date()
-                        try: val_d_k = pd.to_datetime(row_to_edit.get('Demontaz_Koniec')).date()
+                        try: val_d_k = pd.to_datetime(row_to_edit.get(cols[4])).date()
                         except: val_d_k = pd.Timestamp.today().date()
                         
                         c1, c2 = st.columns(2)
-                        e_t_start = c1.date_input("Start Targów", value=val_t_s)
-                        e_t_koniec = c2.date_input("Koniec Targów", value=val_t_k)
-                        e_d_start = c1.date_input("Start Demontażu", value=val_d_s)
-                        e_d_koniec = c2.date_input("Koniec Demontażu", value=val_d_k)
+                        e_t_start = c1.date_input("Dzień klienta (Od)", value=val_t_s)
+                        e_t_koniec = c2.date_input("Dzień klienta (Do)", value=val_t_k)
+                        e_d_start = c1.date_input("Początek demontażu", value=val_d_s)
+                        e_d_koniec = c2.date_input("Koniec demontażu", value=val_d_k)
                         
                         col_save, col_del = st.columns([3, 1])
                         if col_save.form_submit_button("💾 ZAPISZ ZMIANY", type="primary"):
