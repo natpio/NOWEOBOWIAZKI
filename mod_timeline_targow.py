@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja \"PRO 999\". Prawidłowy układ: Główne targi, a bezpośrednio pod nimi dedykowane osie czasu dla poszczególnych przewoźników.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja kaskadowa. Widok domyślnie wyśrodkowany na bieżących dniach. Przewiń wykres w lewo, aby zobaczyć historię.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -133,7 +133,8 @@ def render(sh):
             dopisek = str(row.get("Dopisek", ""))
             
             c_uid = f"CHILD_{nazwa_bazy}_{nr}"
-            c_label = f"<span style='color: #A39B8F; font-size: 13px;'>&nbsp;&nbsp;&nbsp;&nbsp;↳ {nazwa_wyswietlana} [{auto}]</span>"
+            # Zmiana: gruba czcionka (<b>) i odrobinę jaśniejszy szary dla aut
+            c_label = f"<b style='color: #BFAF97; font-size: 13px;'>&nbsp;&nbsp;&nbsp;&nbsp;↳ {nazwa_wyswietlana} [{auto}]</b>"
             sort_auto = f"{nazwa_bazy.upper()}_1_{nazwa_wyswietlana}_{nr}"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
@@ -190,13 +191,10 @@ def render(sh):
         df_gantt['Start'] = pd.to_datetime(df_gantt['Start'])
         df_gantt['Koniec'] = pd.to_datetime(df_gantt['Koniec'])
         
-        # Poszerzenie paska, by jednodniowe eventy były kwadratami
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
 
-        # Logiczne sortowanie 
         df_gantt = df_gantt.sort_values(by=['SortKey', 'Start'])
         
-        # Wyciągamy z posortowanego Dataframe unikalne ukryte UID oraz ich etykiety do wyświetlenia (bez zmiany kolejności)
         unique_ordered = df_gantt[['UID', 'Y_Label']].drop_duplicates()
         ordered_uids = unique_ordered['UID'].tolist()
         ordered_labels = unique_ordered['Y_Label'].tolist()
@@ -215,13 +213,12 @@ def render(sh):
             df_gantt, 
             x_start="Start", 
             x_end="Koniec_Viz", 
-            y="UID",  # Używamy UKRYTEGO ID do prawidłowego i bezkolizyjnego grupowania!
+            y="UID",  
             color="Faza",
             color_discrete_map=color_map,
             custom_data=["HoverEvent", "HoverID", "HoverCarr", "HoverDopisek", "HoverFaza", "BarText"]
         )
 
-        # Profesjonalny, bogaty tooltip dla użytkownika (Hover Data)
         hovertemplate_html = (
             "<b style='font-size:14px;'>%{customdata[0]}</b><br><br>"
             "<b>Zlecenie:</b> %{customdata[1]}<br>"
@@ -243,9 +240,15 @@ def render(sh):
             d.insidetextanchor = 'middle'
             d.textfont = dict(size=11, color='white', family="Inter", weight="bold")
 
-        fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
+        now = datetime.now()
+        fig.add_vline(x=now, line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        # KLUCZOWY FIX: Wymuszamy na Plotly ułożenie osi Y DOKŁADNIE w takiej kolejności, jak podaliśmy
+        # Obliczanie widoku domyślnego osi X (Wczoraj -> Najdalszy koniec w widocznych + 2 dni)
+        zoom_start = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+        max_date_in_data = df_gantt['Koniec_Viz'].max()
+        zoom_end_dt = max(max_date_in_data, now + timedelta(days=14))
+        zoom_end = (zoom_end_dt + timedelta(days=2)).strftime('%Y-%m-%d')
+
         fig.update_yaxes(
             categoryorder="array",           
             categoryarray=ordered_uids,      
@@ -257,7 +260,17 @@ def render(sh):
             gridcolor='rgba(255, 255, 255, 0.05)'
         )
         
-        fig.update_xaxes(showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', tickformat="%d.%m", title="", tickfont=dict(size=12, color='#A39B8F'), side="top")
+        fig.update_xaxes(
+            showgrid=True, 
+            gridcolor='rgba(255, 255, 255, 0.15)', 
+            tickformat="%d.%m", 
+            title="", 
+            tickfont=dict(size=12, color='#A39B8F'), 
+            side="top",
+            range=[zoom_start, zoom_end],  # Zawężenie początkowego widoku
+            dtick="86400000"               # Skok siatki wymuszony co 1 dzień (w ms)
+        )
+        
         fig.update_layout(plot_bgcolor='#1C1A18', paper_bgcolor='#12100E', font=dict(color='#E2DCD3', family='Inter'), margin=dict(l=10, r=20, t=60, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, title="", font=dict(color="#A39B8F", size=13)), height=height_calc)
         
         st.markdown('<div style="border: 1px solid rgba(197, 168, 128, 0.4); border-radius: 8px; padding: 10px; background-color: #12100E; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">', unsafe_allow_html=True)
