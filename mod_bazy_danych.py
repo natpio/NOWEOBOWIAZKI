@@ -10,8 +10,11 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    # Główne zakładki nawigacyjne modułu
-    tab_miejsca, tab_przewoznicy = st.tabs(["🏢 Baza Lokalizacji (Miejsca)", "🚚 Flota (Przewoźnicy)"])
+    tab_miejsca, tab_przewoznicy, tab_eventy = st.tabs([
+        "🏢 Baza Lokalizacji (Miejsca)", 
+        "🚚 Flota (Przewoźnicy)", 
+        "🎪 Baza Eventów (Targi)"
+    ])
 
     # ==========================================
     # SEKCJA 1: MIEJSCA (LOKALIZACJE)
@@ -176,4 +179,103 @@ def render(sh):
                         if col_del.form_submit_button("🗑️ USUŃ TRWALE", type="secondary"):
                             if db.delete_row("Zleceniobiorcy", gs_row_index):
                                 st.error("Przewoźnik został trwale usunięty.")
+                                st.rerun()
+
+    # ==========================================
+    # SEKCJA 3: EVENTY / TARGI (SŁOWNIK)
+    # ==========================================
+    with tab_eventy:
+        df_eventy = db.fetch_data("DB_Event_Etapy")
+        
+        # Inicjalizacja nowych nagłówków, jeśli arkusz jest pusty
+        if df_eventy.empty or len(df_eventy.columns) <= 1:
+            try:
+                ws = sh.worksheet("DB_Event_Etapy")
+                ws.clear()
+                ws.append_row(["Nazwa_Targow", "Dzien_Klienta_Od", "Dzien_Klienta_Do", "Poczatek_Demontazu", "Koniec_Demontazu"])
+                st.cache_data.clear()
+                df_eventy = db.fetch_data("DB_Event_Etapy")
+            except: pass
+
+        esub1, esub2, esub3 = st.tabs(["📋 Przeglądaj", "➕ Dodaj Nowy", "🛠️ Edytuj / Usuń"])
+        
+        with esub1:
+            st.markdown("<p style='color: #C5A880; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;'>⚡ Wyszukaj Event:</p>", unsafe_allow_html=True)
+            wyszukiwana_fraza_e = st.text_input("Szukaj targów", placeholder="np. IFA Berlin...", label_visibility="collapsed", key="search_evt")
+            
+            if not df_eventy.empty and len(df_eventy) > 0:
+                if wyszukiwana_fraza_e:
+                    maska_e = df_eventy.astype(str).apply(lambda row: row.str.contains(wyszukiwana_fraza_e, case=False, na=False).any(), axis=1)
+                    st.dataframe(df_eventy[maska_e], use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(df_eventy, use_container_width=True, hide_index=True)
+            else:
+                st.info("Baza Targów jest pusta.")
+
+        with esub2:
+            with st.form("add_event_master", clear_on_submit=True):
+                st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Nowy Event / Targi</h4>", unsafe_allow_html=True)
+                st.info("Zdefiniuj ramy czasowe wydarzenia. Dane te będą automatycznie zasilać Timeline.")
+                
+                nazwa_eventu = st.text_input("Nazwa Eventu / Targów *", placeholder="np. IFA Berlin 2026")
+                
+                st.markdown("<br><p style='color: #C5A880; font-size: 13px; font-weight: bold; margin-bottom: 2px;'>🎪 Dzień klienta</p>", unsafe_allow_html=True)
+                r1, r2 = st.columns(2)
+                t_start = r1.date_input("Dzień klienta (Od)")
+                t_koniec = r2.date_input("Dzień klienta (Do)")
+                
+                st.markdown("<p style='color: #C5A880; font-size: 13px; font-weight: bold; margin-bottom: 2px;'>🛠️ Demontaż</p>", unsafe_allow_html=True)
+                r3, r4 = st.columns(2)
+                d_start = r3.date_input("Początek demontażu")
+                d_koniec = r4.date_input("Koniec demontażu")
+                
+                if st.form_submit_button("💾 Dodaj Event do słownika", type="primary"):
+                    if nazwa_eventu:
+                        nowy_wiersz = [nazwa_eventu, str(t_start), str(t_koniec), str(d_start), str(d_koniec)]
+                        if db.append_data("DB_Event_Etapy", nowy_wiersz):
+                            st.success(f"Pomyślnie dodano event: {nazwa_eventu}!")
+                            st.rerun()
+                    else:
+                        st.error("Nazwa eventu jest wymagana!")
+
+        with esub3:
+            if not df_eventy.empty and 'Nazwa_Targow' in df_eventy.columns:
+                lista_evt = df_eventy['Nazwa_Targow'].dropna().tolist()
+                wybrany_evt = st.selectbox("Wybierz event do modyfikacji:", ["Wybierz..."] + lista_evt)
+                
+                if wybrany_evt != "Wybierz...":
+                    idx_pd = df_eventy[df_eventy['Nazwa_Targow'] == wybrany_evt].index[0]
+                    row_to_edit = df_eventy.iloc[idx_pd]
+                    gs_row_index = int(idx_pd) + 2
+                    
+                    with st.form("edit_event_master_form"):
+                        st.markdown(f"<p style='color: #C5A880; font-size: 14px;'>Tryb edycji rekordu: <b style='color: #E2DCD3;'>{wybrany_evt}</b></p>", unsafe_allow_html=True)
+                        
+                        e_nazwa = st.text_input("Nazwa Eventu", value=str(row_to_edit.get('Nazwa_Targow', '')))
+                        cols = df_eventy.columns.tolist()
+                        
+                        try: val_t_s = pd.to_datetime(row_to_edit.get(cols[1])).date()
+                        except: val_t_s = pd.Timestamp.today().date()
+                        try: val_t_k = pd.to_datetime(row_to_edit.get(cols[2])).date()
+                        except: val_t_k = pd.Timestamp.today().date()
+                        try: val_d_s = pd.to_datetime(row_to_edit.get(cols[3])).date()
+                        except: val_d_s = pd.Timestamp.today().date()
+                        try: val_d_k = pd.to_datetime(row_to_edit.get(cols[4])).date()
+                        except: val_d_k = pd.Timestamp.today().date()
+                        
+                        c1, c2 = st.columns(2)
+                        e_t_start = c1.date_input("Dzień klienta (Od)", value=val_t_s)
+                        e_t_koniec = c2.date_input("Dzień klienta (Do)", value=val_t_k)
+                        e_d_start = c1.date_input("Początek demontażu", value=val_d_s)
+                        e_d_koniec = c2.date_input("Koniec demontażu", value=val_d_k)
+                        
+                        col_save, col_del = st.columns([3, 1])
+                        if col_save.form_submit_button("💾 ZAPISZ ZMIANY", type="primary"):
+                            nowe_dane = [e_nazwa, str(e_t_start), str(e_t_koniec), str(e_d_start), str(e_d_koniec)]
+                            if db.update_row("DB_Event_Etapy", gs_row_index, nowe_dane):
+                                st.success("Pomyślnie zaktualizowano event!")
+                                st.rerun()
+                        if col_del.form_submit_button("🗑️ USUŃ TRWALE", type="secondary"):
+                            if db.delete_row("DB_Event_Etapy", gs_row_index):
+                                st.error("Event został trwale usunięty.")
                                 st.rerun()
