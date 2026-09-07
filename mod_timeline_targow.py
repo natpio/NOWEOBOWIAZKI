@@ -30,7 +30,6 @@ def extract_demontaz(notatki, fallback_s, fallback_k):
     d_s, d_k = fallback_s, fallback_k
     if pd.isna(notatki): return d_s, d_k
     
-    # Obsługa zarówno nowego formatu [DEM: data] jak i starego z PRO
     match_new = re.search(r'\[DEM:\s*([^\]]+)\]', str(notatki))
     match_old = re.search(r'DEM:\s*([^|\]]+)', str(notatki))
     
@@ -42,7 +41,7 @@ def extract_demontaz(notatki, fallback_s, fallback_k):
             parsed_s = parse_date(dates[0])
             if parsed_s: 
                 d_s = parsed_s
-                d_k = parsed_s # asekuracyjnie koniec = start
+                d_k = parsed_s 
         if len(dates) > 1 and dates[1] and dates[1] != 'None':
             parsed_e = parse_date(dates[1])
             if parsed_e: 
@@ -122,11 +121,14 @@ def render(sh):
 
         for _, row in group.iterrows():
             nr = str(row.get("ID_Zlecenia", ""))
+            przewoznik = str(row.get("Przewoznik", "")).strip()
+            nazwa_wyswietlana = przewoznik if przewoznik else nr
+            
             auto_parts = str(row.get("Typ_Pojazdu", "")).split()
             auto = auto_parts[0] if auto_parts else "Pojazd"
             dopisek = str(row.get("Dopisek", ""))
             
-            etykieta_pojazdu = f"{nr} [{auto}]"
+            etykieta_pojazdu = f"{nazwa_wyswietlana} [{auto}]"
             if dopisek: etykieta_pojazdu += f" | {dopisek}"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
@@ -137,7 +139,6 @@ def render(sh):
 
             if not zaladunek: continue
 
-            # 1. Transport & Montaż
             end_ph1 = rozladunek if rozladunek else (klient_s if klient_s else zaladunek)
             if end_ph1 < zaladunek: end_ph1 = zaladunek
             
@@ -149,7 +150,6 @@ def render(sh):
                 "Szczegoly": etykieta_pojazdu
             })
             
-            # 3. Demontaż dla KONKRETNEGO AUTA
             if not dem_auto_s: dem_auto_s = klient_k if klient_k else end_ph1
             if not dem_auto_k: dem_auto_k = dem_auto_s
                 
@@ -168,7 +168,6 @@ def render(sh):
                     "Szczegoly": etykieta_pojazdu
                 })
 
-            # 4. Powrót na bazę
             if powrot:
                 start_ph4 = end_ph3 if (end_ph3 and end_ph3 > end_ph1) else end_ph1
                 if start_ph4 > powrot: start_ph4 = powrot
@@ -189,11 +188,11 @@ def render(sh):
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
 
         color_map = {
-            "1. Transport & Montaż": "#3B82F6",    # Blue (Trasa IN)
-            "2. Dni Targowe (Event)": "#BA4949",   # Crimson (Tło Targów)
-            "3. Demontaż (Słownik)": "#5A544A",    # Szaro-brązowy (Tło demontażu)
-            "3. Demontaż (Auto)": "#C5A880",       # Gold (Praca tego konkretnego auta)
-            "4. Powrót na bazę": "#10B981"         # Emerald Green (Powrót)
+            "1. Transport & Montaż": "#3B82F6",    
+            "2. Dni Targowe (Event)": "#BA4949",   
+            "3. Demontaż (Słownik)": "#5A544A",    
+            "3. Demontaż (Auto)": "#C5A880",       
+            "4. Powrót na bazę": "#10B981"         
         }
 
         unikalne_zlecenia = len(df_gantt['Zlecenie'].unique())
