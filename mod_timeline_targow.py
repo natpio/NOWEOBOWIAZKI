@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. Tło wydarzenia pochodzi ze Słownika, a paski aut z ich indywidualnych dat.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Kaskadowe odzwierciedlenie cyklu życia targów. Tło wydarzenia pochodzi ze Słownika (📌), a poszczególni przewoźnicy (↳) posiadają własne linie czasu.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -101,24 +101,31 @@ def render(sh):
             demontaz_s = parse_date(r_et.get(cols[3])) if len(cols) > 3 else None
             demontaz_k = parse_date(r_et.get(cols[4])) if len(cols) > 4 else None
 
+        # 1. Główny wiersz eventu (Parent)
+        nazwa_glowna = f"📌 {nazwa_bazy.upper()}"
+        sort_base = f"{nazwa_bazy.upper()}_0"
+
         if klient_s and klient_k:
             gantt_data.append({
-                "Zlecenie": nazwa_bazy, 
+                "Zlecenie": nazwa_glowna, 
                 "Faza": "2. Dni Targowe (Event)", 
                 "Start": klient_s, 
                 "Koniec": klient_k,
-                "Szczegoly": "DZIEŃ KLIENTA"
+                "Szczegoly": "DZIEŃ KLIENTA",
+                "SortKey": sort_base
             })
             
         if demontaz_s and demontaz_k:
             gantt_data.append({
-                "Zlecenie": nazwa_bazy, 
+                "Zlecenie": nazwa_glowna, 
                 "Faza": "3. Demontaż (Słownik)", 
                 "Start": demontaz_s, 
                 "Koniec": demontaz_k,
-                "Szczegoly": "OFICJALNY DEMONTAŻ"
+                "Szczegoly": "OFICJALNY DEMONTAŻ",
+                "SortKey": sort_base
             })
 
+        # 2. Wiersze dla aut (Child)
         for _, row in group.iterrows():
             nr = str(row.get("ID_Zlecenia", ""))
             przewoznik = str(row.get("Przewoznik", "")).strip()
@@ -130,6 +137,9 @@ def render(sh):
             
             etykieta_pojazdu = f"{nazwa_wyswietlana} [{auto}]"
             if dopisek: etykieta_pojazdu += f" | {dopisek}"
+            
+            nazwa_wiersza_auta = f"↳ {etykieta_pojazdu}"
+            sort_auto = f"{nazwa_bazy.upper()}_1_{etykieta_pojazdu}_{nr}"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
             powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
@@ -143,11 +153,12 @@ def render(sh):
             if end_ph1 < zaladunek: end_ph1 = zaladunek
             
             gantt_data.append({
-                "Zlecenie": nazwa_bazy, 
+                "Zlecenie": nazwa_wiersza_auta, 
                 "Faza": "1. Transport & Montaż", 
                 "Start": zaladunek, 
                 "Koniec": end_ph1,
-                "Szczegoly": etykieta_pojazdu
+                "Szczegoly": etykieta_pojazdu,
+                "SortKey": sort_auto
             })
             
             if not dem_auto_s: dem_auto_s = klient_k if klient_k else end_ph1
@@ -161,11 +172,12 @@ def render(sh):
                 if end_ph3 < start_ph3: end_ph3 = start_ph3
                 
                 gantt_data.append({
-                    "Zlecenie": nazwa_bazy, 
+                    "Zlecenie": nazwa_wiersza_auta, 
                     "Faza": "3. Demontaż (Auto)", 
                     "Start": start_ph3, 
                     "Koniec": end_ph3,
-                    "Szczegoly": etykieta_pojazdu
+                    "Szczegoly": etykieta_pojazdu,
+                    "SortKey": sort_auto
                 })
 
             if powrot:
@@ -173,11 +185,12 @@ def render(sh):
                 if start_ph4 > powrot: start_ph4 = powrot
                 
                 gantt_data.append({
-                    "Zlecenie": nazwa_bazy, 
+                    "Zlecenie": nazwa_wiersza_auta, 
                     "Faza": "4. Powrót na bazę", 
                     "Start": start_ph4, 
                     "Koniec": powrot,
-                    "Szczegoly": etykieta_pojazdu
+                    "Szczegoly": etykieta_pojazdu,
+                    "SortKey": sort_auto
                 })
 
     if gantt_data:
@@ -185,7 +198,12 @@ def render(sh):
         df_gantt['Start'] = pd.to_datetime(df_gantt['Start'])
         df_gantt['Koniec'] = pd.to_datetime(df_gantt['Koniec'])
         
+        # Poszerzenie paska o 1 dzień dla widoczności jednodniowych zdarzeń
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
+
+        # Sortowanie logiczne (Targi na górze, potem auta alfabetycznie/chronologicznie)
+        df_gantt = df_gantt.sort_values(by=['SortKey', 'Start'])
+        kolejnosc_y = df_gantt['Zlecenie'].unique().tolist()
 
         color_map = {
             "1. Transport & Montaż": "#3B82F6",    
@@ -195,8 +213,8 @@ def render(sh):
             "4. Powrót na bazę": "#10B981"         
         }
 
-        unikalne_zlecenia = len(df_gantt['Zlecenie'].unique())
-        height_calc = max(300, unikalne_zlecenia * 85 + 150)
+        unikalne_wiersze = len(kolejnosc_y)
+        height_calc = max(300, unikalne_wiersze * 50 + 150)
 
         fig = px.timeline(
             df_gantt, 
@@ -224,7 +242,15 @@ def render(sh):
 
         fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        fig.update_yaxes(autorange="reversed", title="", tickfont=dict(size=16, color='#E2DCD3', family='Inter', weight="bold"), gridcolor='rgba(255, 255, 255, 0.05)')
+        # Wymuszamy wyliczoną kolejność osi Y
+        fig.update_yaxes(
+            autorange="reversed", 
+            categoryorder="array",
+            categoryarray=kolejnosc_y,
+            title="", 
+            tickfont=dict(size=15, color='#E2DCD3', family='Inter', weight="bold"), 
+            gridcolor='rgba(255, 255, 255, 0.05)'
+        )
         fig.update_xaxes(showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', tickformat="%d.%m", title="", tickfont=dict(size=12, color='#A39B8F'), side="top")
         fig.update_layout(plot_bgcolor='#1C1A18', paper_bgcolor='#12100E', font=dict(color='#E2DCD3', family='Inter'), margin=dict(l=10, r=20, t=60, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, title="", font=dict(color="#A39B8F", size=13)), height=height_calc)
         
