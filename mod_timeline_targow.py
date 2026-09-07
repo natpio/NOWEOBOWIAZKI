@@ -149,7 +149,7 @@ def render(sh):
                 "Szczegoly": etykieta_pojazdu
             })
             
-            # 3. Demontaż dla KONTRETNEGO AUTA
+            # 3. Demontaż dla KONKRETNEGO AUTA
             if not dem_auto_s: dem_auto_s = klient_k if klient_k else end_ph1
             if not dem_auto_k: dem_auto_k = dem_auto_s
                 
@@ -225,7 +225,7 @@ def render(sh):
 
         fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        fig.update_yaxes(autorange="reversed", title="", tickfont=dict(size=16, color='#E2DCD3', family='Inter', weight="bold"), gridcolor='rgba(255, 255, 255, 0.05)")
+        fig.update_yaxes(autorange="reversed", title="", tickfont=dict(size=16, color='#E2DCD3', family='Inter', weight="bold"), gridcolor='rgba(255, 255, 255, 0.05)')
         fig.update_xaxes(showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', tickformat="%d.%m", title="", tickfont=dict(size=12, color='#A39B8F'), side="top")
         fig.update_layout(plot_bgcolor='#1C1A18', paper_bgcolor='#12100E', font=dict(color='#E2DCD3', family='Inter'), margin=dict(l=10, r=20, t=60, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, title="", font=dict(color="#A39B8F", size=13)), height=height_calc)
         
