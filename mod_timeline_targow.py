@@ -35,16 +35,24 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. System automatycznie czerpie ramy czasowe ze Słownika i grupuje powiązane ładunki (w tym przerzuty).</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. System automatycznie grupuje auta i ładunki przypisane do tego samego wydarzenia.</p>", unsafe_allow_html=True)
 
     # 1. Pobieranie danych
-    with st.spinner("Ładowanie osi czasu i słowników..."):
+    with st.spinner("Ładowanie osi czasu..."):
         try:
             ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
-            df_etapy = db.fetch_data("DB_Event_Etapy") # Pobieramy czysty słownik (bez modyfikacji)
+            ws_etapy, df_etapy = db.load_data(sh, "DB_Event_Etapy")
         except Exception as e:
             st.error(f"Błąd ładowania danych: {e}")
             return
+
+        # Automatyczne utworzenie struktury nowej bazy
+        if df_etapy.empty and len(df_etapy.columns) <= 1:
+            headers = ["Nazwa_Targow", "Targi_Start", "Targi_Koniec", "Demontaz_Start", "Demontaz_Koniec"]
+            ws_etapy.clear()
+            ws_etapy.append_row(headers)
+            st.cache_data.clear()
+            _, df_etapy = db.load_data(sh, "DB_Event_Etapy")
 
     # 2. Filtrowanie aktywnych eventów
     df_aktywne = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df_ev.empty else pd.DataFrame()
@@ -53,28 +61,21 @@ def render(sh):
         st.info("Brak aktywnych eventów w bazie.")
         return
 
-    # --- 3. INTELIGENTNE GRUPOWANIE (Single Source of Truth) ---
+    # Normalizacja nazw targów
     df_aktywne["Nazwa_Targow"] = df_aktywne["Nazwa_Targow"].astype(str).str.strip()
-    
-    # Rozdzielamy główny event od dopisku (np. "IFA BERLIN | PRZERZUT" -> "IFA BERLIN")
-    def get_base_event(name):
-        return name.split(" | ", 1)[0].strip() if " | " in name else name.strip()
-        
-    def get_dopisek(name):
-        return name.split(" | ", 1)[1].strip() if " | " in name else ""
 
-    df_aktywne["Base_Event"] = df_aktywne["Nazwa_Targow"].apply(get_base_event)
-    df_aktywne["Dopisek"] = df_aktywne["Nazwa_Targow"].apply(get_dopisek)
-
+    # 3. Transformacja danych do kaskadowego wykresu Gantta
     gantt_data = []
-    grouped = df_aktywne.groupby("Base_Event")
 
-    for nazwa_bazy, group in grouped:
-        if not nazwa_bazy or nazwa_bazy in ["nan", "None", ""]: 
+    # GRUPOWANIE PO NAZWIE TARGÓW
+    grouped = df_aktywne.groupby("Nazwa_Targow")
+
+    for nazwa, group in grouped:
+        if not nazwa or nazwa in ["nan", "None", ""]: 
             continue
             
-        # Pobieranie wspólnych etapów (Master Data) dla danego Eventu Głównego
-        etapy_row = df_etapy[df_etapy.iloc[:, 0].astype(str).str.strip() == nazwa_bazy] if not df_etapy.empty else pd.DataFrame()
+        # Pobieranie wspólnych etapów dla tych konkretnych targów
+        etapy_row = df_etapy[df_etapy.iloc[:, 0].astype(str).str.strip() == nazwa] if not df_etapy.empty else pd.DataFrame()
         
         targi_s, targi_k, demontaz_s, demontaz_k = None, None, None, None
         if not etapy_row.empty:
@@ -85,10 +86,11 @@ def render(sh):
             demontaz_s = parse_date(r_et.get(cols[3])) if len(cols) > 3 else None
             demontaz_k = parse_date(r_et.get(cols[4])) if len(cols) > 4 else None
 
-        # --- BLOKI WSPÓLNE (Dni Targowe i Demontaż ze Słownika) ---
+        # --- BLOKI WSPÓLNE (Dni Targowe i Demontaż) ---
+        # Dodawane tylko raz per wydarzenie (Event)
         if targi_s and targi_k:
             gantt_data.append({
-                "Zlecenie": nazwa_bazy, 
+                "Zlecenie": nazwa, 
                 "Faza": "2. Dni Targowe (Event)", 
                 "Start": targi_s, 
                 "Koniec": targi_k,
@@ -97,24 +99,20 @@ def render(sh):
             
         if demontaz_s and demontaz_k:
             gantt_data.append({
-                "Zlecenie": nazwa_bazy, 
+                "Zlecenie": nazwa, 
                 "Faza": "3. Demontaż", 
                 "Start": demontaz_s, 
                 "Koniec": demontaz_k,
                 "Szczegoly": "DEMONTAŻ"
             })
 
-        # --- BLOKI NIEZALEŻNE (Poszczególne pojazdy pod głównym eventem) ---
+        # --- BLOKI NIEZALEŻNE (Dla każdego pojazdu w ramach eventu) ---
         for _, row in group.iterrows():
             nr = str(row.get("ID_Zlecenia", ""))
+            
+            # Bezpieczne pobieranie typu pojazdu (ZABEZPIECZENIE PRZED INDEX ERROR)
             auto_parts = str(row.get("Typ_Pojazdu", "")).split()
             auto = auto_parts[0] if auto_parts else "Pojazd"
-            dopisek = str(row.get("Dopisek", ""))
-            
-            # Formujemy estetyczną etykietę paska dla kierowcy
-            etykieta_pojazdu = f"{nr} [{auto}]"
-            if dopisek:
-                etykieta_pojazdu += f" | {dopisek}"
             
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
             powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
@@ -127,26 +125,26 @@ def render(sh):
             if end_ph1 < zaladunek: end_ph1 = zaladunek
             
             gantt_data.append({
-                "Zlecenie": nazwa_bazy, 
+                "Zlecenie": nazwa, 
                 "Faza": "1. Transport & Montaż", 
                 "Start": zaladunek, 
                 "Koniec": end_ph1,
-                "Szczegoly": etykieta_pojazdu
+                "Szczegoly": f"{nr} [{auto}]"
             })
 
             # Faza 4: Transport OUT (Powrót)
             if powrot:
-                # Kiedy auto wyjeżdża z powrotem? Idealnie po demontażu
+                # Kiedy auto wyjeżdża z powrotem? Po demontażu, po targach lub po prostu po załadunku.
                 start_ph4 = demontaz_k if demontaz_k else (targi_k if targi_k else end_ph1)
-                # Zabezpieczenie przed cofaniem się w czasie
+                # Zapobieganie błędom logiki (cofa się w czasie)
                 if start_ph4 > powrot: start_ph4 = powrot
                 
                 gantt_data.append({
-                    "Zlecenie": nazwa_bazy, 
+                    "Zlecenie": nazwa, 
                     "Faza": "4. Powrót na bazę", 
                     "Start": start_ph4, 
                     "Koniec": powrot,
-                    "Szczegoly": etykieta_pojazdu
+                    "Szczegoly": f"{nr} [{auto}]"
                 })
 
     # 4. Renderowanie wykresu Plotly
@@ -155,7 +153,7 @@ def render(sh):
         df_gantt['Start'] = pd.to_datetime(df_gantt['Start'])
         df_gantt['Koniec'] = pd.to_datetime(df_gantt['Koniec'])
         
-        # Optyczne poszerzenie paska o 1 dzień, aby jednodniowe etapy były wyraźnie widoczne
+        # Optyczne poszerzenie paska o 1 dzień, aby jednodniowe etapy były widoczne jako kwadraty
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
 
         color_map = {
@@ -166,6 +164,7 @@ def render(sh):
         }
 
         unikalne_zlecenia = len(df_gantt['Zlecenie'].unique())
+        # Wykres rośnie wraz z ilością unikalnych targów
         height_calc = max(300, unikalne_zlecenia * 85 + 150)
 
         fig = px.timeline(
@@ -237,4 +236,60 @@ def render(sh):
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.info("Brak wystarczających dat do wygenerowania osi czasu. Sprawdź, czy w Eventach (lub Słownikach) są poprawnie uzupełnione daty załadunku, rozładunku i targów.")
+        st.info("Brak wystarczających dat do wygenerowania osi czasu.")
+
+    # 5. Formularz uzupełniania brakujących etapów
+    st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.2); margin: 35px 0 20px 0;'>", unsafe_allow_html=True)
+    st.markdown("<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>⚙️ Uzupełnij etapy dla targów</h3>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px;'>Ustaw daty raz dla wydarzenia. Puste pola powodują pominięcie etapu na wykresie.</p>", unsafe_allow_html=True)
+
+    with st.form("form_etapy_targow"):
+        opcje_targow = sorted(df_aktywne["Nazwa_Targow"].unique().tolist())
+        wybrany_ev = st.selectbox("Wybierz event (Nazwa Targów) do zsynchronizowania dat:", ["Wybierz..."] + opcje_targow)
+        
+        c1, c2 = st.columns(2)
+        
+        if wybrany_ev != "Wybierz...":
+            akt_row = df_etapy[df_etapy.iloc[:, 0].astype(str).str.strip() == wybrany_ev] if not df_etapy.empty else pd.DataFrame()
+            cols = df_etapy.columns.tolist() if not df_etapy.empty else ["Nazwa_Targow", "Targi_Start", "Targi_Koniec", "Demontaz_Start", "Demontaz_Koniec"]
+            
+            d_t_s = parse_date(akt_row.iloc[0].get(cols[1])) if not akt_row.empty and len(cols) > 1 else datetime.now().date()
+            d_t_k = parse_date(akt_row.iloc[0].get(cols[2])) if not akt_row.empty and len(cols) > 2 else datetime.now().date()
+            d_d_s = parse_date(akt_row.iloc[0].get(cols[3])) if not akt_row.empty and len(cols) > 3 else datetime.now().date()
+            d_d_k = parse_date(akt_row.iloc[0].get(cols[4])) if not akt_row.empty and len(cols) > 4 else datetime.now().date()
+        else:
+            d_t_s, d_t_k, d_d_s, d_d_k = datetime.now().date(), datetime.now().date(), datetime.now().date(), datetime.now().date()
+            
+        with c1:
+            st.markdown("<div style='background: rgba(186, 73, 73, 0.1); padding: 15px; border-radius: 6px; border: 1px solid rgba(186, 73, 73, 0.3);'>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #BA4949; margin-top: 0;'>🎪 Dni Targowe (Dzień Klienta)</h4>", unsafe_allow_html=True)
+            targi_start = st.date_input("Rozpoczęcie targów:", value=d_t_s)
+            targi_koniec = st.date_input("Zakończenie targów:", value=d_t_k)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        with c2:
+            st.markdown("<div style='background: rgba(197, 168, 128, 0.1); padding: 15px; border-radius: 6px; border: 1px solid rgba(197, 168, 128, 0.3);'>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color: #C5A880; margin-top: 0;'>🛠️ Demontaż</h4>", unsafe_allow_html=True)
+            demontaz_start = st.date_input("Rozpoczęcie demontażu:", value=d_d_s)
+            demontaz_koniec = st.date_input("Zakończenie demontażu:", value=d_d_k)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.form_submit_button("💾 Zapisz Etapy do Kalendarza", type="primary", use_container_width=True):
+            if wybrany_ev != "Wybierz...":
+                if not df_etapy.empty and wybrany_ev in df_etapy.iloc[:, 0].values:
+                    idx = df_etapy[df_etapy.iloc[:, 0] == wybrany_ev].index[0]
+                    cols = df_etapy.columns.tolist()
+                    df_etapy.at[idx, cols[1]] = str(targi_start)
+                    df_etapy.at[idx, cols[2]] = str(targi_koniec)
+                    df_etapy.at[idx, cols[3]] = str(demontaz_start)
+                    df_etapy.at[idx, cols[4]] = str(demontaz_koniec)
+                    gs_row = int(df_etapy.at[idx, "sheet_row"])
+                    db.update_single_row_safe("DB_Event_Etapy", gs_row, df_etapy.loc[idx])
+                else:
+                    nowy_wiersz = [wybrany_ev, str(targi_start), str(targi_koniec), str(demontaz_start), str(demontaz_koniec)]
+                    db.append_data("DB_Event_Etapy", nowy_wiersz)
+                st.success(f"Zaktualizowano wykres osi czasu dla: {wybrany_ev}!")
+                st.rerun()
+            else:
+                st.error("Wybierz targi z listy, aby zapisać ich etapy.")
