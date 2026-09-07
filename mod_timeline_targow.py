@@ -26,6 +26,29 @@ def extract_rozladunek(notatki, fallback):
         if d: return d
     return fallback
 
+def extract_demontaz(notatki, fallback_s, fallback_k):
+    d_s, d_k = fallback_s, fallback_k
+    if pd.isna(notatki): return d_s, d_k
+    
+    # Obsługa zarówno nowego formatu [DEM: data] jak i starego z PRO
+    match_new = re.search(r'\[DEM:\s*([^\]]+)\]', str(notatki))
+    match_old = re.search(r'DEM:\s*([^|\]]+)', str(notatki))
+    
+    match = match_new if match_new else match_old
+    if match:
+        dem_raw = match.group(1).strip()
+        dates = [d.strip() for d in dem_raw.split(",")]
+        if len(dates) > 0 and dates[0] and dates[0] != 'None':
+            parsed_s = parse_date(dates[0])
+            if parsed_s: 
+                d_s = parsed_s
+                d_k = parsed_s # asekuracyjnie koniec = start
+        if len(dates) > 1 and dates[1] and dates[1] != 'None':
+            parsed_e = parse_date(dates[1])
+            if parsed_e: 
+                d_k = parsed_e
+    return d_s, d_k
+
 def render(sh):
     st.markdown('''
         <div class="module-header-container">
@@ -34,7 +57,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. System automatycznie czerpie ramy czasowe ze Słownika i grupuje powiązane ładunki (w tym przerzuty).</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Graficzne odzwierciedlenie cyklu życia targów. Tło wydarzenia pochodzi ze Słownika, a paski aut z ich indywidualnych dat.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -91,10 +114,10 @@ def render(sh):
         if demontaz_s and demontaz_k:
             gantt_data.append({
                 "Zlecenie": nazwa_bazy, 
-                "Faza": "3. Demontaż", 
+                "Faza": "3. Demontaż (Słownik)", 
                 "Start": demontaz_s, 
                 "Koniec": demontaz_k,
-                "Szczegoly": "DEMONTAŻ"
+                "Szczegoly": "OFICJALNY DEMONTAŻ"
             })
 
         for _, row in group.iterrows():
@@ -109,9 +132,12 @@ def render(sh):
             zaladunek = parse_date(row.get("Data_Zlecenia_Tr"))
             powrot = parse_date(row.get("Data_Zakonczenia_Uslugi"))
             rozladunek = extract_rozladunek(row.get("Notatki"), klient_s)
+            
+            dem_auto_s, dem_auto_k = extract_demontaz(row.get("Notatki"), demontaz_s, demontaz_k)
 
             if not zaladunek: continue
 
+            # 1. Transport & Montaż
             end_ph1 = rozladunek if rozladunek else (klient_s if klient_s else zaladunek)
             if end_ph1 < zaladunek: end_ph1 = zaladunek
             
@@ -122,9 +148,29 @@ def render(sh):
                 "Koniec": end_ph1,
                 "Szczegoly": etykieta_pojazdu
             })
+            
+            # 3. Demontaż dla KONTRETNEGO AUTA
+            if not dem_auto_s: dem_auto_s = klient_k if klient_k else end_ph1
+            if not dem_auto_k: dem_auto_k = dem_auto_s
+                
+            start_ph3 = dem_auto_s
+            end_ph3 = dem_auto_k
+            
+            if start_ph3 and end_ph3:
+                if start_ph3 < end_ph1: start_ph3 = end_ph1
+                if end_ph3 < start_ph3: end_ph3 = start_ph3
+                
+                gantt_data.append({
+                    "Zlecenie": nazwa_bazy, 
+                    "Faza": "3. Demontaż (Auto)", 
+                    "Start": start_ph3, 
+                    "Koniec": end_ph3,
+                    "Szczegoly": etykieta_pojazdu
+                })
 
+            # 4. Powrót na bazę
             if powrot:
-                start_ph4 = demontaz_k if demontaz_k else (klient_k if klient_k else end_ph1)
+                start_ph4 = end_ph3 if (end_ph3 and end_ph3 > end_ph1) else end_ph1
                 if start_ph4 > powrot: start_ph4 = powrot
                 
                 gantt_data.append({
@@ -143,10 +189,11 @@ def render(sh):
         df_gantt['Koniec_Viz'] = df_gantt.apply(lambda x: x['Koniec'] + timedelta(days=1) if x['Start'] == x['Koniec'] else x['Koniec'] + timedelta(days=1), axis=1)
 
         color_map = {
-            "1. Transport & Montaż": "#3B82F6",    # Blue
-            "2. Dni Targowe (Event)": "#BA4949",   # Crimson/Red
-            "3. Demontaż": "#C5A880",              # Gold
-            "4. Powrót na bazę": "#10B981"         # Emerald Green
+            "1. Transport & Montaż": "#3B82F6",    # Blue (Trasa IN)
+            "2. Dni Targowe (Event)": "#BA4949",   # Crimson (Tło Targów)
+            "3. Demontaż (Słownik)": "#5A544A",    # Szaro-brązowy (Tło demontażu)
+            "3. Demontaż (Auto)": "#C5A880",       # Gold (Praca tego konkretnego auta)
+            "4. Powrót na bazę": "#10B981"         # Emerald Green (Powrót)
         }
 
         unikalne_zlecenia = len(df_gantt['Zlecenie'].unique())
@@ -178,7 +225,7 @@ def render(sh):
 
         fig.add_vline(x=datetime.now(), line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        fig.update_yaxes(autorange="reversed", title="", tickfont=dict(size=16, color='#E2DCD3', family='Inter', weight="bold"), gridcolor='rgba(255, 255, 255, 0.05)')
+        fig.update_yaxes(autorange="reversed", title="", tickfont=dict(size=16, color='#E2DCD3', family='Inter', weight="bold"), gridcolor='rgba(255, 255, 255, 0.05)")
         fig.update_xaxes(showgrid=True, gridcolor='rgba(255, 255, 255, 0.1)', tickformat="%d.%m", title="", tickfont=dict(size=12, color='#A39B8F'), side="top")
         fig.update_layout(plot_bgcolor='#1C1A18', paper_bgcolor='#12100E', font=dict(color='#E2DCD3', family='Inter'), margin=dict(l=10, r=20, t=60, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, title="", font=dict(color="#A39B8F", size=13)), height=height_calc)
         
