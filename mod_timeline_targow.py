@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja kaskadowa. Widok domyślnie wyśrodkowany na bieżących dniach. Przewiń wykres w lewo, aby zobaczyć historię.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja kaskadowa. Widok domyślnie wyśrodkowany na bieżących dniach. Ukrywa zlecenia zarchiwizowane oraz zamknięte.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -66,7 +66,14 @@ def render(sh):
             st.error(f"Błąd ładowania danych: {e}")
             return
 
-    df_aktywne = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df_ev.empty else pd.DataFrame()
+    # PODWÓJNY FILTR: Ignorujemy zarchiwizowane (TAK) oraz takie, które mają status "Zamknięte"
+    if not df_ev.empty:
+        df_aktywne = df_ev[
+            (df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK") & 
+            (~df_ev.get("Faza_Procesu", pd.Series()).astype(str).str.lower().str.contains("zamknięte", na=False))
+        ].copy()
+    else:
+        df_aktywne = pd.DataFrame()
 
     if df_aktywne.empty:
         st.info("Brak aktywnych eventów w bazie.")
@@ -133,7 +140,6 @@ def render(sh):
             dopisek = str(row.get("Dopisek", ""))
             
             c_uid = f"CHILD_{nazwa_bazy}_{nr}"
-            # Zmiana: gruba czcionka (<b>) i odrobinę jaśniejszy szary dla aut
             c_label = f"<b style='color: #BFAF97; font-size: 13px;'>&nbsp;&nbsp;&nbsp;&nbsp;↳ {nazwa_wyswietlana} [{auto}]</b>"
             sort_auto = f"{nazwa_bazy.upper()}_1_{nazwa_wyswietlana}_{nr}"
             
@@ -243,7 +249,6 @@ def render(sh):
         now = datetime.now()
         fig.add_vline(x=now, line_width=2, line_dash="dash", line_color="#E2DCD3", annotation_text="📍 DZISIAJ", annotation_position="top", annotation_font_color="#C5A880", annotation_font_weight="bold")
 
-        # Obliczanie widoku domyślnego osi X (Wczoraj -> Najdalszy koniec w widocznych + 2 dni)
         zoom_start = (now - timedelta(days=1)).strftime('%Y-%m-%d')
         max_date_in_data = df_gantt['Koniec_Viz'].max()
         zoom_end_dt = max(max_date_in_data, now + timedelta(days=14))
@@ -267,8 +272,8 @@ def render(sh):
             title="", 
             tickfont=dict(size=12, color='#A39B8F'), 
             side="top",
-            range=[zoom_start, zoom_end],  # Zawężenie początkowego widoku
-            dtick="86400000"               # Skok siatki wymuszony co 1 dzień (w ms)
+            range=[zoom_start, zoom_end],  
+            dtick="86400000"               
         )
         
         fig.update_layout(plot_bgcolor='#1C1A18', paper_bgcolor='#12100E', font=dict(color='#E2DCD3', family='Inter'), margin=dict(l=10, r=20, t=60, b=10), legend=dict(orientation="h", yanchor="bottom", y=-0.15, xanchor="center", x=0.5, title="", font=dict(color="#A39B8F", size=13)), height=height_calc)
@@ -277,4 +282,4 @@ def render(sh):
         st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
         st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.info("Brak wystarczających dat do wygenerowania osi czasu. Sprawdź, czy w Eventach (lub Słownikach) są poprawnie uzupełnione daty załadunku, rozładunku i targów.")
+        st.info("Brak aktywnych dat do wygenerowania osi czasu.")
