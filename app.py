@@ -18,6 +18,7 @@ import mod_empties
 import mod_rezerwacja_ramp
 import mod_timeline_targow
 import mod_raportownia
+import mod_decision_maker
 
 # 1. KONFIGURACJA STRONY
 st.set_page_config(page_title="SQM HUB", page_icon="⚾", layout="wide")
@@ -207,7 +208,8 @@ def main():
     b64_yes = get_base64_image("yestech.jpg")
     b64_baz = get_base64_image("bazy danych.jpg")
     b64_fin = get_base64_image("finanse.jpg")
-    b64_rap = get_base64_image("raportownia.png") # Wpięta poprawna grafika!
+    b64_rap = get_base64_image("raportownia.png")
+    b64_dec = get_base64_image("decision.png")
     
     # Ładowanie przycisków akcji
     b64_btn_refresh = get_base64_image("image_983cc3.png")
@@ -224,7 +226,7 @@ def main():
         opcje_menu = [
             "COMMAND CENTER", "EVENTY / TARGI", "GENERATOR ZLECEŃ PRO", "ZLECENIA POBOCZNE",
             "REZERWACJA RAMPY", "HARMONOGRAM (GANTT)", "TIMELINE EVENTÓW", 
-            "EMPTIES TOWER", "SUBRENTY", "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY", "RAPORTOWNIA (ANALIZY)"
+            "EMPTIES TOWER", "SUBRENTY", "YESTECH EXPORT", "BAZY DANYCH / SŁOWNIKI", "FINANSE I RAPORTY", "RAPORTOWNIA (ANALIZY)", "DECISION MAKER"
         ]
 
         if "menu_option" not in st.session_state: st.session_state["menu_option"] = "COMMAND CENTER"
@@ -283,9 +285,10 @@ def main():
         [data-testid="stSidebar"] div.element-container:nth-of-type(13) button {{ background-image: url('{b64_baz}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(14) button {{ background-image: url('{b64_fin}') !important; }}
         [data-testid="stSidebar"] div.element-container:nth-of-type(15) button {{ background-image: url('{b64_rap}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(16) button {{ background-image: url('{b64_dec}') !important; }}
         
-        [data-testid="stSidebar"] div.element-container:nth-of-type(17) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
-        [data-testid="stSidebar"] div.element-container:nth-of-type(18) button {{ background-image: url('{b64_btn_logout}') !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(18) button {{ background-image: url('{b64_btn_refresh}') !important; margin-top: 10px !important; }}
+        [data-testid="stSidebar"] div.element-container:nth-of-type(19) button {{ background-image: url('{b64_btn_logout}') !important; }}
         </style>
         """, unsafe_allow_html=True)
 
@@ -316,6 +319,8 @@ def main():
             st.session_state["menu_option"] = "FINANSE I RAPORTY"; st.rerun()
         if st.button("RAPORTOWNIA (ANALIZY)", use_container_width=True): 
             st.session_state["menu_option"] = "RAPORTOWNIA (ANALIZY)"; st.rerun()
+        if st.button("DECISION MAKER", use_container_width=True): 
+            st.session_state["menu_option"] = "DECISION MAKER"; st.rerun()
 
         # Karta profilu
         st.markdown(f"""<div class="sidebar-profile-card">
@@ -360,6 +365,7 @@ def main():
     elif wybrany_modul == "BAZY DANYCH / SŁOWNIKI": mod_bazy_danych.render(sh)
     elif wybrany_modul == "FINANSE I RAPORTY": mod_finanse.render(sh)
     elif wybrany_modul == "RAPORTOWNIA (ANALIZY)": mod_raportownia.render(sh)
+    elif wybrany_modul == "DECISION MAKER": mod_decision_maker.render(sh)
 
 if __name__ == "__main__":
     main()
