@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import db
 import io
+import datetime
 
 def parse_cost(val):
     """Bezpieczne parsowanie kosztów EUR (nawet z wpisami 'N/A' lub ze spacjami)"""
