@@ -14,10 +14,336 @@ def get_b64(filepath):
             return base64.b64encode(f.read()).decode()
     return ""
 
+# ==============================================================================
+# WYZOLOWANY FRAGMENT PANELU SZCZEGÓŁÓW ZLECENIA I AKCJI
+# ==============================================================================
+@st.fragment
+def render_details_panel(rez_id, df_rampy, cal_key):
+    try:
+        row = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].iloc[0]
+        
+        podjazd_db = str(row.get('Faktyczny_Podjazd', '')).strip()
+        if podjazd_db and podjazd_db not in ["nan", "None", ""]:
+            if len(podjazd_db) > 5:
+                p_date, p_time = podjazd_db.split(" ")[0], podjazd_db.split(" ")[1]
+                podj_data_disp, podj_czas_disp = f"📅 {p_date}", f"🕒 {p_time}"
+            else:
+                podj_data_disp, podj_czas_disp = f"📅 {row.get('Data', '-')}", f"🕒 {podjazd_db}"
+        else:
+            podj_data_disp, podj_czas_disp = "📅 –", "🕒 –"
+
+        pojazd_str = str(row.get('Pojazd', ''))
+        rej = pojazd_str.split('/')[0].strip() if '/' in pojazd_str else (pojazd_str if pojazd_str else '-')
+        typ = pojazd_str.split('/')[1].strip() if '/' in pojazd_str else '-'
+        
+        rampa_disp = str(row.get('Rampa', '11'))
+        if rampa_disp.endswith(".0"): rampa_disp = rampa_disp[:-2]
+        
+        rampa_nazwa = f"RAMPA {rampa_disp}" if rampa_disp == "BUS" else f"RAMP A  {rampa_disp}"
+
+        html_panel = f"""
+        <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
+            <div style="flex: 3;">
+                <h2 style="color: #050A15; margin: 0; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif;">{row.get('Nazwa_Imprezy', '-')}</h2>
+                <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">{rampa_nazwa}</h4>
+                <div style="display: flex; gap: 30px;">
+                    <div>
+                        <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PLANOWANA REZERWACJA</div>
+                        <div style="font-weight: 600; color: #050A15; font-size: 14px; margin-top: 4px;">📅 {row.get('Data', '-')}</div>
+                        <div style="font-weight: 600; color: #050A15; font-size: 14px; margin-top: 2px;">🕒 {row.get('Godzina_Od', '-')} - {row.get('Godzina_Do', '-')}</div>
+                    </div>
+                    <div>
+                        <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PODJECHAŁ POD RAMPĘ</div>
+                        <div style="font-weight: 600; color: #10B981; font-size: 14px; margin-top: 4px;">{podj_data_disp}</div>
+                        <div style="font-weight: 600; color: #10B981; font-size: 14px; margin-top: 2px;">{podj_czas_disp}</div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
+                <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">🚛 DANE AUTA</div>
+                <table style="width: 100%; font-size: 12px; color: #4A5568;">
+                    <tr><td style="padding-bottom: 6px; width: 40%;">REJESTRACJA</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{rej}</td></tr>
+                    <tr><td style="padding-bottom: 6px;">TYP</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{typ}</td></tr>
+                    <tr><td style="padding-bottom: 6px;">NACZEPA</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{row.get('Naczepa', '-')}</td></tr>
+                    <tr><td>TYP NACZEPY</td><td style="font-weight: 700; color: #050A15;">{row.get('Typ_Naczepy', '-')}</td></tr>
+                </table>
+            </div>
+            <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
+                <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">👤 DANE KIEROWCY</div>
+                <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">IMIĘ I NAZWISKO</div>
+                <div style="font-size: 14px; font-weight: 800; color: #050A15; margin-bottom: 8px;">{row.get('Kierowca', '-')}</div>
+                <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">TELEFON</div>
+                <div style="font-size: 13px; font-weight: 600; color: #050A15; margin-bottom: 8px;">{row.get('Telefon', '-')}</div>
+                <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">E-MAIL</div>
+                <div style="font-size: 13px; font-weight: 600; color: #050A15;">{row.get('Email', '-')}</div>
+            </div>
+        </div>
+        """
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        col_info, col_akcje = st.columns([8.5, 1.5])
+        
+        with col_info:
+            st.markdown(html_panel.replace('\n', ''), unsafe_allow_html=True)
+            
+            c_text, c_close = st.columns([8, 2])
+            c_text.markdown("<p style='color: #8C8477; font-size: 12px; margin-top: 15px; text-align: center;'>⤢ Przeciągnij rezerwację w kalendarzu, aby zmienić godzinę lub rampę</p>", unsafe_allow_html=True)
+            if c_close.button("✖ ZAMKNIJ", use_container_width=True):
+                st.session_state.wybrana_rezerwacja = None
+                st.rerun()
+                
+        with col_akcje:
+            st.markdown("<div style='background-color: #FDFBF7; border: 1px solid #C5A880; border-radius: 6px; padding: 15px; height: 100%; box-shadow: 0 5px 15px rgba(0,0,0,0.3);'>", unsafe_allow_html=True)
+            st.markdown("<div style='font-family: \"Bebas Neue\", sans-serif; color: #8C8477; font-size: 16px; margin-bottom: 10px; text-align: center; letter-spacing: 2px;'>AKCJE</div>", unsafe_allow_html=True)
+            
+            if st.button("✏️ EDYTUJ", use_container_width=True): 
+                st.session_state.pokaz_formularz = "EDYCJA"
+                st.rerun()
+                
+            if st.button("📄 DUPLIKUJ", use_container_width=True): 
+                st.session_state.pokaz_formularz = "DUPLIKUJ"
+                st.rerun()
+                
+            st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.3);'>", unsafe_allow_html=True)
+            if st.button("🗑️ USUŃ", use_container_width=True):
+                gs_row = int(row['sheet_row'])
+                db.delete_row("DB_Rampy", gs_row)
+                st.session_state.wybrana_rezerwacja = None
+                st.success("Rezerwacja trwale usunięta!")
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        # ==========================================
+        # INTELIGENTNE PRZYCISKI: ROZPOCZNIJ / ZWOLNIJ RAMPĘ
+        # ==========================================
+        st.markdown("<br>", unsafe_allow_html=True)
+        b1, b2, _ = st.columns([3, 3, 4])
+        
+        is_loading = str(row.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK"
+        is_done = str(row.get('Zakonczono', 'NIE')).upper() == "TAK"
+        
+        with b1:
+            if not is_done:
+                if not is_loading:
+                    if st.button("▶ ROZPOCZNIJ ZAŁADUNEK", type="primary", use_container_width=True):
+                        idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
+                        df_rampy.at[idx, 'Trwa_Zaladunek'] = "TAK"
+                        if not podjazd_db or podjazd_db in ["nan", "None"]:
+                            df_rampy.at[idx, 'Faktyczny_Podjazd'] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        gs_row = int(df_rampy.at[idx, 'sheet_row'])
+                        db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
+                        st.rerun()
+                else:
+                    st.button("⏳ ZAŁADUNEK W TOKU...", disabled=True, use_container_width=True)
+
+        with b2:
+            if not is_done and is_loading:
+                if st.button("🟢 ZWOLNIJ RAMPĘ (ZAKOŃCZ)", use_container_width=True):
+                    now = datetime.now()
+                    today = now.date()
+                    start_dt = now
+                    
+                    if podjazd_db and podjazd_db not in ["nan", "None"]:
+                        if len(podjazd_db) > 5:
+                            try: start_dt = datetime.strptime(podjazd_db, "%Y-%m-%d %H:%M")
+                            except: pass
+                        else:
+                            try:
+                                r_date = datetime.strptime(str(row['Data']), "%Y-%m-%d").date()
+                                r_time = datetime.strptime(podjazd_db, "%H:%M").time()
+                                start_dt = datetime.combine(r_date, r_time)
+                            except: pass
+                            
+                    if start_dt.date() < today:
+                        start_dt = datetime.combine(today, datetime.time(7, 0))
+                    elif start_dt.date() == today and start_dt.time() < datetime.time(7, 0):
+                        start_dt = datetime.combine(today, datetime.time(7, 0))
+                        
+                    delta = now - start_dt
+                    total_minutes = int(delta.total_seconds() / 60)
+                    if total_minutes < 0: total_minutes = 0
+                    hours, minutes = total_minutes // 60, total_minutes % 60
+                    duration_str = f"{hours}h {minutes}m"
+                    
+                    idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
+                    df_rampy.at[idx, 'Trwa_Zaladunek'] = "NIE"
+                    df_rampy.at[idx, 'Zakonczono'] = "TAK"
+                    
+                    stare_notatki = str(df_rampy.at[idx, 'Notatki'])
+                    if stare_notatki in ["nan", "None"]: stare_notatki = ""
+                    df_rampy.at[idx, 'Notatki'] = f"[⏱️ Czas operacji na rampie: {duration_str}] " + stare_notatki
+                    
+                    gs_row = int(df_rampy.at[idx, 'sheet_row'])
+                    db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
+                    st.session_state.wybrana_rezerwacja = None
+                    st.success(f"Rampa zwolniona! Zarejestrowany czas operacji: {duration_str}")
+                    st.rerun()
+
+    except Exception as e:
+        st.error(f"Błąd ładowania szczegółów: {e}")
+
+# ==============================================================================
+# WYZOLOWANY FRAGMENT FORMULARZA
+# ==============================================================================
+@st.fragment
+def render_reservation_form(df_rampy, sh, cal_key):
+    st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.1); margin: 20px 0;'>", unsafe_allow_html=True)
+    tytul = "➕ Nowa Rezerwacja" if st.session_state.pokaz_formularz == "NOWA" else ("📄 Duplikowanie Rezerwacji" if st.session_state.pokaz_formularz == "DUPLIKUJ" else "✏️ Edycja Rezerwacji")
+    st.markdown(f"<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>{tytul}</h3>", unsafe_allow_html=True)
+    
+    dane_edycja = {}
+    if st.session_state.pokaz_formularz in ["EDYCJA", "DUPLIKUJ"] and st.session_state.wybrana_rezerwacja:
+        dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
+
+    # --- MOST Z BAZĄ EVENTÓW ---
+    ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
+    if st.session_state.pokaz_formularz == "NOWA" and not df_ev.empty:
+        df_akt_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
+        if not df_akt_ev.empty:
+            st.markdown("<div style='background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.3); padding: 15px; border-radius: 6px; margin-bottom: 20px;'>", unsafe_allow_html=True)
+            opcje_dict = {"-- Wypełnij formularz ręcznie --": None}
+            for row in df_akt_ev.to_dict('records'):
+                opcje_dict[f"🚛 {row.get('ID_Zlecenia', 'Brak')} | {row.get('Nazwa_Targow', 'Brak')}"] = row
+            
+            wybrany_import = st.selectbox("🔗 Opcjonalnie: Zaimportuj dane z aktywnego zlecenia z modułu Eventy PRO:", list(opcje_dict.keys()))
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            if wybrany_import != "-- Wypełnij formularz ręcznie --":
+                ev_data = opcje_dict[wybrany_import]
+                rej = str(ev_data.get('Nr_Rejestracyjny', '')).strip()
+                typ = str(ev_data.get('Typ_Pojazdu', '')).strip()
+                if rej == "nan": rej = ""
+                if typ == "nan": typ = ""
+                pojazd_comb = f"{rej} / {typ}" if rej and typ else (rej if rej else typ)
+                
+                data_ev = str(ev_data.get('Data_Zlecenia_Tr', '')).strip()
+                if data_ev in ["nan", "None", "NaT"]: data_ev = ""
+                kier_ev = str(ev_data.get('Kierowca', '')).strip()
+                if kier_ev == "nan": kier_ev = ""
+
+                dane_edycja = {
+                    'Nazwa_Imprezy': str(ev_data.get('Nazwa_Targow', '')).strip(),
+                    'Pojazd': pojazd_comb,
+                    'Kierowca': kier_ev,
+                    'Data': data_ev,
+                    'Notatki': f"Powiązane z: {ev_data.get('ID_Zlecenia', '')}"
+                }
+
+    with st.form("form_rampy", clear_on_submit=True):
+        fc1, fc2, fc3 = st.columns([1, 1, 1])
+        with fc1:
+            f_impreza = st.text_input("Nazwa Imprezy *", value=dane_edycja.get('Nazwa_Imprezy', ''))
+            
+            r_id = str(dane_edycja.get('Rampa', '11'))
+            if r_id.endswith(".0"): r_id = r_id[:-2]
+            f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15", "BUS"], index=["11", "12", "13", "14", "15", "BUS"].index(r_id) if r_id in ["11", "12", "13", "14", "15", "BUS"] else 0)
+            
+            dt_str = str(dane_edycja.get('Data', st.session_state.rampy_data))
+            try: val_data = datetime.strptime(dt_str, "%Y-%m-%d").date() if dt_str and dt_str not in ["nan", "None"] else st.session_state.rampy_data
+            except: val_data = st.session_state.rampy_data
+            f_data = st.date_input("Data rezerwacji", value=val_data)
+            
+            od_str = str(dane_edycja.get('Godzina_Od', '07:00')).strip()
+            try: val_od = datetime.strptime(od_str, "%H:%M").time() if od_str and od_str not in ["nan", "None"] else datetime.strptime("07:00", "%H:%M").time()
+            except: val_od = datetime.strptime("07:00", "%H:%M").time()
+            f_od = st.time_input("Godzina Od", value=val_od)
+            
+            do_str = str(dane_edycja.get('Godzina_Do', '11:00')).strip()
+            try: val_do = datetime.strptime(do_str, "%H:%M").time() if do_str and do_str not in ["nan", "None"] else datetime.strptime("11:00", "%H:%M").time()
+            except: val_do = datetime.strptime("11:00", "%H:%M").time()
+            f_do = st.time_input("Godzina Do", value=val_do)
+            
+        with fc2:
+            f_pojazd = st.text_input("Pojazd (Rejestracja / Typ)", value=dane_edycja.get('Pojazd', ''))
+            f_naczepa = st.text_input("Rejestracja Naczepy", value=dane_edycja.get('Naczepa', ''))
+            f_typ_naczepy = st.text_input("Typ Naczepy", value=dane_edycja.get('Typ_Naczepy', ''))
+            f_kierowca = st.text_input("Imię i Nazwisko Kierowcy", value=dane_edycja.get('Kierowca', ''))
+            f_tel = st.text_input("Telefon Kierowcy", value=dane_edycja.get('Telefon', ''))
+            f_email = st.text_input("E-mail", value=dane_edycja.get('Email', ''))
+            
+        with fc3:
+            podj_baza = "" if st.session_state.pokaz_formularz == "DUPLIKUJ" else str(dane_edycja.get('Faktyczny_Podjazd', '')).strip()
+            val_podj_d, val_podj_t = None, None
+            
+            if podj_baza and podj_baza not in ["nan", "None"]:
+                if len(podj_baza) > 5:
+                    try:
+                        dt_obj = datetime.strptime(podj_baza, "%Y-%m-%d %H:%M")
+                        val_podj_d = dt_obj.date()
+                        val_podj_t = dt_obj.time()
+                    except: pass
+                else:
+                    try:
+                        val_podj_t = datetime.strptime(podj_baza, "%H:%M").time()
+                        val_podj_d = datetime.strptime(str(dane_edycja.get('Data', st.session_state.rampy_data)), "%Y-%m-%d").date()
+                    except: pass
+            
+            st.markdown("<div style='background: rgba(10, 20, 40, 0.5); padding: 15px; border-radius: 8px; border: 1px solid #1C2D4A;'>", unsafe_allow_html=True)
+            st.markdown("<p style='color: #8C8477; font-weight: bold; margin-bottom: 5px;'>Status Operacji na Rampie</p>", unsafe_allow_html=True)
+            
+            dp_col1, dp_col2 = st.columns(2)
+            f_podjazd_data = dp_col1.date_input("Data podjazdu", value=val_podj_d if val_podj_d else val_data)
+            f_podjazd_czas = dp_col2.time_input("Godzina (Puste = czeka)", value=val_podj_t)
+            usun_podjazd = st.checkbox("Wyczyść podjazd (Cofnij status)", value=(val_podj_t is None))
+            
+            f_trwa = st.selectbox("Czy trwa załadunek/rozładunek?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK" and st.session_state.pokaz_formularz != "DUPLIKUJ" else 0)
+            f_koniec = st.selectbox("Czy zakończono całkowicie?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Zakonczono', 'NIE')).upper() == "TAK" and st.session_state.pokaz_formularz != "DUPLIKUJ" else 0)
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            f_notatki = st.text_area("Dodatkowe notatki", value="" if st.session_state.pokaz_formularz == "DUPLIKUJ" else dane_edycja.get('Notatki', ''))
+        
+        sc1, sc2 = st.columns([1, 1])
+        if sc1.form_submit_button("💾 ZAPISZ", type="primary", use_container_width=True):
+            if not f_impreza:
+                st.error("Nazwa Imprezy jest obowiązkowa!")
+            else:
+                final_podjazd = "" if usun_podjazd else (f"{f_podjazd_data.strftime('%Y-%m-%d')} {f_podjazd_czas.strftime('%H:%M')}" if f_podjazd_czas else "")
+                
+                if st.session_state.pokaz_formularz in ["NOWA", "DUPLIKUJ"]:
+                    new_id = f"RMP-{int(time.time())}-{random.randint(100,999)}"
+                    nowy_wiersz = [
+                        new_id, f_rampa, str(f_data), f_od.strftime("%H:%M"), f_do.strftime("%H:%M"),
+                        f_impreza, f_pojazd, f_kierowca, f_tel, f_email,
+                        f_naczepa, f_typ_naczepy, final_podjazd, f_trwa, f_koniec, f_notatki
+                    ]
+                    db.append_data("DB_Rampy", [str(x) for x in nowy_wiersz])
+                    st.success("Rezerwacja utworzona!")
+                else:
+                    idx = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].index[0]
+                    df_rampy.at[idx, 'Rampa'] = f_rampa
+                    df_rampy.at[idx, 'Data'] = str(f_data)
+                    df_rampy.at[idx, 'Godzina_Od'] = f_od.strftime("%H:%M")
+                    df_rampy.at[idx, 'Godzina_Do'] = f_do.strftime("%H:%M")
+                    df_rampy.at[idx, 'Nazwa_Imprezy'] = f_impreza
+                    df_rampy.at[idx, 'Pojazd'] = f_pojazd
+                    df_rampy.at[idx, 'Kierowca'] = f_kierowca
+                    df_rampy.at[idx, 'Telefon'] = f_tel
+                    df_rampy.at[idx, 'Email'] = f_email
+                    df_rampy.at[idx, 'Naczepa'] = f_naczepa
+                    df_rampy.at[idx, 'Typ_Naczepy'] = f_typ_naczepy
+                    df_rampy.at[idx, 'Faktyczny_Podjazd'] = final_podjazd
+                    df_rampy.at[idx, 'Trwa_Zaladunek'] = f_trwa
+                    df_rampy.at[idx, 'Zakonczono'] = f_koniec
+                    df_rampy.at[idx, 'Notatki'] = f_notatki
+                    
+                    gs_row = int(df_rampy.at[idx, 'sheet_row'])
+                    db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
+                    st.success("Zaktualizowano rezerwację!")
+
+                st.session_state.pokaz_formularz = None
+                st.session_state.pop(cal_key, None)
+                time.sleep(0.5)
+                st.rerun()
+                
+        if sc2.form_submit_button("✖ ANULUJ", use_container_width=True):
+            st.session_state.pokaz_formularz = None
+            st.rerun()
+
+# ==============================================================================
+# GŁÓWNA FUNKCJA RENDER
+# ==============================================================================
 def render(sh):
-    # ==========================================
     # 1. NAPRAWA WYDAJNOŚCI I KOSMICZNA STYLIZACJA
-    # ==========================================
     b64_ftl = get_b64("ftl.png")
     
     st.markdown("""
@@ -71,9 +397,7 @@ def render(sh):
         </div>
     """.replace('\n', ''), unsafe_allow_html=True)
 
-    # ==========================================
     # 2. BAZA DANYCH
-    # ==========================================
     worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
     
     if worksheet_rampy is None:
@@ -87,7 +411,7 @@ def render(sh):
             "Naczepa", "Typ_Naczepy", "Faktyczny_Podjazd", "Trwa_Zaladunek", "Zakonczono", "Notatki"
         ]
         worksheet_rampy.append_row(headers)
-        st.cache_data.clear()
+        db.load_data.clear()
         worksheet_rampy, df_rampy = db.load_data(sh, "DB_Rampy")
 
     expected_cols = [
@@ -103,9 +427,7 @@ def render(sh):
     if "wybrana_rezerwacja" not in st.session_state: st.session_state.wybrana_rezerwacja = None
     if "pokaz_formularz" not in st.session_state: st.session_state.pokaz_formularz = None
 
-    # ==========================================
     # 3. GÓRNY PASEK NAWIGACYJNY I AUTO-PLANOWANIE
-    # ==========================================
     st.markdown('<div class="top-bar-btn">', unsafe_allow_html=True)
     c1, c2, c3, c4, c5, c6, c7 = st.columns([0.5, 2.0, 0.5, 2.0, 3.0, 2.0, 2.0], vertical_alignment="center")
     
@@ -134,13 +456,8 @@ def render(sh):
                 if not df_ev.empty:
                     df_aktywne_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
                     
-                    dostepne_sloty_ciezarowe = [
-                        ("07:00", "11:00"), 
-                        ("11:00", "15:00"), 
-                        ("14:00", "18:00") 
-                    ]
+                    dostepne_sloty_ciezarowe = [("07:00", "11:00"), ("11:00", "15:00"), ("14:00", "18:00")]
                     dostepne_rampy_ciezarowe = ["11", "12", "13", "14", "15"]
-
                     dostepne_sloty_bus = [
                         ("07:00", "08:00"), ("08:00", "09:00"), ("09:00", "10:00"), 
                         ("10:00", "11:00"), ("11:00", "12:00"), ("12:00", "13:00"), 
@@ -151,12 +468,13 @@ def render(sh):
 
                     dzisiaj = date.today()
 
-                    # ZOPTYMALIZOWANY PANCERNY SYSTEM PRZECIWDZIAŁANIA DUPLIKATOM
+                    # Zoptymalizowane szukanie tekstu
                     df_rampy_text = ""
                     if not df_rampy.empty:
                         df_rampy_text = " | ".join(df_rampy.astype(str).fillna("").values.flatten())
 
-                    for _, ev in df_aktywne_ev.iterrows():
+                    # Szybka iteracja używająca to_dict
+                    for ev in df_aktywne_ev.to_dict('records'):
                         ev_id = str(ev.get("ID_Zlecenia", "")).strip()
                         data_zal = str(ev.get("Data_Zlecenia_Tr", "")).strip()
                         typ_poj = str(ev.get("Typ_Pojazdu", "")).strip().upper()
@@ -170,7 +488,6 @@ def render(sh):
                             if data_zal_obj.weekday() >= 5: continue 
                         except: pass
                             
-                        # Błyskawiczne przeszukiwanie tekstu zamiast iteracji po komórkach Pandas
                         is_scheduled = False
                         search_str = f"Powiązane z: {ev_id}"
                         if df_rampy_text and search_str in df_rampy_text:
@@ -178,7 +495,6 @@ def render(sh):
                                 
                         if not is_scheduled:
                             przypisano = False
-                            
                             is_bus = "BUS" in typ_poj or "VAN" in typ_poj
                             akt_sloty = dostepne_sloty_bus if is_bus else dostepne_sloty_ciezarowe
                             akt_rampy = dostepne_rampy_bus if is_bus else dostepne_rampy_ciezarowe
@@ -189,8 +505,9 @@ def render(sh):
                                 for rampa_test in akt_rampy:
                                     overlap = False
                                     if not df_rampy.empty:
+                                        # Filtrowanie lokalne wektorowe - dużo szybsze
                                         zajete = df_rampy[(df_rampy['Data'].astype(str).str.strip() == data_zal) & (df_rampy['Rampa'].astype(str).str.strip() == rampa_test)]
-                                        for _, z in zajete.iterrows():
+                                        for z in zajete.to_dict('records'):
                                             z_od = str(z.get('Godzina_Od', '00:00')).strip()
                                             z_do = str(z.get('Godzina_Do', '00:00')).strip()
                                             if test_od < z_do and test_do > z_od:
@@ -214,8 +531,6 @@ def render(sh):
                                         
                                         nowy_dict = dict(zip(expected_cols, nowy_wiersz))
                                         df_rampy = pd.concat([df_rampy, pd.DataFrame([nowy_dict])], ignore_index=True)
-                                        
-                                        # Zabezpieczenie przed podwójnym dodaniem tego samego eventu w jednej sesji
                                         df_rampy_text += f" | {search_str}"
                                         
                                         przypisano = True
@@ -223,7 +538,6 @@ def render(sh):
                                         break
                                         
                 if zmieniono > 0:
-                    st.cache_data.clear() 
                     st.toast(f"✅ Synchronizacja zakończona: Zarezerwowano {zmieniono} nowych slotów!", icon="🔄")
                     time.sleep(1.5)
                     st.rerun()
@@ -243,9 +557,7 @@ def render(sh):
     if st.session_state.rampy_data.weekday() >= 5:
         st.error("⚠️ Magazyn w weekendy jest ZAMKNIĘTY. Automatyczny kalendarz pomija te dni. Dodawaj tu rezerwacje tylko po wcześniejszym uzgodnieniu z obsługą magazynu.")
 
-    # ==========================================
-    # 4. SILNIK KALENDARZA
-    # ==========================================
+    # 4. SILNIK KALENDARZA (Zoptymalizowany przez to_dict)
     events = []
     if not df_rampy.empty:
         df_dzien = df_rampy[df_rampy['Data'].astype(str).str.strip() == str(st.session_state.rampy_data)]
@@ -254,7 +566,7 @@ def render(sh):
             mask = df_dzien.astype(str).apply(lambda row: row.str.contains(szukana_fraza, case=False, na=False).any(), axis=1)
             df_dzien = df_dzien[mask]
 
-        for _, row in df_dzien.iterrows():
+        for row in df_dzien.to_dict('records'):
             podjazd_db = str(row.get('Faktyczny_Podjazd', '')).strip()
             trwa_zaladunek = str(row.get('Trwa_Zaladunek', '')).strip().upper() == "TAK"
             zakonczono = str(row.get('Zakonczono', '')).strip().upper() == "TAK"
@@ -377,9 +689,7 @@ def render(sh):
         </div>
     """.replace('\n', ''), unsafe_allow_html=True)
 
-    # ==========================================
-    # 5. OBSŁUGA ZDARZEŃ
-    # ==========================================
+    # 5. OBSŁUGA ZDARZEŃ (Kalendarz)
     if cal_state.get("eventChange"):
         zmieniony = cal_state["eventChange"]["event"]
         ev_id = zmieniony["id"]
@@ -402,7 +712,6 @@ def render(sh):
             db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
             
             st.session_state.pop(cal_key, None)
-            st.cache_data.clear() 
             st.toast(f"✅ Rezerwacja Zaktualizowana: Rampa {nowa_rampa} ({nowy_od} - {nowy_do})")
             time.sleep(0.5)
             st.rerun()
@@ -417,330 +726,10 @@ def render(sh):
             st.session_state.pop(cal_key, None)
             st.rerun()
 
-    # ==========================================
-    # 6. KREMOWY PANEL SZCZEGÓŁÓW
-    # ==========================================
+    # 6. WYWOŁANIE WYIZOLOWANEGO PANELU SZCZEGÓŁÓW
     if st.session_state.get("wybrana_rezerwacja") and st.session_state.get("pokaz_formularz") != "NOWA":
-        rez_id = st.session_state.wybrana_rezerwacja
-        try:
-            row = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].iloc[0]
-            
-            podjazd_db = str(row.get('Faktyczny_Podjazd', '')).strip()
-            if podjazd_db and podjazd_db not in ["nan", "None", ""]:
-                if len(podjazd_db) > 5:
-                    p_date, p_time = podjazd_db.split(" ")[0], podjazd_db.split(" ")[1]
-                    podj_data_disp, podj_czas_disp = f"📅 {p_date}", f"🕒 {p_time}"
-                else:
-                    podj_data_disp, podj_czas_disp = f"📅 {row.get('Data', '-')}", f"🕒 {podjazd_db}"
-            else:
-                podj_data_disp, podj_czas_disp = "📅 –", "🕒 –"
+        render_details_panel(st.session_state.wybrana_rezerwacja, df_rampy, cal_key)
 
-            pojazd_str = str(row.get('Pojazd', ''))
-            rej = pojazd_str.split('/')[0].strip() if '/' in pojazd_str else (pojazd_str if pojazd_str else '-')
-            typ = pojazd_str.split('/')[1].strip() if '/' in pojazd_str else '-'
-            
-            rampa_disp = str(row.get('Rampa', '11'))
-            if rampa_disp.endswith(".0"): rampa_disp = rampa_disp[:-2]
-            
-            rampa_nazwa = f"RAMPA {rampa_disp}" if rampa_disp == "BUS" else f"RAMP A  {rampa_disp}"
-
-            html_panel = f"""
-            <div style="background-color: #FDFBF7; border-top: 4px solid #BA4949; border-radius: 6px; padding: 25px; color: #1A2530; display: flex; flex-direction: row; gap: 20px; box-shadow: 0px 10px 30px rgba(0,0,0,0.7);">
-                <div style="flex: 3;">
-                    <h2 style="color: #050A15; margin: 0; font-size: 26px; font-weight: 800; font-family: 'Inter', sans-serif;">{row.get('Nazwa_Imprezy', '-')}</h2>
-                    <h4 style="color: #8C8477; margin: 2px 0 15px 0; font-family: 'Bebas Neue', sans-serif; letter-spacing: 1.5px; font-size: 18px;">{rampa_nazwa}</h4>
-                    <div style="display: flex; gap: 30px;">
-                        <div>
-                            <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PLANOWANA REZERWACJA</div>
-                            <div style="font-weight: 600; color: #050A15; font-size: 14px; margin-top: 4px;">📅 {row.get('Data', '-')}</div>
-                            <div style="font-weight: 600; color: #050A15; font-size: 14px; margin-top: 2px;">🕒 {row.get('Godzina_Od', '-')} - {row.get('Godzina_Do', '-')}</div>
-                        </div>
-                        <div>
-                            <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px;">PODJECHAŁ POD RAMPĘ</div>
-                            <div style="font-weight: 600; color: #10B981; font-size: 14px; margin-top: 4px;">{podj_data_disp}</div>
-                            <div style="font-weight: 600; color: #10B981; font-size: 14px; margin-top: 2px;">{podj_czas_disp}</div>
-                        </div>
-                    </div>
-                </div>
-                <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
-                    <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">🚛 DANE AUTA</div>
-                    <table style="width: 100%; font-size: 12px; color: #4A5568;">
-                        <tr><td style="padding-bottom: 6px; width: 40%;">REJESTRACJA</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{rej}</td></tr>
-                        <tr><td style="padding-bottom: 6px;">TYP</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{typ}</td></tr>
-                        <tr><td style="padding-bottom: 6px;">NACZEPA</td><td style="font-weight: 700; color: #050A15; padding-bottom: 6px;">{row.get('Naczepa', '-')}</td></tr>
-                        <tr><td>TYP NACZEPY</td><td style="font-weight: 700; color: #050A15;">{row.get('Typ_Naczepy', '-')}</td></tr>
-                    </table>
-                </div>
-                <div style="flex: 2; border-left: 1px solid rgba(197,168,128,0.3); padding-left: 20px;">
-                    <div style="font-family: 'Bebas Neue', sans-serif; color: #8C8477; font-size: 14px; letter-spacing: 1px; margin-bottom: 10px;">👤 DANE KIEROWCY</div>
-                    <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">IMIĘ I NAZWISKO</div>
-                    <div style="font-size: 14px; font-weight: 800; color: #050A15; margin-bottom: 8px;">{row.get('Kierowca', '-')}</div>
-                    <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">TELEFON</div>
-                    <div style="font-size: 13px; font-weight: 600; color: #050A15; margin-bottom: 8px;">{row.get('Telefon', '-')}</div>
-                    <div style="font-size: 10px; color: #8C8477; margin-bottom: 2px;">E-MAIL</div>
-                    <div style="font-size: 13px; font-weight: 600; color: #050A15;">{row.get('Email', '-')}</div>
-                </div>
-            </div>
-            """
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_info, col_akcje = st.columns([8.5, 1.5])
-            
-            with col_info:
-                st.markdown(html_panel.replace('\n', ''), unsafe_allow_html=True)
-                
-                c_text, c_close = st.columns([8, 2])
-                c_text.markdown("<p style='color: #8C8477; font-size: 12px; margin-top: 15px; text-align: center;'>⤢ Przeciągnij rezerwację w kalendarzu, aby zmienić godzinę lub rampę</p>", unsafe_allow_html=True)
-                if c_close.button("✖ ZAMKNIJ", use_container_width=True):
-                    st.session_state.wybrana_rezerwacja = None
-                    st.rerun()
-                    
-            with col_akcje:
-                st.markdown("<div style='background-color: #FDFBF7; border: 1px solid #C5A880; border-radius: 6px; padding: 15px; height: 100%; box-shadow: 0 5px 15px rgba(0,0,0,0.3);'>", unsafe_allow_html=True)
-                st.markdown("<div style='font-family: \"Bebas Neue\", sans-serif; color: #8C8477; font-size: 16px; margin-bottom: 10px; text-align: center; letter-spacing: 2px;'>AKCJE</div>", unsafe_allow_html=True)
-                
-                if st.button("✏️ EDYTUJ", use_container_width=True): 
-                    st.session_state.pokaz_formularz = "EDYCJA"
-                    st.rerun()
-                    
-                if st.button("📄 DUPLIKUJ", use_container_width=True): 
-                    st.session_state.pokaz_formularz = "DUPLIKUJ"
-                    st.rerun()
-                    
-                st.markdown("<hr style='margin: 10px 0; border-color: rgba(197, 168, 128, 0.3);'>", unsafe_allow_html=True)
-                if st.button("🗑️ USUŃ", use_container_width=True):
-                    gs_row = int(row['sheet_row'])
-                    db.delete_row("DB_Rampy", gs_row)
-                    st.session_state.wybrana_rezerwacja = None
-                    st.cache_data.clear() 
-                    st.success("Rezerwacja trwale usunięta!")
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            # ==========================================
-            # INTELIGENTNE PRZYCISKI: ROZPOCZNIJ / ZWOLNIJ RAMPĘ
-            # ==========================================
-            st.markdown("<br>", unsafe_allow_html=True)
-            b1, b2, _ = st.columns([3, 3, 4])
-            
-            is_loading = str(row.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK"
-            is_done = str(row.get('Zakonczono', 'NIE')).upper() == "TAK"
-            
-            with b1:
-                if not is_done:
-                    if not is_loading:
-                        if st.button("▶ ROZPOCZNIJ ZAŁADUNEK", type="primary", use_container_width=True):
-                            idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
-                            df_rampy.at[idx, 'Trwa_Zaladunek'] = "TAK"
-                            if not podjazd_db or podjazd_db in ["nan", "None"]:
-                                df_rampy.at[idx, 'Faktyczny_Podjazd'] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                            gs_row = int(df_rampy.at[idx, 'sheet_row'])
-                            db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                            st.cache_data.clear() 
-                            st.rerun()
-                    else:
-                        st.button("⏳ ZAŁADUNEK W TOKU...", disabled=True, use_container_width=True)
-
-            with b2:
-                if not is_done and is_loading:
-                    if st.button("🟢 ZWOLNIJ RAMPĘ (ZAKOŃCZ)", use_container_width=True):
-                        now = datetime.now()
-                        today = now.date()
-                        start_dt = now
-                        
-                        if podjazd_db and podjazd_db not in ["nan", "None"]:
-                            if len(podjazd_db) > 5:
-                                try: start_dt = datetime.strptime(podjazd_db, "%Y-%m-%d %H:%M")
-                                except: pass
-                            else:
-                                try:
-                                    r_date = datetime.strptime(str(row['Data']), "%Y-%m-%d").date()
-                                    r_time = datetime.strptime(podjazd_db, "%H:%M").time()
-                                    start_dt = datetime.combine(r_date, r_time)
-                                except: pass
-                                
-                        if start_dt.date() < today:
-                            start_dt = datetime.combine(today, datetime.time(7, 0))
-                        elif start_dt.date() == today and start_dt.time() < datetime.time(7, 0):
-                            start_dt = datetime.combine(today, datetime.time(7, 0))
-                            
-                        delta = now - start_dt
-                        total_minutes = int(delta.total_seconds() / 60)
-                        if total_minutes < 0: total_minutes = 0
-                        hours, minutes = total_minutes // 60, total_minutes % 60
-                        duration_str = f"{hours}h {minutes}m"
-                        
-                        idx = df_rampy[df_rampy['ID_Rezerwacji'] == rez_id].index[0]
-                        df_rampy.at[idx, 'Trwa_Zaladunek'] = "NIE"
-                        df_rampy.at[idx, 'Zakonczono'] = "TAK"
-                        
-                        stare_notatki = str(df_rampy.at[idx, 'Notatki'])
-                        if stare_notatki in ["nan", "None"]: stare_notatki = ""
-                        df_rampy.at[idx, 'Notatki'] = f"[⏱️ Czas operacji na rampie: {duration_str}] " + stare_notatki
-                        
-                        gs_row = int(df_rampy.at[idx, 'sheet_row'])
-                        db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                        st.session_state.wybrana_rezerwacja = None
-                        st.cache_data.clear() 
-                        st.success(f"Rampa zwolniona! Zarejestrowany czas operacji: {duration_str}")
-                        st.rerun()
-
-        except Exception as e:
-            st.error(f"Błąd ładowania szczegółów: {e}")
-
-    # ==========================================
-    # 7. FORMULARZ (DODAJ / EDYTUJ / DUPLIKUJ)
-    # ==========================================
+    # 7. WYWOŁANIE WYIZOLOWANEGO FORMULARZA (DODAJ / EDYTUJ / DUPLIKUJ)
     if st.session_state.get("pokaz_formularz") in ["NOWA", "EDYCJA", "DUPLIKUJ"]:
-        st.markdown("<hr style='border-color: rgba(197, 168, 128, 0.1); margin: 20px 0;'>", unsafe_allow_html=True)
-        tytul = "➕ Nowa Rezerwacja" if st.session_state.pokaz_formularz == "NOWA" else ("📄 Duplikowanie Rezerwacji" if st.session_state.pokaz_formularz == "DUPLIKUJ" else "✏️ Edycja Rezerwacji")
-        st.markdown(f"<h3 style='color: #C5A880; font-family: \"Shippori Mincho\", serif;'>{tytul}</h3>", unsafe_allow_html=True)
-        
-        dane_edycja = {}
-        if st.session_state.pokaz_formularz in ["EDYCJA", "DUPLIKUJ"] and st.session_state.wybrana_rezerwacja:
-            dane_edycja = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].iloc[0].to_dict()
-
-        # --- MOST Z BAZĄ EVENTÓW ---
-        ws_ev, df_ev = db.load_data(sh, "DB_Eventy")
-        if st.session_state.pokaz_formularz == "NOWA" and not df_ev.empty:
-            df_akt_ev = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"]
-            if not df_akt_ev.empty:
-                st.markdown("<div style='background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.3); padding: 15px; border-radius: 6px; margin-bottom: 20px;'>", unsafe_allow_html=True)
-                opcje_dict = {"-- Wypełnij formularz ręcznie --": None}
-                for _, r in df_akt_ev.iterrows():
-                    opcje_dict[f"🚛 {r.get('ID_Zlecenia', 'Brak')} | {r.get('Nazwa_Targow', 'Brak')}"] = r
-                
-                wybrany_import = st.selectbox("🔗 Opcjonalnie: Zaimportuj dane z aktywnego zlecenia z modułu Eventy PRO:", list(opcje_dict.keys()))
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                if wybrany_import != "-- Wypełnij formularz ręcznie --":
-                    ev_data = opcje_dict[wybrany_import]
-                    rej = str(ev_data.get('Nr_Rejestracyjny', '')).strip()
-                    typ = str(ev_data.get('Typ_Pojazdu', '')).strip()
-                    if rej == "nan": rej = ""
-                    if typ == "nan": typ = ""
-                    pojazd_comb = f"{rej} / {typ}" if rej and typ else (rej if rej else typ)
-                    
-                    data_ev = str(ev_data.get('Data_Zlecenia_Tr', '')).strip()
-                    if data_ev in ["nan", "None", "NaT"]: data_ev = ""
-                    kier_ev = str(ev_data.get('Kierowca', '')).strip()
-                    if kier_ev == "nan": kier_ev = ""
-
-                    dane_edycja = {
-                        'Nazwa_Imprezy': str(ev_data.get('Nazwa_Targow', '')).strip(),
-                        'Pojazd': pojazd_comb,
-                        'Kierowca': kier_ev,
-                        'Data': data_ev,
-                        'Notatki': f"Powiązane z: {ev_data.get('ID_Zlecenia', '')}"
-                    }
-
-        with st.form("form_rampy", clear_on_submit=True):
-            fc1, fc2, fc3 = st.columns([1, 1, 1])
-            with fc1:
-                f_impreza = st.text_input("Nazwa Imprezy *", value=dane_edycja.get('Nazwa_Imprezy', ''))
-                
-                r_id = str(dane_edycja.get('Rampa', '11'))
-                if r_id.endswith(".0"): r_id = r_id[:-2]
-                f_rampa = st.selectbox("Rampa", ["11", "12", "13", "14", "15", "BUS"], index=["11", "12", "13", "14", "15", "BUS"].index(r_id) if r_id in ["11", "12", "13", "14", "15", "BUS"] else 0)
-                
-                dt_str = str(dane_edycja.get('Data', st.session_state.rampy_data))
-                try: val_data = datetime.strptime(dt_str, "%Y-%m-%d").date() if dt_str and dt_str not in ["nan", "None"] else st.session_state.rampy_data
-                except: val_data = st.session_state.rampy_data
-                f_data = st.date_input("Data rezerwacji", value=val_data)
-                
-                od_str = str(dane_edycja.get('Godzina_Od', '07:00')).strip()
-                try: val_od = datetime.strptime(od_str, "%H:%M").time() if od_str and od_str not in ["nan", "None"] else datetime.strptime("07:00", "%H:%M").time()
-                except: val_od = datetime.strptime("07:00", "%H:%M").time()
-                f_od = st.time_input("Godzina Od", value=val_od)
-                
-                do_str = str(dane_edycja.get('Godzina_Do', '11:00')).strip()
-                try: val_do = datetime.strptime(do_str, "%H:%M").time() if do_str and do_str not in ["nan", "None"] else datetime.strptime("11:00", "%H:%M").time()
-                except: val_do = datetime.strptime("11:00", "%H:%M").time()
-                f_do = st.time_input("Godzina Do", value=val_do)
-                
-            with fc2:
-                f_pojazd = st.text_input("Pojazd (Rejestracja / Typ)", value=dane_edycja.get('Pojazd', ''))
-                f_naczepa = st.text_input("Rejestracja Naczepy", value=dane_edycja.get('Naczepa', ''))
-                f_typ_naczepy = st.text_input("Typ Naczepy", value=dane_edycja.get('Typ_Naczepy', ''))
-                f_kierowca = st.text_input("Imię i Nazwisko Kierowcy", value=dane_edycja.get('Kierowca', ''))
-                f_tel = st.text_input("Telefon Kierowcy", value=dane_edycja.get('Telefon', ''))
-                f_email = st.text_input("E-mail", value=dane_edycja.get('Email', ''))
-                
-            with fc3:
-                podj_baza = "" if st.session_state.pokaz_formularz == "DUPLIKUJ" else str(dane_edycja.get('Faktyczny_Podjazd', '')).strip()
-                val_podj_d, val_podj_t = None, None
-                
-                if podj_baza and podj_baza not in ["nan", "None"]:
-                    if len(podj_baza) > 5:
-                        try:
-                            dt_obj = datetime.strptime(podj_baza, "%Y-%m-%d %H:%M")
-                            val_podj_d = dt_obj.date()
-                            val_podj_t = dt_obj.time()
-                        except: pass
-                    else:
-                        try:
-                            val_podj_t = datetime.strptime(podj_baza, "%H:%M").time()
-                            val_podj_d = datetime.strptime(str(dane_edycja.get('Data', st.session_state.rampy_data)), "%Y-%m-%d").date()
-                        except: pass
-                
-                st.markdown("<div style='background: rgba(10, 20, 40, 0.5); padding: 15px; border-radius: 8px; border: 1px solid #1C2D4A;'>", unsafe_allow_html=True)
-                st.markdown("<p style='color: #8C8477; font-weight: bold; margin-bottom: 5px;'>Status Operacji na Rampie</p>", unsafe_allow_html=True)
-                
-                dp_col1, dp_col2 = st.columns(2)
-                f_podjazd_data = dp_col1.date_input("Data podjazdu", value=val_podj_d if val_podj_d else val_data)
-                f_podjazd_czas = dp_col2.time_input("Godzina (Puste = czeka)", value=val_podj_t)
-                usun_podjazd = st.checkbox("Wyczyść podjazd (Cofnij status)", value=(val_podj_t is None))
-                
-                f_trwa = st.selectbox("Czy trwa załadunek/rozładunek?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Trwa_Zaladunek', 'NIE')).upper() == "TAK" and st.session_state.pokaz_formularz != "DUPLIKUJ" else 0)
-                f_koniec = st.selectbox("Czy zakończono całkowicie?", ["NIE", "TAK"], index=1 if str(dane_edycja.get('Zakonczono', 'NIE')).upper() == "TAK" and st.session_state.pokaz_formularz != "DUPLIKUJ" else 0)
-                st.markdown("</div>", unsafe_allow_html=True)
-                
-                f_notatki = st.text_area("Dodatkowe notatki", value="" if st.session_state.pokaz_formularz == "DUPLIKUJ" else dane_edycja.get('Notatki', ''))
-            
-            sc1, sc2 = st.columns([1, 1])
-            if sc1.form_submit_button("💾 ZAPISZ", type="primary", use_container_width=True):
-                if not f_impreza:
-                    st.error("Nazwa Imprezy jest obowiązkowa!")
-                else:
-                    final_podjazd = "" if usun_podjazd else (f"{f_podjazd_data.strftime('%Y-%m-%d')} {f_podjazd_czas.strftime('%H:%M')}" if f_podjazd_czas else "")
-                    
-                    if st.session_state.pokaz_formularz in ["NOWA", "DUPLIKUJ"]:
-                        new_id = f"RMP-{int(time.time())}-{random.randint(100,999)}"
-                        nowy_wiersz = [
-                            new_id, f_rampa, str(f_data), f_od.strftime("%H:%M"), f_do.strftime("%H:%M"),
-                            f_impreza, f_pojazd, f_kierowca, f_tel, f_email,
-                            f_naczepa, f_typ_naczepy, final_podjazd, f_trwa, f_koniec, f_notatki
-                        ]
-                        db.append_data("DB_Rampy", [str(x) for x in nowy_wiersz])
-                        st.cache_data.clear() 
-                        st.success("Rezerwacja utworzona!")
-                    else:
-                        idx = df_rampy[df_rampy['ID_Rezerwacji'] == st.session_state.wybrana_rezerwacja].index[0]
-                        df_rampy.at[idx, 'Rampa'] = f_rampa
-                        df_rampy.at[idx, 'Data'] = str(f_data)
-                        df_rampy.at[idx, 'Godzina_Od'] = f_od.strftime("%H:%M")
-                        df_rampy.at[idx, 'Godzina_Do'] = f_do.strftime("%H:%M")
-                        df_rampy.at[idx, 'Nazwa_Imprezy'] = f_impreza
-                        df_rampy.at[idx, 'Pojazd'] = f_pojazd
-                        df_rampy.at[idx, 'Kierowca'] = f_kierowca
-                        df_rampy.at[idx, 'Telefon'] = f_tel
-                        df_rampy.at[idx, 'Email'] = f_email
-                        df_rampy.at[idx, 'Naczepa'] = f_naczepa
-                        df_rampy.at[idx, 'Typ_Naczepy'] = f_typ_naczepy
-                        df_rampy.at[idx, 'Faktyczny_Podjazd'] = final_podjazd
-                        df_rampy.at[idx, 'Trwa_Zaladunek'] = f_trwa
-                        df_rampy.at[idx, 'Zakonczono'] = f_koniec
-                        df_rampy.at[idx, 'Notatki'] = f_notatki
-                        
-                        gs_row = int(df_rampy.at[idx, 'sheet_row'])
-                        db.update_single_row_safe("DB_Rampy", gs_row, df_rampy.loc[idx])
-                        st.cache_data.clear() 
-                        st.success("Zaktualizowano rezerwację!")
-
-                    st.session_state.pokaz_formularz = None
-                    st.session_state.pop(cal_key, None)
-                    time.sleep(0.5)
-                    st.rerun()
-            if sc2.form_submit_button("✖ ANULUJ", use_container_width=True):
-                st.session_state.pokaz_formularz = None
-                st.rerun()
+        render_reservation_form(df_rampy, sh, cal_key)
