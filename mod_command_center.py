@@ -55,9 +55,9 @@ def render(sh):
     # --- AGREGACJA ZDARZEŃ W SŁOWNIKU ---
     all_events = defaultdict(list)
 
-    # 1. Analiza Zleceń PRO
+    # 1. Analiza Zleceń PRO - SZYBKA ITERACJA (Omija powolne iterrows)
     if not df_zlecenia.empty:
-        for _, row in df_zlecenia.iterrows():
+        for row in df_zlecenia.to_dict('records'):
             nr = str(row.get("Numer zlecenia", "Brak NR")).strip()
             projekt = str(row.get("ID Projektu", "Brak")).strip()
             przewoznik = str(row.get("Zleceniobiorca", "Brak danych")).strip()
@@ -78,11 +78,13 @@ def render(sh):
                     "kolor": "#83A5DB", "ikona": "🏁"
                 })
 
-    # 2. Analiza Zleceń Pobocznych
+    # 2. Analiza Zleceń Pobocznych - SZYBKA ITERACJA (Omija powolne iterrows)
     if not df_poboczne.empty:
-        for _, row in df_poboczne.iterrows():
+        for row in df_poboczne.to_dict('records'):
             nr = str(row.get("Nr Zlecenia", "Brak NR")).strip()
-            przewoznik = str(row.get("Przewoźnik", "Brak danych")).strip()
+            przewoznik = str(row.get("Przewoźźnik", "Brak danych")).strip()
+            if przewoznik == "Brak danych": # Zabezpieczenie nazw kolumn
+                przewoznik = str(row.get("Przewoźnik", "Brak danych")).strip()
             
             # PANCERNA BLOKADA DUPLIKATÓW
             is_pro_order = (nr in pro_orders_set) or str(nr).startswith("CRG") or str(nr).startswith("EVT") or str(nr).startswith("ZLP")
@@ -113,6 +115,13 @@ def render(sh):
                     "kolor": "#BA4949", "ikona": "💳"
                 })
 
+    # Uruchomienie wyizolowanego fragmentu
+    render_calendar_and_agenda(all_events)
+
+
+# --- WYDZIELONY FRAGMENT KALENDARZA (ZAPOBIEGA PRZEŁADOWANIOM CAŁEJ STRONY) ---
+@st.fragment
+def render_calendar_and_agenda(all_events):
     # --- INTERFEJS KALENDARZA ---
     st.markdown("""
         <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 10px;">
@@ -260,7 +269,7 @@ def render(sh):
                     """
                     events_html += part_html.replace('\n', '')
                 
-                # Zastosowanie gotowej klasy z Twojego pliku style.css: class="tag-zen-red"
+                # Zastosowanie gotowej klasy
                 main_html = f"""
                 <div class="custom-row" style="border-left: 6px solid {main_color}; margin-bottom: 12px; flex-direction: column; align-items: flex-start; padding: 18px 24px;">
                     <div style="margin-bottom: 12px; width: 100%; border-bottom: 2px solid rgba(0,0,0,0.08); padding-bottom: 14px;">
@@ -291,4 +300,4 @@ def render(sh):
                         st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO" 
                     else:
                         st.session_state['menu_option'] = "ZLECENIA POBOCZNE"
-                    st.rerun()
+                    st.rerun() # Twarde przeładowanie przy skoku do innego modułu
