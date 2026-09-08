@@ -5,7 +5,7 @@ import datetime
 import re
 import time
 
-@st.cache_resource
+@st.cache_resource(ttl=3500) # Re-autoryzacja tuż przed wygaśnięciem tokena Google (1h)
 def init_connection():
     gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
     sh = gc.open("NOWY PODZIAŁ OBOWIĄZKÓW") 
@@ -18,16 +18,34 @@ def get_col_letter(col_idx):
         string = chr(65 + remainder) + string
     return string
 
-@st.cache_data(ttl=60, show_spinner=False)
-def load_data(_sh, sheet_name):
+# ==========================================
+# SYSTEM SMART CACHE (Tokeny Arkuszy)
+# ==========================================
+def get_sync_token(sheet_name):
+    """Zwraca unikalny token dla arkusza. Zmiana wymusza pobranie nowych danych."""
+    token_key = f"sync_{sheet_name}"
+    if token_key not in st.session_state:
+        st.session_state[token_key] = time.time()
+    return st.session_state[token_key]
+
+def invalidate_sheet(sheet_name):
+    """Odświeża pamięć TYLKO dla wybranego arkusza, nie dotykając innych."""
+    st.session_state[f"sync_{sheet_name}"] = time.time()
+
+# ==========================================
+# SZYBKIE POBIERANIE DANYCH
+# ==========================================
+@st.cache_data(ttl=14400, show_spinner=False) # Dane pamiętane aż do 4 godzin
+def _load_data_cached(sheet_name, _sync_token):
+    sh = init_connection()
     max_retries = 3
     
     for attempt in range(max_retries):
         try:
             try:
-                worksheet = _sh.worksheet(sheet_name)
+                worksheet = sh.worksheet(sheet_name)
             except gspread.exceptions.WorksheetNotFound:
-                worksheet = _sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
+                worksheet = sh.add_worksheet(title=sheet_name, rows=1000, cols=30)
 
             raw_data = worksheet.get_all_values()
             if raw_data and len(raw_data) > 0:
@@ -113,16 +131,19 @@ def load_data(_sh, sheet_name):
             return worksheet, df
 
         except Exception as e:
-            if ("503" in str(e) or "429" in str(e) or "Quota" in str(e)) and attempt < max_retries - 1:
+            if ("503" in str(e) or "429" in str(e) or "Quota" in str(e) or "Connection" in str(e)) and attempt < max_retries - 1:
                 time.sleep(1.5 ** attempt)
                 continue
             
             st.error(f"Błąd ładowania arkusza {sheet_name}: {e}")
-            load_data.clear()
             return None, pd.DataFrame()
 
-@st.cache_data(ttl=60, show_spinner=False)
-def fetch_data(sheet_name):
+def load_data(sh, sheet_name):
+    token = get_sync_token(sheet_name)
+    return _load_data_cached(sheet_name, token)
+
+@st.cache_data(ttl=14400, show_spinner=False)
+def _fetch_data_cached(sheet_name, _sync_token):
     sh = init_connection()
     max_retries = 3
     
@@ -143,14 +164,20 @@ def fetch_data(sheet_name):
             return pd.DataFrame()
             
         except Exception as e:
-            if ("503" in str(e) or "429" in str(e) or "Quota" in str(e)) and attempt < max_retries - 1:
+            if ("503" in str(e) or "429" in str(e) or "Quota" in str(e) or "Connection" in str(e)) and attempt < max_retries - 1:
                 time.sleep(1.5 ** attempt) 
                 continue
                 
             st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
-            fetch_data.clear()
             return pd.DataFrame()
 
+def fetch_data(sheet_name):
+    token = get_sync_token(sheet_name)
+    return _fetch_data_cached(sheet_name, token)
+
+# ==========================================
+# OPERACJE ZAPISU - Z PRECYZYJNYM ODŚWIEŻANIEM
+# ==========================================
 def get_next_cmr_number():
     sh = init_connection()
     try:
@@ -167,6 +194,7 @@ def get_next_cmr_number():
         
     next_cmr = int(val) + 1
     ws.update_acell('B2', str(next_cmr))
+    invalidate_sheet("System_Ustawienia")
     return str(next_cmr)
 
 def update_single_row_safe(sheet_name, gs_row_index, row_series):
@@ -178,12 +206,7 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
         if 'sheet_row' in dane_do_zapisu:
             dane_do_zapisu = dane_do_zapisu.drop('sheet_row')
             
-        row_list = []
-        for val in dane_do_zapisu.tolist():
-            if pd.isna(val) or val is None:
-                row_list.append("")
-            else:
-                row_list.append(str(val))
+        row_list = [str(val) if not pd.isna(val) and val is not None else "" for val in dane_do_zapisu.tolist()]
                 
         ostatnia_kolumna = get_col_letter(len(row_list))
         zakres = f"A{gs_row_index}:{ostatnia_kolumna}{gs_row_index}"
@@ -193,9 +216,7 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
         except TypeError:
             ws.update(zakres, [row_list])
             
-        # Zmiana z st.cache_data.clear()
-        load_data.clear()
-        fetch_data.clear()
+        invalidate_sheet(sheet_name)
         return True
     except Exception as e:
         st.error(f"Krytyczny błąd zapisu: {e}")
@@ -227,15 +248,15 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         ws_source = sh.worksheet(source_sheet)
         ws_source.delete_rows(row_index)
         
-        # Zmiana z st.cache_data.clear()
-        load_data.clear()
-        fetch_data.clear()
+        invalidate_sheet(source_sheet)
+        invalidate_sheet(archive_sheet)
         return True
     except Exception as e:
         st.error(f"Błąd fizycznej archiwizacji: {e}")
         return False
 
 def save_data(worksheet, edited_df):
+    sheet_name = worksheet.title
     df_to_save = edited_df.copy()
     if 'sheet_row' in df_to_save.columns:
         df_to_save = df_to_save.drop(columns=['sheet_row'])
@@ -245,9 +266,7 @@ def save_data(worksheet, edited_df):
         df_str = df_to_save.astype(str).replace('nan', '')
         worksheet.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
     
-    # Zmiana z st.cache_data.clear()
-    load_data.clear()
-    fetch_data.clear()
+    invalidate_sheet(sheet_name)
     st.toast("Zmiany zapisane pomyślnie!", icon="✅")
 
 def append_data(sheet_name, row_data):
@@ -267,9 +286,7 @@ def append_data(sheet_name, row_data):
         except TypeError:
             ws.update(zakres, [safe_list])
             
-        # Zmiana z st.cache_data.clear()
-        load_data.clear()
-        fetch_data.clear()
+        invalidate_sheet(sheet_name)
         return True
     except Exception as e:
         st.error(f"Błąd zapisu w {sheet_name}: {e}")
@@ -289,9 +306,7 @@ def update_row(sheet_name, row_index, row_data):
         except TypeError:
             ws.update(zakres, [safe_list])
             
-        # Zmiana z st.cache_data.clear()
-        load_data.clear()
-        fetch_data.clear()
+        invalidate_sheet(sheet_name)
         return True
     except Exception as e:
         st.error(f"Błąd aktualizacji wiersza {row_index} w {sheet_name}: {e}")
@@ -303,9 +318,7 @@ def delete_row(sheet_name, row_index):
         ws = sh.worksheet(sheet_name)
         ws.delete_rows(row_index)
         
-        # Zmiana z st.cache_data.clear()
-        load_data.clear()
-        fetch_data.clear()
+        invalidate_sheet(sheet_name)
         return True
     except Exception as e:
         st.error(f"Błąd usuwania wiersza {row_index} w {sheet_name}: {e}")
