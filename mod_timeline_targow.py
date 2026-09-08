@@ -56,7 +56,7 @@ def render(sh):
         </div>
     ''', unsafe_allow_html=True)
 
-    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja kaskadowa. Widok domyślnie wyśrodkowany na bieżących dniach. Ukrywa zlecenia zarchiwizowane oraz zamknięte.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 20px;'>Wizualizacja kaskadowa. Widok domyślnie wyśrodkowany na bieżących dniach. Przewiń wykres w lewo, aby zobaczyć historię.</p>", unsafe_allow_html=True)
 
     with st.spinner("Ładowanie osi czasu i słowników..."):
         try:
@@ -66,14 +66,7 @@ def render(sh):
             st.error(f"Błąd ładowania danych: {e}")
             return
 
-    # PODWÓJNY FILTR: Ignorujemy zarchiwizowane (TAK) oraz takie, które mają status "Zamknięte"
-    if not df_ev.empty:
-        df_aktywne = df_ev[
-            (df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK") & 
-            (~df_ev.get("Faza_Procesu", pd.Series()).astype(str).str.lower().str.contains("zamknięte", na=False))
-        ].copy()
-    else:
-        df_aktywne = pd.DataFrame()
+    df_aktywne = df_ev[df_ev.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df_ev.empty else pd.DataFrame()
 
     if df_aktywne.empty:
         st.info("Brak aktywnych eventów w bazie.")
@@ -97,7 +90,11 @@ def render(sh):
         if not nazwa_bazy or nazwa_bazy in ["nan", "None", ""]: 
             continue
             
-        etapy_row = df_etapy[df_etapy.iloc[:, 0].astype(str).str.strip() == nazwa_bazy] if not df_etapy.empty else pd.DataFrame()
+        etapy_row = pd.DataFrame()
+        if not df_etapy.empty:
+            # 1. PANCERNE SZUKANIE: Niewrażliwe na wielkość liter
+            mask = df_etapy.iloc[:, 0].astype(str).str.strip().str.lower() == nazwa_bazy.lower()
+            etapy_row = df_etapy[mask]
         
         klient_s, klient_k, demontaz_s, demontaz_k = None, None, None, None
         if not etapy_row.empty:
@@ -108,10 +105,12 @@ def render(sh):
             demontaz_s = parse_date(r_et.get(cols[3])) if len(cols) > 3 else None
             demontaz_k = parse_date(r_et.get(cols[4])) if len(cols) > 4 else None
 
-        # 1. Główny wiersz eventu (Parent)
+        # Główny wiersz eventu (Parent)
         p_uid = f"PARENT_{nazwa_bazy}"
         p_label = f"<b style='color: #E2DCD3; font-size: 14px;'>📌 {nazwa_bazy.upper()}</b>"
         sort_base = f"{nazwa_bazy.upper()}_0"
+
+        parent_has_bars = False
 
         if klient_s and klient_k:
             gantt_data.append({
@@ -120,6 +119,7 @@ def render(sh):
                 "BarText": "DNI KLIENTA", 
                 "HoverEvent": nazwa_bazy, "HoverID": "-", "HoverCarr": "-", "HoverDopisek": "-", "HoverFaza": "Dni Targowe"
             })
+            parent_has_bars = True
             
         if demontaz_s and demontaz_k:
             gantt_data.append({
@@ -128,8 +128,24 @@ def render(sh):
                 "BarText": "DEMONTAŻ", 
                 "HoverEvent": nazwa_bazy, "HoverID": "-", "HoverCarr": "-", "HoverDopisek": "-", "HoverFaza": "Demontaż"
             })
+            parent_has_bars = True
 
-        # 2. Wiersze dla poszczególnych aut (Child)
+        # 2. GWARANCJA NAGŁÓWKA: Wieszak-widmo, jeśli słownik jest pusty
+        if not parent_has_bars:
+            fallback_date = datetime.now().date()
+            for _, r in group.iterrows():
+                d = parse_date(r.get("Data_Zlecenia_Tr"))
+                if d: 
+                    fallback_date = d
+                    break
+            gantt_data.append({
+                "UID": p_uid, "Y_Label": p_label, "SortKey": sort_base,
+                "Faza": "0. Brak Danych", "Start": fallback_date, "Koniec": fallback_date,
+                "BarText": "", 
+                "HoverEvent": nazwa_bazy, "HoverID": "-", "HoverCarr": "-", "HoverDopisek": "Uzupełnij Słownik!", "HoverFaza": "Brak Dni Targowych"
+            })
+
+        # Wiersze dla poszczególnych aut (Child)
         for _, row in group.iterrows():
             nr = str(row.get("ID_Zlecenia", ""))
             przewoznik = str(row.get("Przewoznik", "")).strip()
@@ -206,6 +222,7 @@ def render(sh):
         ordered_labels = unique_ordered['Y_Label'].tolist()
 
         color_map = {
+            "0. Brak Danych": "rgba(0,0,0,0)",     # Ukryte tło 
             "1. Transport & Montaż": "#3B82F6",    
             "2. Dni Targowe (Event)": "#BA4949",   
             "3. Demontaż (Słownik)": "#5A544A",    
