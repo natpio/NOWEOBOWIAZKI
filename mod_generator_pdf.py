@@ -84,6 +84,7 @@ class PRO_TransportOrder(FPDF):
             
         self.cell(0, 5, pdf_sanitize(f"www.sqm.pl   |   {email}   |   {telefon}"), ln=True, align='C')
 
+@st.cache_data(show_spinner=False)
 def generate_pro_pdf(dane):
     pdf = PRO_TransportOrder(opiekun=dane.get('opiekun', 'PD'))
     pdf.alias_nb_pages()
@@ -235,6 +236,7 @@ def safe_set_cell(sheet, coordinate, value):
         pass
     sheet[target_coord] = value
 
+@st.cache_data(show_spinner=False)
 def generate_cmr_excel(dane):
     szablon_path = "Szablon_CMR.xlsx"
     if not os.path.exists(szablon_path): 
@@ -451,7 +453,7 @@ def odtworz_dane_zlecenia(r, df_miejsca, df_przewoznicy, idx_pd, row_idx):
 
     return paczka_pdf, dane_cmr, nr_zlecenia, dane_cmr_powrot
 
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def pobierz_dane_z_bazy():
     return db.fetch_data("Projekty"), db.fetch_data("Miejsca"), db.fetch_data("Zleceniobiorcy"), db.fetch_data("Zlecenia")
 
@@ -922,7 +924,7 @@ def render(sh):
                         st.session_state.nazwa_pdf = f"Order_{nr_zlecenia.replace('/', '_')}.pdf"
                         st.session_state.nazwa_cmr = f"CMR_{nr_zlecenia.replace('/', '_')}_{nr_cmr_zapisany}.xlsx"
                         st.session_state.dokumenty_wygenerowane = True
-                        st.cache_data.clear(); st.rerun() 
+                        st.rerun() 
 
         if st.session_state.dokumenty_wygenerowane:
             st.success(st.session_state.komunikat)
