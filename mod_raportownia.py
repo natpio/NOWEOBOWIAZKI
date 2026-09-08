@@ -43,6 +43,7 @@ def render(sh):
     # --- CZYSZCZENIE I STANDARYZACJA DANYCH ---
     df_all['Base_Event'] = df_all.get('Nazwa_Targow', '').apply(lambda x: str(x).split(" | ")[0].strip() if " | " in str(x) else str(x).strip())
     df_all['Przewoznik'] = df_all.get('Przewoznik', '').fillna('Nieokreślony').replace('', 'Nieokreślony')
+    df_all['Typ_Pojazdu'] = df_all.get('Typ_Pojazdu', '').fillna('Nieokreślony').replace('', 'Nieokreślony')
     df_all['W_Kolku'] = df_all.get('Data_Zakonczenia_Uslugi', '').apply(is_round_trip)
     df_all['Zewnetrzny'] = df_all.get('Typ_Transportu', '') == 'Zewnętrzny'
     df_all['Wlasny'] = df_all.get('Typ_Transportu', '') == 'Własny SQM'
@@ -67,8 +68,15 @@ def render(sh):
         Trasy_Drop=('W_Kolku', lambda x: (~x).sum()),
         Suma_Koszty=('Koszt_EUR', 'sum')
     ).reset_index()
-    # Sortujemy najpierw po kosztach (najwięksi partnerzy na górze), potem po liczbie zleceń
     raport_przewoznicy = raport_przewoznicy.sort_values(by=['Suma_Koszty', 'Liczba_Zlecen'], ascending=[False, False])
+
+    # --- AGREGACJA 3: RELACJE SZCZEGÓŁOWE (Kto, Gdzie, Czym) ---
+    raport_relacje = df_all.groupby(['Przewoznik', 'Base_Event', 'Typ_Pojazdu', 'W_Kolku']).agg(
+        Liczba_Kursow=('ID_Zlecenia', 'count'),
+        Suma_Kosztow=('Koszt_EUR', 'sum')
+    ).reset_index()
+    raport_relacje['W_Kolku'] = raport_relacje['W_Kolku'].apply(lambda x: "🔄 W KÓŁKU" if x else "➡️ TYLKO DOSTAWA")
+    raport_relacje = raport_relacje.sort_values(by=['Przewoznik', 'Base_Event', 'Liczba_Kursow'], ascending=[True, True, False])
 
     # --- KPI NA GÓRZE ---
     total_aut = int(raport_eventy['Liczba_Aut'].sum())
@@ -95,11 +103,14 @@ def render(sh):
         </div>
     """, unsafe_allow_html=True)
 
-    tab_eventy, tab_przewoznicy, tab_szczegoly = st.tabs([
+    tab_eventy, tab_przewoznicy, tab_relacje, tab_szczegoly = st.tabs([
         "📊 Zbiorczo (Eventy)", 
         "🚚 Zbiorczo (Przewoźnicy)", 
+        "🗺️ Relacje (Kto, Gdzie, Czym)",
         "🔍 Szczegóły Projektu"
     ])
+
+    dzisiaj_str = datetime.datetime.now().strftime('%Y-%m-%d')
 
     with tab_eventy:
         st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif; margin-bottom: 15px;'>Zestawienie Wolumenu i Kosztów per Event</h4>", unsafe_allow_html=True)
@@ -115,8 +126,6 @@ def render(sh):
         )
 
         c_csv_ev, c_xls_ev = st.columns(2)
-        dzisiaj_str = datetime.datetime.now().strftime('%Y-%m-%d')
-        
         with c_csv_ev:
             st.download_button("📥 Pobierz zestawienie Eventów (.CSV)", data=df_disp_ev.to_csv(index=False).encode('utf-8'), file_name=f"Raport_Eventow_{dzisiaj_str}.csv", mime="text/csv", use_container_width=True)
         with c_xls_ev:
@@ -145,6 +154,28 @@ def render(sh):
             buf_przew = io.BytesIO()
             with pd.ExcelWriter(buf_przew, engine='openpyxl') as writer: df_disp_przew.to_excel(writer, index=False, sheet_name='Raport_Przewoznikow')
             st.download_button("📈 Pobierz zestawienie Przewoźników (.xlsx)", data=buf_przew.getvalue(), file_name=f"Raport_Przewoznikow_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
+
+    with tab_relacje:
+        st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif; margin-bottom: 15px;'>Szczegółowe Relacje Transportowe</h4>", unsafe_allow_html=True)
+        st.info("📍 W tym miejscu sprawdzisz precyzyjnie, jakiej wielkości autem dany przewoźnik pojechał na konkretny event i czy była to pełna pętla, czy jedynie zrzutka (drop).")
+
+        df_disp_rel = raport_relacje.copy()
+        df_disp_rel.columns = ["Przewoźnik", "Event / Targi", "Typ Pojazdu (Wielkość)", "Rodzaj Trasy", "Liczba takich kursów", "Suma Kosztów za te kursy (€)"]
+
+        st.dataframe(
+            df_disp_rel, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={"Suma Kosztów za te kursy (€)": st.column_config.NumberColumn(format="%.2f €")}
+        )
+
+        c_csv_rel, c_xls_rel = st.columns(2)
+        with c_csv_rel:
+            st.download_button("📥 Pobierz Relacje (.CSV)", data=df_disp_rel.to_csv(index=False).encode('utf-8'), file_name=f"Relacje_Przewoznikow_{dzisiaj_str}.csv", mime="text/csv", use_container_width=True)
+        with c_xls_rel:
+            buf_rel = io.BytesIO()
+            with pd.ExcelWriter(buf_rel, engine='openpyxl') as writer: df_disp_rel.to_excel(writer, index=False, sheet_name='Relacje')
+            st.download_button("📈 Pobierz Relacje (.xlsx)", data=buf_rel.getvalue(), file_name=f"Relacje_Przewoznikow_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
 
     with tab_szczegoly:
         st.markdown("<p style='color: #C5A880; font-size: 13px; font-weight: bold;'>Wybierz event, aby zobaczyć dokładną listę aut i kosztów, które się na niego złożyły:</p>", unsafe_allow_html=True)
