@@ -33,39 +33,58 @@ def render(sh=None):
         cities_set.update(c['exp'].keys())
     cities = sorted(list(cities_set))
 
+    # Inicjalizacja domyślnego stanu, żeby wyświetlić "czystą" stronę przed pierwszym przeliczeniem
+    if 'dm_city' not in st.session_state:
+        st.session_state.dm_city = cities[0]
+        st.session_state.dm_carrier = carriers[0]
+        st.session_state.dm_dates = (datetime.today().date(), datetime.today().date() + timedelta(days=7))
+
     with st.container(border=True):
         st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px; text-transform: uppercase;'>Wprowadź parametry zlecenia</p>", unsafe_allow_html=True)
         
-        c1, c2, c3 = st.columns([1.5, 2, 1.5])
-        with c1:
-            city = st.selectbox("📍 Miasto docelowe (Targi):", cities)
-        with c2:
-            carrier = st.selectbox("🚛 Przewoźnik i Pojazd:", carriers)
-        with c3:
-            # Intuicyjny wybór zakresu dat zamiast wpisywania liczby dni z palca
-            default_start = datetime.today().date()
-            default_end = default_start + timedelta(days=7)
-            dates = st.date_input("📅 Czas postoju (Od - Do):", value=(default_start, default_end))
+        # ZAPAKOWANE W ST.FORM - Zmiany nie wywołują przeładowania, aż do kliknięcia przycisku!
+        with st.form("calc_form"):
+            c1, c2, c3 = st.columns([1.5, 2, 1.5])
+            with c1:
+                city = st.selectbox("📍 Miasto docelowe (Targi):", cities, index=cities.index(st.session_state.dm_city))
+            with c2:
+                carrier = st.selectbox("🚛 Przewoźnik i Pojazd:", carriers, index=carriers.index(st.session_state.dm_carrier))
+            with c3:
+                dates = st.date_input("📅 Czas postoju (Od - Do):", value=st.session_state.dm_dates)
+                
+            submitted = st.form_submit_button("⚡ PRZELICZ KOSZTY", type="primary", use_container_width=True)
             
-    # Obliczanie dni postoju (overlay) na podstawie wybranego zakresu w kalendarzu
-    if isinstance(dates, tuple) and len(dates) == 2:
-        start_date, end_date = dates
+            if submitted:
+                st.session_state.dm_city = city
+                st.session_state.dm_carrier = carrier
+                st.session_state.dm_dates = dates
+
+    # Pobieramy zapisane w sesji wartości, by UI nie mrugało/nie zmieniało się w trakcie klikania
+    active_city = st.session_state.dm_city
+    active_carrier = st.session_state.dm_carrier
+    active_dates = st.session_state.dm_dates
+
+    # Obliczanie dni postoju (overlay) na podstawie wybranego zakresu
+    if isinstance(active_dates, tuple) and len(active_dates) == 2:
+        start_date, end_date = active_dates
         overlay_days = max(0, (end_date - start_date).days)
     else:
         overlay_days = 0
+        start_date = datetime.today().date()
+        end_date = start_date
 
-    v_rates = rates[carrier]
+    v_rates = rates[active_carrier]
     v_type = v_rates['vClass']
     is_sqm = v_rates['type'] == 'SQM'
     
-    e = v_rates['exp'].get(city, 0)
-    i = v_rates['imp'].get(city, 0)
-    d = v_rates['dniowki'].get(city, 0)
+    e = v_rates['exp'].get(active_city, 0)
+    i = v_rates['imp'].get(active_city, 0)
+    d = v_rates['dniowki'].get(active_city, 0)
     
     extra = 0
     extra_msg = ""
     
-    if city in ["Londyn", "Liverpool", "Manchester"]:
+    if active_city in ["Londyn", "Liverpool", "Manchester"]:
         if is_sqm:
             if v_type == "BUS":
                 extra = 332 + 166 + 19
@@ -76,7 +95,7 @@ def render(sh=None):
         else:
             extra = 166
             extra_msg = "Karnet ATA (166)"
-    elif city in ["Genewa", "Bazylea"]:
+    elif active_city in ["Genewa", "Bazylea"]:
         extra = 166
         extra_msg = "Karnet ATA (166)"
         
@@ -154,7 +173,7 @@ def render(sh=None):
 
     st.markdown(f'''
         <div style="margin-top: 30px; text-align: center; font-size: 14px; font-weight: 700; color: #C5A880;">
-            ⚖️ Punkt opłacalności (Break-even): <span style="color: #E2DCD3;">Dla trasy do {city} ({carrier}), automagazyn opłaca się jeśli targi trwają do </span><span style="color: #BA4949; font-size: 18px;">{break_even_days:.1f} dni</span>.
+            ⚖️ Punkt opłacalności (Break-even): <span style="color: #E2DCD3;">Dla trasy do {active_city} ({active_carrier}), automagazyn opłaca się jeśli targi trwają do </span><span style="color: #BA4949; font-size: 18px;">{break_even_days:.1f} dni</span>.
         </div>
     ''', unsafe_allow_html=True)
 
@@ -167,7 +186,6 @@ def render(sh=None):
     fig.add_trace(go.Scatter(x=x_days, y=y_zwiezienie, mode='lines', name='Koszt: Zwiezienie', line=dict(color='#3B82F6', width=3)))
     fig.add_trace(go.Scatter(x=x_days, y=y_automagazyn, mode='lines', name='Koszt: Automagazyn', line=dict(color='#10B981', width=3)))
     
-    # Unikamy rysowania pionowej kreski w błędnym miejscu gdy overlay_days == 0
     if overlay_days > 0:
         fig.add_vline(x=overlay_days, line_width=2, line_dash="dash", line_color="#BA4949", annotation_text="TWÓJ EVENT", annotation_position="top right", annotation_font_color="#E2DCD3")
         
