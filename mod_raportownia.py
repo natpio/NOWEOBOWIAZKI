@@ -9,7 +9,6 @@ def parse_cost(val):
     try:
         val_str = str(val).strip().upper()
         if val_str in ["", "NAN", "NONE", "N/A", "FLOTA WŁASNA"]: return 0.0
-        # Usuń spacje i zamień przecinki na kropki
         clean_val = val_str.replace(' ', '').replace(',', '.')
         return float(clean_val)
     except:
@@ -34,7 +33,7 @@ def render(sh):
         df_aktywne = db.fetch_data("DB_Eventy")
         df_arch = db.fetch_data("DB_Eventy ARCHIWUM")
 
-    # Połączenie obydwu baz (z pominięciem błędów, jeśli archiwum jest puste)
+    # Połączenie obydwu baz
     df_all = pd.concat([df_aktywne, df_arch], ignore_index=True)
 
     if df_all.empty:
@@ -42,22 +41,14 @@ def render(sh):
         return
 
     # --- CZYSZCZENIE I STANDARYZACJA DANYCH ---
-    # 1. Wyciągamy główną nazwę eventu (ucinamy wszystko po " | ")
-    df_all['Base_Event'] = df_all.get('Nazwa_Targow', '').apply(
-        lambda x: str(x).split(" | ")[0].strip() if " | " in str(x) else str(x).strip()
-    )
-    
-    # 2. Identyfikacja trasy (W kółku vs Tylko dostawa)
+    df_all['Base_Event'] = df_all.get('Nazwa_Targow', '').apply(lambda x: str(x).split(" | ")[0].strip() if " | " in str(x) else str(x).strip())
+    df_all['Przewoznik'] = df_all.get('Przewoznik', '').fillna('Nieokreślony').replace('', 'Nieokreślony')
     df_all['W_Kolku'] = df_all.get('Data_Zakonczenia_Uslugi', '').apply(is_round_trip)
-    
-    # 3. Typ floty
     df_all['Zewnetrzny'] = df_all.get('Typ_Transportu', '') == 'Zewnętrzny'
     df_all['Wlasny'] = df_all.get('Typ_Transportu', '') == 'Własny SQM'
-    
-    # 4. Koszty
     df_all['Koszt_EUR'] = df_all.get('Koszt_Transportu_EUR', 0).apply(parse_cost)
 
-    # --- AGREGACJA (TABELA GŁÓWNA) ---
+    # --- AGREGACJA 1: PO EVENTACH ---
     raport_eventy = df_all.groupby('Base_Event').agg(
         Liczba_Aut=('ID_Zlecenia', 'count'),
         Auta_W_Kolku=('W_Kolku', 'sum'),
@@ -66,9 +57,18 @@ def render(sh):
         Flota_SQM=('Wlasny', 'sum'),
         Koszt_Calkowity=('Koszt_EUR', 'sum')
     ).reset_index()
-
-    # Sortowanie po największej liczbie aut
     raport_eventy = raport_eventy.sort_values(by='Liczba_Aut', ascending=False)
+
+    # --- AGREGACJA 2: PO PRZEWOŹNIKACH ---
+    raport_przewoznicy = df_all.groupby('Przewoznik').agg(
+        Liczba_Zlecen=('ID_Zlecenia', 'count'),
+        Obslugiwane_Eventy=('Base_Event', 'nunique'),
+        Trasy_W_Kolku=('W_Kolku', 'sum'),
+        Trasy_Drop=('W_Kolku', lambda x: (~x).sum()),
+        Suma_Koszty=('Koszt_EUR', 'sum')
+    ).reset_index()
+    # Sortujemy najpierw po kosztach (najwięksi partnerzy na górze), potem po liczbie zleceń
+    raport_przewoznicy = raport_przewoznicy.sort_values(by=['Suma_Koszty', 'Liczba_Zlecen'], ascending=[False, False])
 
     # --- KPI NA GÓRZE ---
     total_aut = int(raport_eventy['Liczba_Aut'].sum())
@@ -95,51 +95,56 @@ def render(sh):
         </div>
     """, unsafe_allow_html=True)
 
-    tab_zbiorczy, tab_szczegoly = st.tabs(["📊 Zbiorcze Zestawienie Eventów", "🔍 Szczegóły Konkretnego Projektu"])
+    tab_eventy, tab_przewoznicy, tab_szczegoly = st.tabs([
+        "📊 Zbiorczo (Eventy)", 
+        "🚚 Zbiorczo (Przewoźnicy)", 
+        "🔍 Szczegóły Projektu"
+    ])
 
-    with tab_zbiorczy:
-        st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif; margin-bottom: 15px;'>Zestawienie Wolumenu i Kosztów</h4>", unsafe_allow_html=True)
+    with tab_eventy:
+        st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif; margin-bottom: 15px;'>Zestawienie Wolumenu i Kosztów per Event</h4>", unsafe_allow_html=True)
         
-        # Formatowanie dataframe do wyświetlenia
-        df_display = raport_eventy.copy()
-        df_display.columns = ["Główny Event", "Suma Aut", "W kółku (Powrót)", "Tylko Dostawa", "Zewnętrzni", "Własna Flota", "Koszt Zewnętrzny (€)"]
+        df_disp_ev = raport_eventy.copy()
+        df_disp_ev.columns = ["Główny Event", "Suma Aut", "W kółku (Powrót)", "Tylko Dostawa", "Zewnętrzni", "Własna Flota", "Koszt Zewnętrzny (€)"]
         
         st.dataframe(
-            df_display, 
+            df_disp_ev, 
             use_container_width=True, 
             hide_index=True,
-            column_config={
-                "Koszt Zewnętrzny (€)": st.column_config.NumberColumn(format="%.2f €")
-            }
+            column_config={"Koszt Zewnętrzny (€)": st.column_config.NumberColumn(format="%.2f €")}
         )
 
-        col_csv, col_xls = st.columns(2)
+        c_csv_ev, c_xls_ev = st.columns(2)
         dzisiaj_str = datetime.datetime.now().strftime('%Y-%m-%d')
         
-        with col_csv:
-            csv_data = df_display.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Pobierz zestawienie (.CSV)",
-                data=csv_data,
-                file_name=f"Raport_Eventow_{dzisiaj_str}.csv",
-                mime="text/csv",
-                use_container_width=True
-            )
+        with c_csv_ev:
+            st.download_button("📥 Pobierz zestawienie Eventów (.CSV)", data=df_disp_ev.to_csv(index=False).encode('utf-8'), file_name=f"Raport_Eventow_{dzisiaj_str}.csv", mime="text/csv", use_container_width=True)
+        with c_xls_ev:
+            buf_ev = io.BytesIO()
+            with pd.ExcelWriter(buf_ev, engine='openpyxl') as writer: df_disp_ev.to_excel(writer, index=False, sheet_name='Raport_Eventow')
+            st.download_button("📈 Pobierz zestawienie Eventów (.xlsx)", data=buf_ev.getvalue(), file_name=f"Raport_Eventow_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
+
+    with tab_przewoznicy:
+        st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif; margin-bottom: 15px;'>Zestawienie Partnerów i Wydatków</h4>", unsafe_allow_html=True)
+        st.info("💡 Tabela pokazuje, z jakimi przewoźnikami współpracujesz najczęściej oraz jak rozkładają się koszty (EUR) na poszczególne firmy transportowe.")
         
-        with col_xls:
-            excel_buffer = io.BytesIO()
-            with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
-                df_display.to_excel(writer, index=False, sheet_name='Raport_Wolumenowy')
-            excel_data = excel_buffer.getvalue()
-            
-            st.download_button(
-                label="📈 Pobierz zestawienie (.xlsx)",
-                data=excel_data,
-                file_name=f"Raport_Eventow_{dzisiaj_str}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary",
-                use_container_width=True
-            )
+        df_disp_przew = raport_przewoznicy.copy()
+        df_disp_przew.columns = ["Firma Transportowa / Przewoźnik", "Liczba Zleceń", "Ilość Obsłużonych Eventów", "Tras w kółku", "Tras (Dostawy / Dropy)", "Wygenerowane Koszty (€)"]
+        
+        st.dataframe(
+            df_disp_przew, 
+            use_container_width=True, 
+            hide_index=True,
+            column_config={"Wygenerowane Koszty (€)": st.column_config.NumberColumn(format="%.2f €")}
+        )
+
+        c_csv_przew, c_xls_przew = st.columns(2)
+        with c_csv_przew:
+            st.download_button("📥 Pobierz zestawienie Przewoźników (.CSV)", data=df_disp_przew.to_csv(index=False).encode('utf-8'), file_name=f"Raport_Przewoznikow_{dzisiaj_str}.csv", mime="text/csv", use_container_width=True)
+        with c_xls_przew:
+            buf_przew = io.BytesIO()
+            with pd.ExcelWriter(buf_przew, engine='openpyxl') as writer: df_disp_przew.to_excel(writer, index=False, sheet_name='Raport_Przewoznikow')
+            st.download_button("📈 Pobierz zestawienie Przewoźników (.xlsx)", data=buf_przew.getvalue(), file_name=f"Raport_Przewoznikow_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
 
     with tab_szczegoly:
         st.markdown("<p style='color: #C5A880; font-size: 13px; font-weight: bold;'>Wybierz event, aby zobaczyć dokładną listę aut i kosztów, które się na niego złożyły:</p>", unsafe_allow_html=True)
@@ -152,7 +157,6 @@ def render(sh):
             
             st.markdown(f"<h3 style='color: #BA4949; margin-top: 15px;'>Rozbicie kosztów: {wybrany_event}</h3>", unsafe_allow_html=True)
             
-            # Przygotowanie tabeli szczegółowej
             detale_widok = df_szczegoly[[
                 'ID_Zlecenia', 'Nazwa_Targow', 'Typ_Pojazdu', 'Przewoznik', 
                 'W_Kolku', 'Data_Zlecenia_Tr', 'Data_Zakonczenia_Uslugi', 'Koszt_EUR'
@@ -169,9 +173,7 @@ def render(sh):
                 detale_widok,
                 use_container_width=True,
                 hide_index=True,
-                column_config={
-                    "Koszt Netto (€)": st.column_config.NumberColumn(format="%.2f €")
-                }
+                column_config={"Koszt Netto (€)": st.column_config.NumberColumn(format="%.2f €")}
             )
             
             koszt_suma_detale = detale_widok['Koszt Netto (€)'].sum()
