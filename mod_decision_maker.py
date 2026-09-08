@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime, timedelta
 
 def get_all_rates():
     """Baza danych stawek twardo przepisana z cennika PRICELIST 2026 v4.3.1"""
@@ -35,13 +36,23 @@ def render(sh=None):
     with st.container(border=True):
         st.markdown("<p style='color: #C5A880; font-weight: 700; margin-bottom: 5px; text-transform: uppercase;'>Wprowadź parametry zlecenia</p>", unsafe_allow_html=True)
         
-        c1, c2, c3 = st.columns([1.5, 2, 1])
+        c1, c2, c3 = st.columns([1.5, 2, 1.5])
         with c1:
             city = st.selectbox("📍 Miasto docelowe (Targi):", cities)
         with c2:
             carrier = st.selectbox("🚛 Przewoźnik i Pojazd:", carriers)
         with c3:
-            overlay_days = st.number_input("⏳ Dni postoju (Overlay):", min_value=1, max_value=60, value=7, step=1)
+            # Intuicyjny wybór zakresu dat zamiast wpisywania liczby dni z palca
+            default_start = datetime.today().date()
+            default_end = default_start + timedelta(days=7)
+            dates = st.date_input("📅 Czas postoju (Od - Do):", value=(default_start, default_end))
+            
+    # Obliczanie dni postoju (overlay) na podstawie wybranego zakresu w kalendarzu
+    if isinstance(dates, tuple) and len(dates) == 2:
+        start_date, end_date = dates
+        overlay_days = max(0, (end_date - start_date).days)
+    else:
+        overlay_days = 0
 
     v_rates = rates[carrier]
     v_type = v_rates['vClass']
@@ -126,6 +137,8 @@ def render(sh=None):
             </div>
         ''', unsafe_allow_html=True)
 
+        daty_info = f"(Od {start_date.strftime('%d.%m')} do {end_date.strftime('%d.%m')})" if overlay_days > 0 else ""
+
         with st.expander("🔍 Zobacz szczegółowy składnik kosztów (Automagazyn)"):
             st.markdown(f'''
             <ul style="color: #E2DCD3; font-size: 13px;">
@@ -133,7 +146,7 @@ def render(sh=None):
                 <li><b>Kurs 1 (Targi) - Powrót (Imp):</b> € {i:,.2f}</li>
                 <li><b>Dniówki kierowcy (1 pełne kółko):</b> € {d:,.2f}</li>
                 <li><b>Opłaty dodatkowe (1 pełne kółko):</b> € {extra:,.2f} <span style="color:#A39B8F;">{extra_msg}</span></li>
-                <li><b>Przestój podwykonawcy/floty ({overlay_days} dni):</b> € {(v_rates['postoj'] * overlay_days):,.2f} <span style="color:#A39B8F;">(Stawka z cennika: €{v_rates['postoj']}/dzień)</span></li>
+                <li><b>Przestój podwykonawcy/floty ({overlay_days} dni) {daty_info}:</b> € {(v_rates['postoj'] * overlay_days):,.2f} <span style="color:#A39B8F;">(Stawka z cennika: €{v_rates['postoj']}/dzień)</span></li>
                 <li><b>Koszty parkingowe pod halą ({overlay_days} dni):</b> € {(30 * overlay_days):,.2f} <span style="color:#A39B8F;">(Zryczałtowane: €30/dzień)</span></li>
                 <li style="border-top: 1px solid rgba(197, 168, 128, 0.2); margin-top: 5px; padding-top: 5px; font-weight: 800; color: #10B981;">Suma całkowita: € {cost_automagazyn:,.2f}</li>
             </ul>
@@ -154,7 +167,10 @@ def render(sh=None):
     fig.add_trace(go.Scatter(x=x_days, y=y_zwiezienie, mode='lines', name='Koszt: Zwiezienie', line=dict(color='#3B82F6', width=3)))
     fig.add_trace(go.Scatter(x=x_days, y=y_automagazyn, mode='lines', name='Koszt: Automagazyn', line=dict(color='#10B981', width=3)))
     
-    fig.add_vline(x=overlay_days, line_width=2, line_dash="dash", line_color="#BA4949", annotation_text="TWÓJ EVENT", annotation_position="top right", annotation_font_color="#E2DCD3")
+    # Unikamy rysowania pionowej kreski w błędnym miejscu gdy overlay_days == 0
+    if overlay_days > 0:
+        fig.add_vline(x=overlay_days, line_width=2, line_dash="dash", line_color="#BA4949", annotation_text="TWÓJ EVENT", annotation_position="top right", annotation_font_color="#E2DCD3")
+        
     fig.add_vline(x=break_even_days, line_width=1, line_dash="dot", line_color="#C5A880", annotation_text="BREAK-EVEN", annotation_position="bottom right", annotation_font_color="#C5A880")
 
     fig.update_layout(
