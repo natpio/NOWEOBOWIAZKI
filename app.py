@@ -207,7 +207,7 @@ def main():
     b64_yes = get_base64_image("yestech.jpg")
     b64_baz = get_base64_image("bazy danych.jpg")
     b64_fin = get_base64_image("finanse.jpg")
-    b64_rap = get_base64_image("finanse.jpg") # Klonowanie grafiki dla Raportowni
+    b64_rap = get_base64_image("raportownia.png") # Wpięta poprawna grafika!
     
     # Ładowanie przycisków akcji
     b64_btn_refresh = get_base64_image("image_983cc3.png")
