@@ -143,14 +143,11 @@ def fetch_data(sheet_name):
             return pd.DataFrame()
             
         except Exception as e:
-            # Jeśli to błąd 503 lub 429 i mamy jeszcze próby w zapasie - czekamy i ponawiamy
             if ("503" in str(e) or "429" in str(e) or "Quota" in str(e)) and attempt < max_retries - 1:
-                time.sleep(1.5 ** attempt)  # Czeka 1s, potem 1.5s, potem 2.25s...
+                time.sleep(1.5 ** attempt) 
                 continue
                 
-            # Jeśli wyczerpano próby, wyślij błąd
             st.error(f"Błąd pobierania arkusza {sheet_name}: {e}")
-            # Czyścimy cache tej funkcji, aby Streamlit nie zapamiętał pustego wyniku na minutę!
             fetch_data.clear()
             return pd.DataFrame()
 
@@ -196,7 +193,9 @@ def update_single_row_safe(sheet_name, gs_row_index, row_series):
         except TypeError:
             ws.update(zakres, [row_list])
             
-        st.cache_data.clear()
+        # Zmiana z st.cache_data.clear()
+        load_data.clear()
+        fetch_data.clear()
         return True
     except Exception as e:
         st.error(f"Krytyczny błąd zapisu: {e}")
@@ -215,7 +214,6 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data_list]
         
-        # Ominięcie append_row - twardy zapis do kolumny A
         col_a_values = ws_arch.col_values(1)
         next_row = len(col_a_values) + 1
         ostatnia_kolumna = get_col_letter(len(safe_list))
@@ -229,7 +227,9 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         ws_source = sh.worksheet(source_sheet)
         ws_source.delete_rows(row_index)
         
-        st.cache_data.clear()
+        # Zmiana z st.cache_data.clear()
+        load_data.clear()
+        fetch_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd fizycznej archiwizacji: {e}")
@@ -244,7 +244,10 @@ def save_data(worksheet, edited_df):
         worksheet.clear()
         df_str = df_to_save.astype(str).replace('nan', '')
         worksheet.update(values=[df_str.columns.values.tolist()] + df_str.values.tolist(), range_name='A1')
-    st.cache_data.clear()
+    
+    # Zmiana z st.cache_data.clear()
+    load_data.clear()
+    fetch_data.clear()
     st.toast("Zmiany zapisane pomyślnie!", icon="✅")
 
 def append_data(sheet_name, row_data):
@@ -253,10 +256,8 @@ def append_data(sheet_name, row_data):
         ws = sh.worksheet(sheet_name)
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
         
-        # --- PANCERNE ROZWIĄZANIE ---
-        # Zamiast ws.append_row() zmuszamy API do zapisu równo od kolumny A
         col_a_values = ws.col_values(1)
-        next_row = len(col_a_values) + 1 # Pierwszy całkowicie pusty wiersz patrząc na Kolumnę A
+        next_row = len(col_a_values) + 1 
         
         ostatnia_kolumna = get_col_letter(len(safe_list))
         zakres = f"A{next_row}:{ostatnia_kolumna}{next_row}"
@@ -266,7 +267,9 @@ def append_data(sheet_name, row_data):
         except TypeError:
             ws.update(zakres, [safe_list])
             
-        st.cache_data.clear()
+        # Zmiana z st.cache_data.clear()
+        load_data.clear()
+        fetch_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd zapisu w {sheet_name}: {e}")
@@ -286,7 +289,9 @@ def update_row(sheet_name, row_index, row_data):
         except TypeError:
             ws.update(zakres, [safe_list])
             
-        st.cache_data.clear()
+        # Zmiana z st.cache_data.clear()
+        load_data.clear()
+        fetch_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd aktualizacji wiersza {row_index} w {sheet_name}: {e}")
@@ -297,7 +302,10 @@ def delete_row(sheet_name, row_index):
     try:
         ws = sh.worksheet(sheet_name)
         ws.delete_rows(row_index)
-        st.cache_data.clear()
+        
+        # Zmiana z st.cache_data.clear()
+        load_data.clear()
+        fetch_data.clear()
         return True
     except Exception as e:
         st.error(f"Błąd usuwania wiersza {row_index} w {sheet_name}: {e}")
