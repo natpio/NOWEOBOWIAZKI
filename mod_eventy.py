@@ -61,9 +61,8 @@ def is_past_end_date(row, dzisiaj_date):
     return False
 
 # ==============================================================================
-# WYZOLOWANY FRAGMENT DETALI ZLECENIA
+# DETALE ZLECENIA (Usunięto @st.fragment by odblokować nawigację do Generatora PRO)
 # ==============================================================================
-@st.fragment
 def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == wybrany_id].iloc[0]
     is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
@@ -131,7 +130,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
                             }
                             st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"] = generate_cmr_excel(dane_cmr_powrot)
                             st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"] = nowy_nr_powrotny
-                            st.rerun()
+                            # POPRAWKA: Usunięto st.rerun() by przyspieszyć wygenerowanie guzika "Download" w tym samym cyklu!
                             
                     if f"powrot_bytes_{dane_eventu['ID_Zlecenia']}" in st.session_state:
                         nr_gen = st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"]
@@ -143,6 +142,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
             if st.button("📄 Przekaż do Generatora Zleceń PRO", type="primary", use_container_width=True, key=f"bridge_pro_{dane_eventu['ID_Zlecenia']}"):
                 st.session_state['import_z_eventu'] = dane_eventu.to_dict()
                 st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO"
+                # Dzięki usunięciu @st.fragment to przeładowanie skutecznie zmieni menu bazowe
                 st.rerun()
 
     with c_dup:
@@ -396,9 +396,8 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
 
 
 # ==============================================================================
-# WYZOLOWANY FRAGMENT TWORZENIA ZLECENIA
+# FORMULARZ TWORZENIA ZLECENIA (Usunięto @st.fragment)
 # ==============================================================================
-@st.fragment
 def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik, opcje_lokalizacji):
     import_data = st.session_state.get('import_z_eventu', None)
     
@@ -548,9 +547,8 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
                 st.rerun()
 
 # ==============================================================================
-# WYZOLOWANY FRAGMENT Z WYSZUKIWARKĄ I LISTĄ EVENTÓW
+# WYSZUKIWARKA I LISTA EVENTÓW (Usunięto @st.fragment)
 # ==============================================================================
-@st.fragment
 def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisiaj_date, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
     if "wybrany_event_id" not in st.session_state: st.session_state["wybrany_event_id"] = None
     if "filtr_eventow" not in st.session_state: st.session_state["filtr_eventow"] = "Wszystkie"
@@ -725,7 +723,6 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
         if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
             render_event_details(st.session_state["wybrany_event_id"], df_widok, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh)
 
-
 # ==============================================================================
 # GŁÓWNA FUNKCJA RENDER
 # ==============================================================================
@@ -833,7 +830,7 @@ def render(sh):
                             st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
                             st.cache_data.clear(); st.rerun()
 
-        # Wywołanie wyizolowanego formularza nowego zlecenia
+        # Wywołanie bez-fragmentowego formularza nowego zlecenia
         render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik, opcje_lokalizacji)
 
     with tab_archiwum:
