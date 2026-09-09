@@ -35,8 +35,9 @@ def invalidate_sheet(sheet_name):
 # ==========================================
 # SZYBKIE POBIERANIE DANYCH
 # ==========================================
-@st.cache_data(ttl=14400, show_spinner=False) # Dane pamiętane aż do 4 godzin
-def _load_data_cached(sheet_name, _sync_token):
+# UWAGA: Usunięto podkreślnik w 'sync_token', aby Streamlit poprawnie resetował cache!
+@st.cache_data(ttl=14400, show_spinner=False) 
+def _load_data_cached(sheet_name, sync_token):
     sh = init_connection()
     max_retries = 3
     
@@ -142,8 +143,9 @@ def load_data(sh, sheet_name):
     token = get_sync_token(sheet_name)
     return _load_data_cached(sheet_name, token)
 
+# UWAGA: Usunięto podkreślnik w 'sync_token'
 @st.cache_data(ttl=14400, show_spinner=False)
-def _fetch_data_cached(sheet_name, _sync_token):
+def _fetch_data_cached(sheet_name, sync_token):
     sh = init_connection()
     max_retries = 3
     
