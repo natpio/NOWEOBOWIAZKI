@@ -61,7 +61,7 @@ def is_past_end_date(row, dzisiaj_date):
     return False
 
 # ==============================================================================
-# DETALE ZLECENIA (Usunięto @st.fragment by odblokować nawigację do Generatora PRO)
+# DETALE ZLECENIA 
 # ==============================================================================
 def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
     dane_eventu = df_widok[df_widok["ID_Zlecenia"] == wybrany_id].iloc[0]
@@ -130,7 +130,6 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
                             }
                             st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"] = generate_cmr_excel(dane_cmr_powrot)
                             st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"] = nowy_nr_powrotny
-                            # POPRAWKA: Usunięto st.rerun() by przyspieszyć wygenerowanie guzika "Download" w tym samym cyklu!
                             
                     if f"powrot_bytes_{dane_eventu['ID_Zlecenia']}" in st.session_state:
                         nr_gen = st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"]
@@ -142,7 +141,6 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
             if st.button("📄 Przekaż do Generatora Zleceń PRO", type="primary", use_container_width=True, key=f"bridge_pro_{dane_eventu['ID_Zlecenia']}"):
                 st.session_state['import_z_eventu'] = dane_eventu.to_dict()
                 st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO"
-                # Dzięki usunięciu @st.fragment to przeładowanie skutecznie zmieni menu bazowe
                 st.rerun()
 
     with c_dup:
@@ -394,9 +392,8 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
             st.success(f"Zlecenie zamknięte i przeniesione do fizycznego archiwum Cold Storage!"); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
-
 # ==============================================================================
-# FORMULARZ TWORZENIA ZLECENIA (Usunięto @st.fragment)
+# FORMULARZ TWORZENIA ZLECENIA 
 # ==============================================================================
 def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik, opcje_lokalizacji):
     import_data = st.session_state.get('import_z_eventu', None)
@@ -547,7 +544,7 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
                 st.rerun()
 
 # ==============================================================================
-# WYSZUKIWARKA I LISTA EVENTÓW (Usunięto @st.fragment)
+# WYSZUKIWARKA I LISTA EVENTÓW 
 # ==============================================================================
 def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisiaj_date, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
     if "wybrany_event_id" not in st.session_state: st.session_state["wybrany_event_id"] = None
@@ -626,9 +623,9 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
             df_zam = df_widok[mask_zamkniete]
             df_reszta = df_widok[~mask_zamkniete]
         
-        df_plan = df_reszta[df_reszta['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja", na=False)]
-        df_zal = df_reszta[df_reszta['Faza_Procesu'].str.lower().str.contains("załadunek", na=False)]
-        df_tra = df_reszta[~df_reszta['Faza_Procesu'].str.lower().str.contains("planowanie|inicjacja|załadunek", na=False)]
+        df_plan = df_reszta[df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("planowanie|inicjacja", na=False)]
+        df_zal = df_reszta[df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("załadunek", na=False)]
+        df_tra = df_reszta[~df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("planowanie|inicjacja|załadunek", na=False)]
 
         def render_list(df_subset, tab_container):
             with tab_container:
@@ -637,7 +634,7 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                 else:
                     for index, row in enumerate(df_subset.to_dict('records')):
                         faza = str(row.get('Faza_Procesu', '')).lower()
-                        is_sqm_row = row.get('Typ_Transportu', '') == "Własny SQM"
+                        is_sqm_row = str(row.get('Typ_Transportu', '')) == "Własny SQM"
                         braki_tagi_html = ""
                         
                         if check_wymaga_cmr(row): braki_tagi_html += "<span class='tag-zen-red'>🚨 WYSTAW CMR</span>"
@@ -665,10 +662,10 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                         else:
                             typ_etykieta = '<div style="display: inline-block; padding: 4px 10px; background: rgba(4, 120, 87, 0.1); border: 1px solid #047857; color: #047857 !important; border-radius: 4px; font-size: 11px; font-weight: 800; margin-top: 8px; letter-spacing: 0.5px;">➡️ TYLKO DOSTAWA (BEZ POWROTU)</div>'
 
-                        if "zamknięte" in faza: badge_class, faza_wyswietlana = "cr-badge zamkniete", row.get('Faza_Procesu', '-').upper()
+                        if "zamknięte" in faza: badge_class, faza_wyswietlana = "cr-badge zamkniete", str(row.get('Faza_Procesu', '-')).upper()
                         elif is_past_end_date(row, dzisiaj_date): badge_class, faza_wyswietlana = "cr-badge zamkniete", "ZAMKNIĘTE (AUTO)"
                         else:
-                            faza_wyswietlana = row.get('Faza_Procesu', '-').upper()
+                            faza_wyswietlana = str(row.get('Faza_Procesu', '-')).upper()
                             badge_class = "cr-badge"
                             if "inicjacja" in faza: badge_class += " inicjacja"
                             elif "planowanie" in faza: badge_class += " planowanie"
@@ -682,7 +679,7 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                         else:
                             display_name = raw_name
 
-                        c_karta, c_btn = st.columns([8, 2], vertical_alignment="center")
+                        c_karta, c_btn = st.columns([8, 2])
                         with c_karta:
                             html_karta = f"""
                             <div class="custom-row" style="margin-bottom: 5px; padding: 15px 20px; flex-direction: column;">
@@ -709,15 +706,16 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                             st.markdown(html_karta.replace('\n', ''), unsafe_allow_html=True)
                             
                         with c_btn:
+                            st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True) 
                             is_primary = st.session_state.get("wybrany_event_id") == row.get('ID_Zlecenia')
                             if st.button("🔍 Szczegóły", key=f"det_{index}_{row.get('ID_Zlecenia', '')}", type="primary" if is_primary else "secondary", use_container_width=True):
                                 st.session_state["wybrany_event_id"] = row.get('ID_Zlecenia')
                                 st.rerun()
 
-            render_list(df_plan, t_plan)
-            render_list(df_zal, t_zal)
-            render_list(df_tra, t_tra)
-            render_list(df_zam, t_zam)
+        render_list(df_plan, t_plan)
+        render_list(df_zal, t_zal)
+        render_list(df_tra, t_tra)
+        render_list(df_zam, t_zam)
 
     with col_detale:
         if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
@@ -830,7 +828,6 @@ def render(sh):
                             st.success(f"✅ Dodano pomyślnie: {nowa_nazwa_lista}")
                             st.cache_data.clear(); st.rerun()
 
-        # Wywołanie bez-fragmentowego formularza nowego zlecenia
         render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik, opcje_lokalizacji)
 
     with tab_archiwum:
