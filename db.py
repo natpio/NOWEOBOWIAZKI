@@ -35,7 +35,6 @@ def invalidate_sheet(sheet_name):
 # ==========================================
 # SZYBKIE POBIERANIE DANYCH
 # ==========================================
-# UWAGA: Usunięto podkreślnik w 'sync_token', aby Streamlit poprawnie resetował cache!
 @st.cache_data(ttl=14400, show_spinner=False) 
 def _load_data_cached(sheet_name, sync_token):
     sh = init_connection()
@@ -71,20 +70,36 @@ def _load_data_cached(sheet_name, sync_token):
 
             # Inicjalizacja domyślnych kolumn dla konkretnych arkuszy
             if sheet_name == "DB_Eventy":
-                wymagane = ["CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch",
-                            "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR"]
-                for kol in wymagane:
-                    if kol not in df.columns: df[kol] = ""
-                    
-                domyslne_kolumny = {
+                # 1. Definiujemy sztywną, wymaganą strukturę
+                wymagane_kolumny = [
+                    "Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik", 
+                    "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn", 
+                    "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Miejsce_Przeznaczenia", "Waga", 
+                    "Nr_Rejestracyjny", "Kierowca", "Nr_CMR", "CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", 
+                    "PP_Otrzymane", "Zakonczone_Arch"
+                ]
+                
+                # 2. Uzupełniamy ewentualne braki
+                for kol in wymagane_kolumny:
+                    if kol not in df.columns: 
+                        df[kol] = ""
+                        
+                # 3. Aplikujemy wartości domyślne tam, gdzie puste
+                domyslne_wartosci = {
                     "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
                     "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
                     "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
                     "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
                     "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
                 }
-                for kol, val in domyslne_kolumny.items():
-                    if kol not in df.columns: df[kol] = val
+                for kol, val in domyslne_wartosci.items():
+                    df[kol] = df[kol].apply(lambda x: val if pd.isna(x) or str(x).strip() == "" else x)
+
+                # 4. KLUCZOWE: Odcięcie śmieci (Brak_Nazwy) i wymuszenie idealnej kolejności!
+                kolumny_do_zostawienia = wymagane_kolumny.copy()
+                if 'sheet_row' in df.columns:
+                    kolumny_do_zostawienia.append('sheet_row')
+                df = df[kolumny_do_zostawienia]
 
             elif sheet_name == "DB_Subrenty":
                 domyslne_subrenty = {
@@ -143,7 +158,6 @@ def load_data(sh, sheet_name):
     token = get_sync_token(sheet_name)
     return _load_data_cached(sheet_name, token)
 
-# UWAGA: Usunięto podkreślnik w 'sync_token'
 @st.cache_data(ttl=14400, show_spinner=False)
 def _fetch_data_cached(sheet_name, sync_token):
     sh = init_connection()
