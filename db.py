@@ -68,82 +68,49 @@ def _load_data_cached(sheet_name, sync_token):
             else:
                 df['sheet_row'] = []
 
-            # Inicjalizacja domyślnych kolumn dla konkretnych arkuszy
+            # --- NOWY, BEZPIECZNY SYSTEM DOPASOWYWANIA KOLUMN ---
+            wymagane_kolejnosc = []
+            domyslne_wartosci = {}
+            
             if sheet_name == "DB_Eventy":
-                # 1. Definiujemy sztywną, wymaganą strukturę
-                wymagane_kolumny = [
-                    "Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik", 
-                    "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn", 
-                    "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Miejsce_Przeznaczenia", "Waga", 
-                    "Nr_Rejestracyjny", "Kierowca", "Nr_CMR", "CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", 
-                    "PP_Otrzymane", "Zakonczone_Arch"
-                ]
+                wymagane_kolejnosc = ["Typ_Transportu", "ID_Zlecenia", "Nazwa_Targow", "Faza_Procesu", "Typ_Pojazdu", "Przewoznik", "Data_Zlecenia_Tr", "Status_Magazyn", "Notatki", "Koszt_Transportu_EUR", "Nr_Zlecenia_Zewn", "Nr_Faktury", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Miejsce_Przeznaczenia", "Waga", "Nr_Rejestracyjny", "Kierowca", "Nr_CMR", "CMR_Gotowe", "CMR_Podpisane_POD", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+                domyslne_wartosci = {"Typ_Transportu": "Zewnętrzny", "Faza_Procesu": "Inicjacja", "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości", "Koszt_Transportu_EUR": 0.0}
+            
+            elif sheet_name == "DB_Subrenty":
+                wymagane_kolejnosc = ["ID_Subrentu", "Rodzaj_Zlecenia", "Dostawca", "Co_Jedzie", "Data_Odbioru", "Deadline_Zwrotu", "Status_Subrentu", "Transport_IN_Kto", "Transport_IN_Dokumenty", "Transport_OUT_Kto", "Transport_OUT_Dokumenty", "Koszt_Calkowity_EUR", "Nr_Zlecenia_Zewn", "Nr_Faktury", "Data_Faktycznego_Zwrotu", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+                domyslne_wartosci = {"Rodzaj_Zlecenia": "Dry Hire", "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()), "Status_Subrentu": "1. Zamówione (Oczekuje na IN)", "Koszt_Calkowity_EUR": 0.0, "Zakonczone_Arch": "NIE"}
                 
-                # 2. Uzupełniamy ewentualne braki
-                for kol in wymagane_kolumny:
-                    if kol not in df.columns: 
+            elif sheet_name == "DB_Yestech":
+                wymagane_kolejnosc = ["ID_Yestech", "Data_Zgloszenia", "Destynacja", "Gabaryt", "Status_Ofertowy", "Wycena_Dla_Basi", "Koszt_Rzeczywisty", "Marza_Info", "Przewoznik", "CMR_Gotowe", "Nr_Zlecenia_Zewn", "Nr_Faktury", "Data_Zlecenia_Tr", "Data_Zakonczenia_Uslugi", "Data_Platnosci", "Faktura_Oplacona", "PP_Otrzymane", "Zakonczone_Arch"]
+                domyslne_wartosci = {"Data_Zgloszenia": str(datetime.date.today()), "Status_Ofertowy": "1. Zapytanie", "Wycena_Dla_Basi": 0.0, "Koszt_Rzeczywisty": 0.0, "Zakonczone_Arch": "NIE"}
+                
+            elif sheet_name == "DB_Sloty":
+                wymagane_kolejnosc = ["ID_Zlecenia", "Typ_Operacji", "Data_Slota", "Godzina_Od", "Godzina_Do", "Brama_Rampa", "Notatki"]
+                domyslne_wartosci = {"Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today())}
+
+            if wymagane_kolejnosc:
+                # 1. Uzupełnienie brakujących kolumn
+                for kol in wymagane_kolejnosc:
+                    if kol not in df.columns:
                         df[kol] = ""
-                        
-                # 3. Aplikujemy wartości domyślne tam, gdzie puste
-                domyslne_wartosci = {
-                    "Typ_Transportu": "Zewnętrzny", "ID_Zlecenia": "", "Nazwa_Targow": "",
-                    "Faza_Procesu": "Inicjacja", "Typ_Pojazdu": "", "Przewoznik": "",
-                    "Data_Zlecenia_Tr": str(datetime.date.today()), "Status_Magazyn": "Brak gotowości",
-                    "Notatki": "", "Koszt_Transportu_EUR": 0.0, "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "",
-                    "Data_Zakonczenia_Uslugi": "", "Data_Platnosci": ""
-                }
+                
+                # 2. Uzupełnienie wartości domyślnych (tylko w pustych komórkach)
                 for kol, val in domyslne_wartosci.items():
                     df[kol] = df[kol].apply(lambda x: val if pd.isna(x) or str(x).strip() == "" else x)
-
-                # 4. KLUCZOWE: Odcięcie śmieci (Brak_Nazwy) i wymuszenie idealnej kolejności!
-                kolumny_do_zostawienia = wymagane_kolumny.copy()
-                if 'sheet_row' in df.columns:
-                    kolumny_do_zostawienia.append('sheet_row')
-                df = df[kolumny_do_zostawienia]
-
-            elif sheet_name == "DB_Subrenty":
-                domyslne_subrenty = {
-                    "ID_Subrentu": "", "Rodzaj_Zlecenia": "Dry Hire", "Dostawca": "", "Co_Jedzie": "",
-                    "Data_Odbioru": str(datetime.date.today()), "Deadline_Zwrotu": str(datetime.date.today()),
-                    "Status_Subrentu": "1. Zamówione (Oczekuje na IN)", "Transport_IN_Kto": "", "Transport_IN_Dokumenty": "",
-                    "Transport_OUT_Kto": "", "Transport_OUT_Dokumenty": "", "Koszt_Calkowity_EUR": 0.0,
-                    "Nr_Zlecenia_Zewn": "", "Nr_Faktury": "", "Data_Faktycznego_Zwrotu": "",
-                    "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "", "Zakonczone_Arch": "NIE"
-                }
-                for kol, val in domyslne_subrenty.items():
-                    if kol not in df.columns: df[kol] = val
-                        
-            elif sheet_name == "DB_Yestech":
-                domyslne_yestech = {
-                    "ID_Yestech": "", "Data_Zgloszenia": str(datetime.date.today()),
-                    "Destynacja": "", "Gabaryt": "", "Status_Ofertowy": "1. Zapytanie",
-                    "Wycena_Dla_Basi": 0.0, "Koszt_Rzeczywisty": 0.0, "Marza_Info": "",
-                    "Przewoznik": "", "CMR_Gotowe": "", "Nr_Zlecenia_Zewn": "",
-                    "Nr_Faktury": "", "Data_Zlecenia_Tr": "", "Data_Zakonczenia_Uslugi": "",
-                    "Data_Platnosci": "", "Faktura_Oplacona": "", "PP_Otrzymane": "",
-                    "Zakonczone_Arch": "NIE"
-                }
-                for kol in domyslne_yestech.keys():
-                    if kol not in df.columns: df[kol] = domyslne_yestech[kol]
                     
-                kolumny_do_zostawienia = list(domyslne_yestech.keys())
-                if 'sheet_row' in df.columns:
-                    kolumny_do_zostawienia.append('sheet_row')
-                df = df[kolumny_do_zostawienia]
-
-            elif sheet_name == "DB_Sloty":
-                domyslne_sloty = {
-                    "ID_Zlecenia": "", "Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today()),
-                    "Godzina_Od": "", "Godzina_Do": "", "Brama_Rampa": "", "Notatki": ""
-                }
-                for kol, val in domyslne_sloty.items():
-                    if kol not in df.columns: df[kol] = val
-                    
-                kolumny_do_zostawienia = list(domyslne_sloty.keys())
-                if 'sheet_row' in df.columns:
-                    kolumny_do_zostawienia.append('sheet_row')
-                df = df[kolumny_do_zostawienia]
+                # 3. Dynamiczne filtrowanie zachowujące oryginalną kolejność arkusza!
+                oryginalne_kolumny = [k for k in df.columns if not str(k).startswith("Brak_Nazwy_") and "duplikat" not in str(k) and k != "sheet_row"]
+                
+                # Upewnijmy się, że wszystkie wymagane są na liście
+                for kol in wymagane_kolejnosc:
+                    if kol not in oryginalne_kolumny:
+                        oryginalne_kolumny.append(kol)
                         
+                if 'sheet_row' in df.columns:
+                    oryginalne_kolumny.append('sheet_row')
+                    
+                df = df[oryginalne_kolumny]
+
             return worksheet, df
 
         except Exception as e:
