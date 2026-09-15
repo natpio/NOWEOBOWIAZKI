@@ -70,7 +70,7 @@ def render(sh):
 
     tab_event, tab_przewoznik, tab_ogolne = st.tabs([
         "🎪 Analiza wybranego Eventu", 
-        "🚚 Zestawienie Przewoźnika (Statusy)", 
+        "🚚 Zestawienie Przewoźników (Audyt)", 
         "📈 Zbiorczy Dashboard"
     ])
 
@@ -118,47 +118,69 @@ def render(sh):
                 st.download_button("📈 Pobierz Excel", data=buf.getvalue(), file_name=f"Raport_{wybrany_event}_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     # =======================================================
-    # ZAKŁADKA 2: ZESTAWIENIE PRZEWOŹNIKA (STATUSY / ETAPY)
+    # ZAKŁADKA 2: ZESTAWIENIE PRZEWOŹNIKA (AUDYT FAKTUR)
     # =======================================================
     with tab_przewoznik:
-        st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Historia i statusy wybranego przewoźnika</h4>", unsafe_allow_html=True)
+        st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Audyt Zleceń i Faktur Przewoźnika</h4>", unsafe_allow_html=True)
         
         lista_przewoznikow = sorted(df_all['Przewoznik'].unique().tolist())
-        wybrany_przewoznik = st.selectbox("Wybierz Przewoźnika:", ["-- Wybierz z listy --"] + lista_przewoznikow, key="sel_przew")
+        wybrani_przewoznicy = st.multiselect("Wybierz jednego lub kilku przewoźników do zestawienia:", lista_przewoznikow, key="sel_przew_multi")
 
-        if wybrany_przewoznik != "-- Wybierz z listy --":
-            df_pr = df_all[df_all['Przewoznik'] == wybrany_przewoznik].copy()
+        if wybrani_przewoznicy:
+            df_pr = df_all[df_all['Przewoznik'].isin(wybrani_przewoznicy)].copy()
+            
+            # Czyszczenie braków w numerach faktur
+            df_pr['Nr_Faktury'] = df_pr.get('Nr_Faktury', '').fillna('-').replace('', '-')
+            df_pr['Faktura_Oplacona'] = df_pr.get('Faktura_Oplacona', 'NIE').fillna('NIE').replace('', 'NIE')
+            df_pr['Data_Platnosci'] = df_pr.get('Data_Platnosci', '').fillna('-').replace('', '-')
             
             aktywne_w_toku = len(df_pr[df_pr['Zakonczone'] != 'TAK'])
-            zamkniete = len(df_pr) - aktywne_w_toku
             koszt_pr = df_pr['Koszt_EUR'].sum()
+            
+            # Podliczanie tylko nieopłaconych faktur
+            dlug_pr = df_pr[df_pr['Faktura_Oplacona'] != 'TAK']['Koszt_EUR'].sum()
+            
+            # Dynamiczny tekst nagłówka
+            nazwy_display = ", ".join(wybrani_przewoznicy) if len(wybrani_przewoznicy) <= 3 else f"{len(wybrani_przewoznicy)} wybranych firm"
 
             st.markdown(f"""
             <div style='background: rgba(197, 168, 128, 0.1); border-left: 4px solid #C5A880; padding: 15px; margin-bottom: 20px; border-radius: 0 4px 4px 0;'>
-                <h3 style='margin:0; color:#E2DCD3;'>Przewoźnik: {wybrany_przewoznik}</h3>
-                <p style='margin:0; color:#A39B8F; font-size: 14px;'>Współpracował przy <strong style='color:#C5A880;'>{len(df_pr)} zleceniach</strong> (w tym <strong style='color:#BA4949;'>{aktywne_w_toku}</strong> aktualnie w toku). Łączny koszt usług: <strong style='color:#C5A880; font-size: 18px;'>{koszt_pr:,.2f} €</strong>.</p>
+                <h3 style='margin:0; color:#E2DCD3;'>Audyt Finansowy: <span style='color:#C5A880; font-size: 20px;'>{nazwy_display}</span></h3>
+                <p style='margin:0; color:#A39B8F; font-size: 14px;'>
+                    Suma wszystkich wygenerowanych kosztów: <strong style='color:#C5A880; font-size: 16px;'>{koszt_pr:,.2f} €</strong>.<br>
+                    Kwota wciąż <b>NIEOPŁACONA</b> w systemie: <strong style='color:#BA4949; font-size: 18px;'>{dlug_pr:,.2f} €</strong>.
+                </p>
             </div>
             """, unsafe_allow_html=True)
 
-            view_pr = df_pr[['ID_Zlecenia', 'Nazwa_Targow', 'Faza_Procesu', 'Zakonczone', 'Koszt_EUR']].copy()
-            view_pr['Zakonczone'] = view_pr['Zakonczone'].apply(lambda x: "ARCHIWUM" if x == "TAK" else "W TOKU")
-            view_pr.columns = ['Numer Zlecenia', 'Event / Trasa', 'Obecny Etap', 'Status Globalny', 'Koszt Netto (€)']
+            # Widok z kolumną Przewoznik do weryfikacji faktur grupowych
+            view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci', 'Zakonczone']].copy()
+            
+            # Formatyzacja kolumn dla czytelności
+            view_pr['Zakonczone'] = view_pr['Zakonczone'].apply(lambda x: "📦 ARCHIWUM" if x == "TAK" else "⏳ W TOKU")
+            view_pr['Faktura_Oplacona'] = view_pr['Faktura_Oplacona'].apply(lambda x: "✅ TAK" if x == "TAK" else "❌ NIE")
+            
+            view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności', 'Status Systemowy']
             
             st.dataframe(
                 view_pr, 
                 use_container_width=True, 
                 hide_index=True, 
-                column_config={"Koszt Netto (€)": st.column_config.NumberColumn(format="%.2f €")}
+                column_config={
+                    "Kwota Netto (€)": st.column_config.NumberColumn(format="%.2f €"),
+                    "Opłacona?": st.column_config.TextColumn(width="small")
+                }
             )
 
-            # Przyciski eksportu
+            file_suffix = "_".join(wybrani_przewoznicy).replace(" ", "")[:30] if len(wybrani_przewoznicy) <= 2 else "Wielu_Przewoznikow"
+
             c_csv2, c_xls2, _ = st.columns([1, 1, 2])
             with c_csv2:
-                st.download_button("📥 Pobierz CSV", data=view_pr.to_csv(index=False).encode('utf-8'), file_name=f"Raport_{wybrany_przewoznik}_{dzisiaj_str}.csv", mime="text/csv", key="csv2", use_container_width=True)
+                st.download_button("📥 Pobierz do CSV (do analizy)", data=view_pr.to_csv(index=False).encode('utf-8'), file_name=f"Audyt_Faktur_{file_suffix}_{dzisiaj_str}.csv", mime="text/csv", key="csv2", use_container_width=True)
             with c_xls2:
                 buf2 = io.BytesIO()
-                with pd.ExcelWriter(buf2, engine='openpyxl') as writer: view_pr.to_excel(writer, index=False, sheet_name='Przewoznik')
-                st.download_button("📈 Pobierz Excel", data=buf2.getvalue(), file_name=f"Raport_{wybrany_przewoznik}_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="xls2", use_container_width=True)
+                with pd.ExcelWriter(buf2, engine='openpyxl') as writer: view_pr.to_excel(writer, index=False, sheet_name='Audyt')
+                st.download_button("📈 Pobierz do Excela", data=buf2.getvalue(), file_name=f"Audyt_Faktur_{file_suffix}_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="xls2", use_container_width=True)
 
     # =======================================================
     # ZAKŁADKA 3: ZBIORCZY DASHBOARD (DLA ZARZĄDU)
