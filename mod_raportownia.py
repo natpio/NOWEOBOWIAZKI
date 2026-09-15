@@ -43,6 +43,9 @@ def render(sh):
         df_ev['Koszt_EUR'] = df_ev.get('Koszt_Transportu_EUR', 0).apply(parse_cost)
         df_ev['Faza_Procesu'] = df_ev.get('Faza_Procesu', 'BRAK STATUSU')
         df_ev['Zakonczone'] = df_ev.get('Zakonczone_Arch', 'NIE')
+        # Ujednolicenie dat
+        df_ev['Data_Zaladunku'] = df_ev.get('Data_Zlecenia_Tr', '').fillna('-').replace('', '-')
+        df_ev['Data_Rozladunku'] = df_ev.get('Data_Zakonczenia_Uslugi', '').fillna('-').replace('', '-')
 
     # --- STANDARYZACJA ZLECEŃ POBOCZNYCH (Dopasowanie kolumn pod Audyt) ---
     if not df_pob.empty:
@@ -57,6 +60,9 @@ def render(sh):
         df_pob['Nr_Faktury'] = df_pob.get('Nr Faktury', '')
         df_pob['Faktura_Oplacona'] = df_pob.get('Faktura', '')
         df_pob['Data_Platnosci'] = df_pob.get('Data Płatności', '')
+        # Ujednolicenie dat
+        df_pob['Data_Zaladunku'] = df_pob.get('Data Załadunku', '').fillna('-').replace('', '-')
+        df_pob['Data_Rozladunku'] = df_pob.get('Data Rozładunku', '').fillna('-').replace('', '-')
 
     # --- POŁĄCZENIE WSZYSTKIEGO W JEDEN MEGA-REJESTR ---
     df_all = pd.concat([df_ev, df_pob], ignore_index=True)
@@ -119,9 +125,9 @@ def render(sh):
             </div>
             """, unsafe_allow_html=True)
 
-            view_ev = df_ev_view[['ID_Zlecenia', 'Przewoznik', 'Typ_Pojazdu', 'Faza_Procesu', 'Koszt_EUR']].copy()
+            view_ev = df_ev_view[['ID_Zlecenia', 'Przewoznik', 'Typ_Pojazdu', 'Data_Zaladunku', 'Data_Rozladunku', 'Faza_Procesu', 'Koszt_EUR']].copy()
             view_ev['Faza_Procesu'] = view_ev['Faza_Procesu'].apply(lambda x: str(x).upper())
-            view_ev.columns = ['Numer Zlecenia', 'Przewoźnik', 'Auto', 'Status Zlecenia', 'Koszt Netto (€)']
+            view_ev.columns = ['Numer Zlecenia', 'Przewoźnik', 'Auto', 'Data Załadunku', 'Data Rozładunku', 'Status Zlecenia', 'Koszt Netto (€)']
             
             st.dataframe(
                 view_ev, 
@@ -169,14 +175,14 @@ def render(sh):
             </div>
             """, unsafe_allow_html=True)
 
-            # Wyciągamy kolumnę Faza_Procesu, aby odzwierciedlić np. Planowanie, Załadunek, Trasa, Zamknięte, Archiwum
-            view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Faza_Procesu', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci']].copy()
+            # Wyciągamy na wierzch nowe kolumny Dat załadunku i rozładunku
+            view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Data_Zaladunku', 'Data_Rozladunku', 'Faza_Procesu', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci']].copy()
             
             # Formatyzacja kolumn dla czytelności
             view_pr['Faza_Procesu'] = view_pr['Faza_Procesu'].apply(lambda x: str(x).upper())
             view_pr['Faktura_Oplacona'] = view_pr['Faktura_Oplacona'].apply(lambda x: "✅ TAK" if str(x).upper() == "TAK" else "❌ NIE")
             
-            view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
+            view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Data Załadunku', 'Data Rozładunku', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
             
             st.dataframe(
                 view_pr, 
