@@ -3,6 +3,7 @@ import pandas as pd
 import db
 import io
 import datetime
+import re
 
 def parse_cost(val):
     """Bezpieczne parsowanie kosztów EUR (nawet z wpisami 'N/A' lub ze spacjami)"""
@@ -24,7 +25,7 @@ def render(sh):
 
     st.markdown("<p style='color: #8C8477; font-size: 13px; margin-bottom: 25px;'>Zintegrowane centrum analityczne. Filtruj zlecenia według Eventów lub Przewoźników, aby na bieżąco kontrolować koszty i statusy.</p>", unsafe_allow_html=True)
 
-    with st.spinner("Agregacja wszystkich zleceń (Aktywne + Cold Storage)..."):
+    with st.spinner("Agregacja wszystkich zleceń (Aktywne + Cold Storage + Daty Wystawienia)..."):
         # 1. POBRANIE EVENTÓW
         df_ev_akt = db.fetch_data("DB_Eventy")
         df_ev_arch = db.fetch_data("DB_Eventy ARCHIWUM")
@@ -35,6 +36,30 @@ def render(sh):
         df_pob_arch = db.fetch_data("Zlecenia Poboczne ARCHIWUM")
         df_pob = pd.concat([df_pob_akt, df_pob_arch], ignore_index=True)
 
+        # 3. POBRANIE BAZY ZLECEŃ PRO (Dla dat wygenerowania zlecenia)
+        df_zlec = db.fetch_data("Zlecenia")
+
+    # --- MAPOWANIE DAT WYSTAWIENIA ZLECENIA ---
+    dict_wystawienia = {}
+    if not df_zlec.empty and 'Numer zlecenia' in df_zlec.columns and 'Data/Czas Operacji' in df_zlec.columns:
+        for _, row in df_zlec.iterrows():
+            nr = str(row.get('Numer zlecenia', '')).strip()
+            data_wyst = str(row.get('Data/Czas Operacji', '')).split(" ")[0]
+            if nr and data_wyst and data_wyst not in ["nan", "None"]:
+                dict_wystawienia[nr] = data_wyst
+
+    def extract_creation_date(nr):
+        nr = str(nr).strip()
+        # Najpierw szukamy w bazie Zleceń PRO
+        if nr in dict_wystawienia:
+            return dict_wystawienia[nr]
+        # Awaryjnie - dekodujemy datę wprost z numeru ID (np. EVT-26/0915/PD01 -> 2026-09-15)
+        match = re.search(r'(?:EVT|ZLP|CRG)-(\d{2})/(\d{2})(\d{2})', nr)
+        if match:
+            yy, mm, dd = match.groups()
+            return f"20{yy}-{mm}-{dd}"
+        return "-"
+
     # --- STANDARYZACJA EVENTÓW ---
     if not df_ev.empty:
         df_ev['Base_Event'] = df_ev.get('Nazwa_Targow', '').apply(lambda x: str(x).split(" | ")[0].strip() if " | " in str(x) else str(x).strip())
@@ -43,9 +68,7 @@ def render(sh):
         df_ev['Koszt_EUR'] = df_ev.get('Koszt_Transportu_EUR', 0).apply(parse_cost)
         df_ev['Faza_Procesu'] = df_ev.get('Faza_Procesu', 'BRAK STATUSU')
         df_ev['Zakonczone'] = df_ev.get('Zakonczone_Arch', 'NIE')
-        # Ujednolicenie dat
         df_ev['Data_Zaladunku'] = df_ev.get('Data_Zlecenia_Tr', '').fillna('-').replace('', '-')
-        df_ev['Data_Rozladunku'] = df_ev.get('Data_Zakonczenia_Uslugi', '').fillna('-').replace('', '-')
 
     # --- STANDARYZACJA ZLECEŃ POBOCZNYCH (Dopasowanie kolumn pod Audyt) ---
     if not df_pob.empty:
@@ -60,9 +83,7 @@ def render(sh):
         df_pob['Nr_Faktury'] = df_pob.get('Nr Faktury', '')
         df_pob['Faktura_Oplacona'] = df_pob.get('Faktura', '')
         df_pob['Data_Platnosci'] = df_pob.get('Data Płatności', '')
-        # Ujednolicenie dat
         df_pob['Data_Zaladunku'] = df_pob.get('Data Załadunku', '').fillna('-').replace('', '-')
-        df_pob['Data_Rozladunku'] = df_pob.get('Data Rozładunku', '').fillna('-').replace('', '-')
 
     # --- POŁĄCZENIE WSZYSTKIEGO W JEDEN MEGA-REJESTR ---
     df_all = pd.concat([df_ev, df_pob], ignore_index=True)
@@ -70,6 +91,9 @@ def render(sh):
     if df_all.empty:
         st.info("Brak jakichkolwiek zleceń w systemie (aktywnych i archiwalnych).")
         return
+
+    # PRZYPISANIE DATY WYSTAWIENIA ZLECENIA DO KAŻDEGO REKORDU
+    df_all['Data_Wystawienia'] = df_all['ID_Zlecenia'].apply(extract_creation_date)
 
     # --- KPI NA GÓRZE ---
     total_aut = len(df_all)
@@ -111,23 +135,26 @@ def render(sh):
         st.markdown("<h4 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Wybierz event, aby sprawdzić kto i za ile na niego pojechał</h4>", unsafe_allow_html=True)
         
         lista_eventow = sorted(df_all['Base_Event'].unique().tolist())
-        wybrany_event = st.selectbox("Wybierz event:", ["-- Wybierz z listy --"] + lista_eventow, key="sel_ev")
+        wybrani_eventy = st.multiselect("Wybierz jeden lub kilka eventów do zestawienia:", lista_eventow, key="sel_ev_multi")
 
-        if wybrany_event != "-- Wybierz z listy --":
-            df_ev_view = df_all[df_all['Base_Event'] == wybrany_event].copy()
+        if wybrani_eventy:
+            df_ev_view = df_all[df_all['Base_Event'].isin(wybrani_eventy)].copy()
             koszt_ev = df_ev_view['Koszt_EUR'].sum()
             aut_ev = len(df_ev_view)
 
+            nazwy_ev_display = ", ".join(wybrani_eventy) if len(wybrani_eventy) <= 3 else f"{len(wybrani_eventy)} wybranych eventów"
+
             st.markdown(f"""
             <div style='background: rgba(186, 73, 73, 0.1); border-left: 4px solid #BA4949; padding: 15px; margin-bottom: 20px; border-radius: 0 4px 4px 0;'>
-                <h3 style='margin:0; color:#E2DCD3;'>Podsumowanie: {wybrany_event}</h3>
-                <p style='margin:0; color:#A39B8F; font-size: 14px;'>Na ten event wysłano łącznie <strong style='color:#C5A880; font-size: 18px;'>{aut_ev} aut</strong>. Suma kosztów to <strong style='color:#BA4949; font-size: 18px;'>{koszt_ev:,.2f} €</strong>.</p>
+                <h3 style='margin:0; color:#E2DCD3;'>Podsumowanie: <span style='color:#BA4949; font-size: 20px;'>{nazwy_ev_display}</span></h3>
+                <p style='margin:0; color:#A39B8F; font-size: 14px;'>Na wybrane eventy wysłano łącznie <strong style='color:#C5A880; font-size: 18px;'>{aut_ev} aut/zleceń</strong>. Suma kosztów to <strong style='color:#BA4949; font-size: 18px;'>{koszt_ev:,.2f} €</strong>.</p>
             </div>
             """, unsafe_allow_html=True)
 
-            view_ev = df_ev_view[['ID_Zlecenia', 'Przewoznik', 'Typ_Pojazdu', 'Data_Zaladunku', 'Data_Rozladunku', 'Faza_Procesu', 'Koszt_EUR']].copy()
+            # Odświeżone kolumny - dodajemy Base_Event aby się nie pogubić przy wielu eventach
+            view_ev = df_ev_view[['ID_Zlecenia', 'Base_Event', 'Przewoznik', 'Typ_Pojazdu', 'Data_Wystawienia', 'Data_Zaladunku', 'Faza_Procesu', 'Koszt_EUR']].copy()
             view_ev['Faza_Procesu'] = view_ev['Faza_Procesu'].apply(lambda x: str(x).upper())
-            view_ev.columns = ['Numer Zlecenia', 'Przewoźnik', 'Auto', 'Data Załadunku', 'Data Rozładunku', 'Status Zlecenia', 'Koszt Netto (€)']
+            view_ev.columns = ['Numer Zlecenia', 'Event / Trasa', 'Przewoźnik', 'Auto', 'Data Zlecenia', 'Data Załadunku', 'Status Zlecenia', 'Koszt Netto (€)']
             
             st.dataframe(
                 view_ev, 
@@ -136,13 +163,15 @@ def render(sh):
                 column_config={"Koszt Netto (€)": st.column_config.NumberColumn(format="%.2f €")}
             )
 
+            file_suffix_ev = "_".join(wybrani_eventy).replace(" ", "")[:30] if len(wybrani_eventy) <= 2 else "Wiele_Eventow"
+
             c_csv, c_xls, _ = st.columns([1, 1, 2])
             with c_csv:
-                st.download_button("📥 Pobierz CSV", data=view_ev.to_csv(index=False).encode('utf-8'), file_name=f"Raport_{wybrany_event}_{dzisiaj_str}.csv", mime="text/csv", use_container_width=True)
+                st.download_button("📥 Pobierz CSV", data=view_ev.to_csv(index=False).encode('utf-8'), file_name=f"Raport_{file_suffix_ev}_{dzisiaj_str}.csv", mime="text/csv", use_container_width=True)
             with c_xls:
                 buf = io.BytesIO()
                 with pd.ExcelWriter(buf, engine='openpyxl') as writer: view_ev.to_excel(writer, index=False, sheet_name='Event')
-                st.download_button("📈 Pobierz Excel", data=buf.getvalue(), file_name=f"Raport_{wybrany_event}_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                st.download_button("📈 Pobierz Excel", data=buf.getvalue(), file_name=f"Raport_{file_suffix_ev}_{dzisiaj_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
     # =======================================================
     # ZAKŁADKA 2: ZESTAWIENIE PRZEWOŹNIKA (AUDYT FAKTUR I STATUSÓW)
@@ -175,14 +204,12 @@ def render(sh):
             </div>
             """, unsafe_allow_html=True)
 
-            # Wyciągamy na wierzch nowe kolumny Dat załadunku i rozładunku
-            view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Data_Zaladunku', 'Data_Rozladunku', 'Faza_Procesu', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci']].copy()
+            view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Data_Wystawienia', 'Data_Zaladunku', 'Faza_Procesu', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci']].copy()
             
-            # Formatyzacja kolumn dla czytelności
             view_pr['Faza_Procesu'] = view_pr['Faza_Procesu'].apply(lambda x: str(x).upper())
             view_pr['Faktura_Oplacona'] = view_pr['Faktura_Oplacona'].apply(lambda x: "✅ TAK" if str(x).upper() == "TAK" else "❌ NIE")
             
-            view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Data Załadunku', 'Data Rozładunku', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
+            view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Data Zlecenia', 'Data Załadunku (Wyjazd)', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
             
             st.dataframe(
                 view_pr, 
