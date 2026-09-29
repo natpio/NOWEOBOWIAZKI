@@ -8,7 +8,7 @@ st.set_page_config(page_title="Migracja SQM HUB", layout="centered")
 st.title("Migracja SQM HUB do Supabase 🚀")
 
 # Gotowy link do nowej bazy
-DB_URL = "postgresql://postgres.twmuwhgjtxmwvaihmgnr:7dJfrLGb3Wuilvyl@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+DB_URL = "postgresql+psycopg2://postgres:7dJfrLGb3Wuilvyl@db.twmuwhgjtxmwvaihmgnr.supabase.co:5432/postgres"
 
 if st.button("Rozpocznij przenoszenie danych do SQL", type="primary", use_container_width=True):
     engine = create_engine(DB_URL)
