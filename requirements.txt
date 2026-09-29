@@ -9,3 +9,5 @@ oauth2client
 fpdf
 openpyxl
 streamlit-calendar
+SQLAlchemy
+psycopg2-binary
