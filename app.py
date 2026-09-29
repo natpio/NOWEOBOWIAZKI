@@ -7,9 +7,9 @@ from sqlalchemy import create_engine
 st.set_page_config(page_title="Migracja SQM HUB", layout="centered")
 st.title("Migracja SQM HUB do Supabase 🚀")
 
-DB_URL = "postgresql+psycopg2://postgres.twmuwhgjtxmwvaihmgnr:7dJfrLGb3Wuilvyl@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
-
 if st.button("Rozpocznij przenoszenie danych do SQL", type="primary", use_container_width=True):
+    # Pobieranie linku na żywo z ustawień w chmurze
+    DB_URL = st.secrets["connections"]["supabase"]["url"]
     engine = create_engine(DB_URL)
     
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
