@@ -344,7 +344,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
         
     with det_fin:
         with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
-            st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
+            st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
             if is_sqm:
                 u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
                 st.info("🚚 Pojazd własnej floty SQM. Pola finansowe są automatycznie ustawione na N/A.")
@@ -499,7 +499,7 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
 
         if st.form_submit_button("🚀 Zainicjuj Zlecenie Systemowe"):
             if baza_targow == "-- Wybierz lub dodaj w słowniku --" or not przewoznik:
-                st.error("❌ Uzupełnij główny event oraz przewoźnika!")
+                st.error("❌ Uzupełnij głównevent oraz przewoźnika!")
             else:
                 nr_zewn_final = id_zlecenia_custom if typ_transportu == "Zewnętrzny" else "FLOTA WŁASNA"
                 final_roz_2 = "" if usun_roz_2_nowe else (str(data_rozladunku_2) if data_rozladunku_2 else "")
@@ -627,7 +627,7 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
         df_zal = df_reszta[df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("załadunek", na=False)]
         df_tra = df_reszta[~df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("planowanie|inicjacja|załadunek", na=False)]
 
-        def render_list(df_subset, tab_container):
+        def render_list(df_subset, tab_container, prefix):
             with tab_container:
                 if df_subset.empty:
                     st.info("Brak aktywnych zleceń w tej fazie procesu.")
@@ -708,14 +708,14 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                         with c_btn:
                             st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True) 
                             is_primary = st.session_state.get("wybrany_event_id") == row.get('ID_Zlecenia')
-                            if st.button("🔍 Szczegóły", key=f"det_{index}_{row.get('ID_Zlecenia', '')}", type="primary" if is_primary else "secondary", use_container_width=True):
+                            if st.button("🔍 Szczegóły", key=f"det_{prefix}_{index}_{row.get('ID_Zlecenia', '')}", type="primary" if is_primary else "secondary", use_container_width=True):
                                 st.session_state["wybrany_event_id"] = row.get('ID_Zlecenia')
                                 st.rerun()
 
-        render_list(df_plan, t_plan)
-        render_list(df_zal, t_zal)
-        render_list(df_tra, t_tra)
-        render_list(df_zam, t_zam)
+        render_list(df_plan, t_plan, "plan")
+        render_list(df_zal, t_zal, "zal")
+        render_list(df_tra, t_tra, "tra")
+        render_list(df_zam, t_zam, "zam")
 
     with col_detale:
         if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
