@@ -81,7 +81,10 @@ def render(sh):
         df_pob['Faza_Procesu'] = df_pob.get('Status', 'BRAK STATUSU')
         df_pob['Zakonczone'] = df_pob.get('Status', '').apply(lambda x: 'TAK' if str(x).upper() == 'ARCHIWUM' else 'NIE')
         df_pob['Nr_Faktury'] = df_pob.get('Nr Faktury', '')
+        
+        # POPRAWKA MAPOWANIA STATUSU PŁATNOŚCI
         df_pob['Faktura_Oplacona'] = df_pob.get('Faktura', '')
+        
         df_pob['Data_Platnosci'] = df_pob.get('Data Płatności', '')
         df_pob['Data_Zaladunku'] = df_pob.get('Data Załadunku', '').fillna('-').replace('', '-')
 
@@ -153,7 +156,10 @@ def render(sh):
 
             # Odświeżone kolumny - dodajemy Base_Event aby się nie pogubić przy wielu eventach
             view_ev = df_ev_view[['ID_Zlecenia', 'Base_Event', 'Przewoznik', 'Typ_Pojazdu', 'Data_Wystawienia', 'Data_Zaladunku', 'Faza_Procesu', 'Koszt_EUR']].copy()
-            view_ev['Faza_Procesu'] = view_ev['Faza_Procesu'].apply(lambda x: str(x).upper())
+            
+            # POPRAWKA WEKTORYZACJI
+            view_ev['Faza_Procesu'] = view_ev['Faza_Procesu'].astype(str).str.upper()
+            
             view_ev.columns = ['Numer Zlecenia', 'Event / Trasa', 'Przewoźnik', 'Auto', 'Data Zlecenia', 'Data Załadunku', 'Status Zlecenia', 'Koszt Netto (€)']
             
             st.dataframe(
@@ -190,7 +196,9 @@ def render(sh):
             df_pr['Data_Platnosci'] = df_pr.get('Data_Platnosci', '').fillna('-').replace('', '-')
             
             koszt_pr = df_pr['Koszt_EUR'].sum()
-            dlug_pr = df_pr[df_pr['Faktura_Oplacona'] != 'TAK']['Koszt_EUR'].sum()
+            
+            # POPRAWKA OBLICZANIA DŁUGU (Rzutowanie na wielkie litery przy sprawdzaniu)
+            dlug_pr = df_pr[df_pr['Faktura_Oplacona'].astype(str).str.upper() != 'TAK']['Koszt_EUR'].sum()
             
             nazwy_display = ", ".join(wybrani_przewoznicy) if len(wybrani_przewoznicy) <= 3 else f"{len(wybrani_przewoznicy)} wybranych firm"
 
@@ -206,8 +214,9 @@ def render(sh):
 
             view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Data_Wystawienia', 'Data_Zaladunku', 'Faza_Procesu', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci']].copy()
             
-            view_pr['Faza_Procesu'] = view_pr['Faza_Procesu'].apply(lambda x: str(x).upper())
-            view_pr['Faktura_Oplacona'] = view_pr['Faktura_Oplacona'].apply(lambda x: "✅ TAK" if str(x).upper() == "TAK" else "❌ NIE")
+            # POPRAWKA WEKTORYZACJI
+            view_pr['Faza_Procesu'] = view_pr['Faza_Procesu'].astype(str).str.upper()
+            view_pr['Faktura_Oplacona'] = view_pr['Faktura_Oplacona'].astype(str).apply(lambda x: "✅ TAK" if x.upper() == "TAK" else "❌ NIE")
             
             view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Data Zlecenia', 'Data Załadunku (Wyjazd)', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
             
