@@ -233,8 +233,8 @@ def render(sh):
         
         if not df_raport.empty:
             # Tworzenie kolumny Daty do obliczeń i sortowania
-            df_raport['_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], format="%d.%m.%Y", errors='coerce')
-            df_raport.loc[df_raport['_Data_DT'].isna(), '_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], errors='coerce')
+            # POPRAWKA: Usunięcie sztywnego formatu, by obsługiwać zarówno YYYY-MM-DD jak i DD.MM.YYYY
+            df_raport['_Data_DT'] = pd.to_datetime(df_raport['Data Płatności'], errors='coerce', dayfirst=True)
             
             def oblicz_status(dt):
                 if pd.isna(dt): return "Brak daty płatności"
@@ -273,7 +273,11 @@ def render(sh):
                         data_to_gs = [[str(cell) for cell in row] for row in data_to_gs]
                         
                         ws.clear()
-                        ws.update('A1', data_to_gs)
+                        # POPRAWKA: Bezpieczne wywołanie dla nowszych i starszych wersji gspread
+                        try:
+                            ws.update(values=data_to_gs, range_name='A1')
+                        except TypeError:
+                            ws.update('A1', data_to_gs)
                         
                         st.success("✅ Sukces! Najświeższy raport został zaktualizowany bezpośrednio w chmurze.")
                         try:
