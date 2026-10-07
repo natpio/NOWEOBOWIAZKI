@@ -206,8 +206,8 @@ def archive_row_safe(source_sheet, archive_sheet, row_index, row_data_list):
         
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data_list]
         
-        col_a_values = ws_arch.col_values(1)
-        next_row = len(col_a_values) + 1
+        all_vals = ws_arch.get_all_values()
+        next_row = len(all_vals) + 1
         ostatnia_kolumna = get_col_letter(len(safe_list))
         zakres = f"A{next_row}:{ostatnia_kolumna}{next_row}"
         
@@ -246,8 +246,8 @@ def append_data(sheet_name, row_data):
         ws = sh.worksheet(sheet_name)
         safe_list = [str(x) if not pd.isna(x) else "" for x in row_data]
         
-        col_a_values = ws.col_values(1)
-        next_row = len(col_a_values) + 1 
+        all_vals = ws.get_all_values()
+        next_row = len(all_vals) + 1 
         
         ostatnia_kolumna = get_col_letter(len(safe_list))
         zakres = f"A{next_row}:{ostatnia_kolumna}{next_row}"
