@@ -64,10 +64,20 @@ def render(sh=None):
     active_carrier = st.session_state.dm_carrier
     active_dates = st.session_state.dm_dates
 
-    # Obliczanie dni postoju (overlay) na podstawie wybranego zakresu
+    # =========================================================
+    # ZMIANA: Bezpieczne parsowanie dat, zapobiega crashom i resetowaniu
+    # =========================================================
     if isinstance(active_dates, tuple) and len(active_dates) == 2:
         start_date, end_date = active_dates
         overlay_days = max(0, (end_date - start_date).days)
+    elif isinstance(active_dates, tuple) and len(active_dates) == 1:
+        overlay_days = 0
+        start_date = active_dates[0]
+        end_date = start_date
+    elif not isinstance(active_dates, tuple) and active_dates is not None:
+        overlay_days = 0
+        start_date = active_dates
+        end_date = start_date
     else:
         overlay_days = 0
         start_date = datetime.today().date()
