@@ -708,7 +708,7 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                         with c_btn:
                             st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True) 
                             is_primary = st.session_state.get("wybrany_event_id") == row.get('ID_Zlecenia')
-                            if st.button("🔍 Szczegóły", key=f"det_{index}_{row.get('ID_Zlecenia', '')}", type="primary" if is_primary else "secondary", use_container_width=True):
+                           if st.button("🔍 Szczegóły", key=f"det_{prefix}_{sheet_row_val}", type="primary" if is_primary else "secondary", use_container_width=True):
                                 st.session_state["wybrany_event_id"] = row.get('ID_Zlecenia')
                                 st.rerun()
 
