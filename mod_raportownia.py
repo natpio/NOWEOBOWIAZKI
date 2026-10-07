@@ -53,8 +53,9 @@ def render(sh):
         # Najpierw szukamy w bazie Zleceń PRO
         if nr in dict_wystawienia:
             return dict_wystawienia[nr]
-        # Awaryjnie - dekodujemy datę wprost z numeru ID (np. EVT-26/0915/PD01 -> 2026-09-15)
-        match = re.search(r'(?:EVT|ZLP|CRG)-(\d{2})/(\d{2})(\d{2})', nr)
+        # Awaryjnie - dekodujemy datę wprost z numeru ID 
+        # POPRAWKA: myślnik jest opcjonalny "-?" aby objąć numery jak EVT-26... i EVT26...
+        match = re.search(r'(?:EVT|ZLP|CRG)-?(\d{2})/(\d{2})(\d{2})', nr)
         if match:
             yy, mm, dd = match.groups()
             return f"20{yy}-{mm}-{dd}"
@@ -62,31 +63,50 @@ def render(sh):
 
     # --- STANDARYZACJA EVENTÓW ---
     if not df_ev.empty:
-        df_ev['Base_Event'] = df_ev.get('Nazwa_Targow', '').apply(lambda x: str(x).split(" | ")[0].strip() if " | " in str(x) else str(x).strip())
-        df_ev['Przewoznik'] = df_ev.get('Przewoznik', '').fillna('Nieokreślony').replace('', 'Nieokreślony')
-        df_ev['Typ_Pojazdu'] = df_ev.get('Typ_Pojazdu', '').fillna('-').replace('', '-')
-        df_ev['Koszt_EUR'] = df_ev.get('Koszt_Transportu_EUR', 0).apply(parse_cost)
+        # POPRAWKA: Bezpieczne rzutowanie przez dostarczony domyślny Series chroniący przed błędem AttributeError
+        ser_nazwa = df_ev.get('Nazwa_Targow', pd.Series('', index=df_ev.index))
+        df_ev['Base_Event'] = ser_nazwa.apply(lambda x: str(x).split(" | ")[0].strip() if " | " in str(x) else str(x).strip())
+        
+        ser_przew = df_ev.get('Przewoznik', pd.Series('', index=df_ev.index))
+        df_ev['Przewoznik'] = ser_przew.fillna('Nieokreślony').replace('', 'Nieokreślony')
+        
+        ser_poj = df_ev.get('Typ_Pojazdu', pd.Series('', index=df_ev.index))
+        df_ev['Typ_Pojazdu'] = ser_poj.fillna('-').replace('', '-')
+        
+        ser_koszt = df_ev.get('Koszt_Transportu_EUR', pd.Series('0', index=df_ev.index))
+        df_ev['Koszt_EUR'] = ser_koszt.apply(parse_cost)
+        
         df_ev['Faza_Procesu'] = df_ev.get('Faza_Procesu', 'BRAK STATUSU')
         df_ev['Zakonczone'] = df_ev.get('Zakonczone_Arch', 'NIE')
-        df_ev['Data_Zaladunku'] = df_ev.get('Data_Zlecenia_Tr', '').fillna('-').replace('', '-')
+        
+        ser_zal = df_ev.get('Data_Zlecenia_Tr', pd.Series('', index=df_ev.index))
+        df_ev['Data_Zaladunku'] = ser_zal.fillna('-').replace('', '-')
 
     # --- STANDARYZACJA ZLECEŃ POBOCZNYCH (Dopasowanie kolumn pod Audyt) ---
     if not df_pob.empty:
         df_pob['ID_Zlecenia'] = df_pob.get('Nr Zlecenia', '')
-        df_pob['Przewoznik'] = df_pob.get('Przewoźnik', '').fillna('Nieokreślony').replace('', 'Nieokreślony')
-        df_pob['Base_Event'] = df_pob.get('Opis Ładunku / Trasy', '').astype(str) + " [POBOCZNE]" 
+        
+        ser_przew_pob = df_pob.get('Przewoźnik', pd.Series('', index=df_pob.index))
+        df_pob['Przewoznik'] = ser_przew_pob.fillna('Nieokreślony').replace('', 'Nieokreślony')
+        
+        ser_opis = df_pob.get('Opis Ładunku / Trasy', pd.Series('', index=df_pob.index))
+        df_pob['Base_Event'] = ser_opis.astype(str) + " [POBOCZNE]" 
         df_pob['Nazwa_Targow'] = df_pob['Base_Event']
+        
         df_pob['Typ_Pojazdu'] = '-'
         df_pob['Koszt_EUR'] = 0.0 # W zleceniach pobocznych nie wpisujecie kwot
         df_pob['Faza_Procesu'] = df_pob.get('Status', 'BRAK STATUSU')
-        df_pob['Zakonczone'] = df_pob.get('Status', '').apply(lambda x: 'TAK' if str(x).upper() == 'ARCHIWUM' else 'NIE')
+        
+        # POPRAWKA: Bezpieczna wektoryzacja statusu chroniąca przed AttributeError
+        ser_status = df_pob.get('Status', pd.Series('', index=df_pob.index))
+        df_pob['Zakonczone'] = ser_status.apply(lambda x: 'TAK' if str(x).upper() == 'ARCHIWUM' else 'NIE')
+        
         df_pob['Nr_Faktury'] = df_pob.get('Nr Faktury', '')
-        
-        # POPRAWKA MAPOWANIA STATUSU PŁATNOŚCI
         df_pob['Faktura_Oplacona'] = df_pob.get('Faktura', '')
-        
         df_pob['Data_Platnosci'] = df_pob.get('Data Płatności', '')
-        df_pob['Data_Zaladunku'] = df_pob.get('Data Załadunku', '').fillna('-').replace('', '-')
+        
+        ser_zal_pob = df_pob.get('Data Załadunku', pd.Series('', index=df_pob.index))
+        df_pob['Data_Zaladunku'] = ser_zal_pob.fillna('-').replace('', '-')
 
     # --- POŁĄCZENIE WSZYSTKIEGO W JEDEN MEGA-REJESTR ---
     df_all = pd.concat([df_ev, df_pob], ignore_index=True)
@@ -154,10 +174,8 @@ def render(sh):
             </div>
             """, unsafe_allow_html=True)
 
-            # Odświeżone kolumny - dodajemy Base_Event aby się nie pogubić przy wielu eventach
             view_ev = df_ev_view[['ID_Zlecenia', 'Base_Event', 'Przewoznik', 'Typ_Pojazdu', 'Data_Wystawienia', 'Data_Zaladunku', 'Faza_Procesu', 'Koszt_EUR']].copy()
             
-            # POPRAWKA WEKTORYZACJI
             view_ev['Faza_Procesu'] = view_ev['Faza_Procesu'].astype(str).str.upper()
             
             view_ev.columns = ['Numer Zlecenia', 'Event / Trasa', 'Przewoźnik', 'Auto', 'Data Zlecenia', 'Data Załadunku', 'Status Zlecenia', 'Koszt Netto (€)']
@@ -191,13 +209,12 @@ def render(sh):
         if wybrani_przewoznicy:
             df_pr = df_all[df_all['Przewoznik'].isin(wybrani_przewoznicy)].copy()
             
-            df_pr['Nr_Faktury'] = df_pr.get('Nr_Faktury', '').fillna('-').replace('', '-')
-            df_pr['Faktura_Oplacona'] = df_pr.get('Faktura_Oplacona', 'NIE').fillna('NIE').replace('', 'NIE')
-            df_pr['Data_Platnosci'] = df_pr.get('Data_Platnosci', '').fillna('-').replace('', '-')
+            df_pr['Nr_Faktury'] = df_pr.get('Nr_Faktury', pd.Series('', index=df_pr.index)).fillna('-').replace('', '-')
+            df_pr['Faktura_Oplacona'] = df_pr.get('Faktura_Oplacona', pd.Series('NIE', index=df_pr.index)).fillna('NIE').replace('', 'NIE')
+            df_pr['Data_Platnosci'] = df_pr.get('Data_Platnosci', pd.Series('', index=df_pr.index)).fillna('-').replace('', '-')
             
             koszt_pr = df_pr['Koszt_EUR'].sum()
             
-            # POPRAWKA OBLICZANIA DŁUGU (Rzutowanie na wielkie litery przy sprawdzaniu)
             dlug_pr = df_pr[df_pr['Faktura_Oplacona'].astype(str).str.upper() != 'TAK']['Koszt_EUR'].sum()
             
             nazwy_display = ", ".join(wybrani_przewoznicy) if len(wybrani_przewoznicy) <= 3 else f"{len(wybrani_przewoznicy)} wybranych firm"
@@ -214,11 +231,10 @@ def render(sh):
 
             view_pr = df_pr[['ID_Zlecenia', 'Przewoznik', 'Nazwa_Targow', 'Data_Wystawienia', 'Data_Zaladunku', 'Faza_Procesu', 'Koszt_EUR', 'Nr_Faktury', 'Faktura_Oplacona', 'Data_Platnosci']].copy()
             
-            # POPRAWKA WEKTORYZACJI
             view_pr['Faza_Procesu'] = view_pr['Faza_Procesu'].astype(str).str.upper()
             view_pr['Faktura_Oplacona'] = view_pr['Faktura_Oplacona'].astype(str).apply(lambda x: "✅ TAK" if x.upper() == "TAK" else "❌ NIE")
             
-            view_pr.columns = ['Numer Zlecenia', 'Przewoźnik', 'Event / Trasa', 'Data Zlecenia', 'Data Załadunku (Wyjazd)', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
+            view_pr.columns = ['Numer Zlecenia', 'Przewoźźnik', 'Event / Trasa', 'Data Zlecenia', 'Data Załadunku (Wyjazd)', 'Status Zlecenia', 'Kwota Netto (€)', 'Nr Faktury Zewn.', 'Opłacona?', 'Data Płatności']
             
             st.dataframe(
                 view_pr, 
