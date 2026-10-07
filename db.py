@@ -68,7 +68,7 @@ def _load_data_cached(sheet_name, sync_token):
             else:
                 df['sheet_row'] = []
 
-            # --- NOWY, BEZPIECZNY SYSTEM DOPASOWYWANIA KOLUMN ---
+            # --- BEZPIECZNE UZUPEŁNIANIE BRAKUJĄCYCH KOLUMN I WARTOŚCI ---
             wymagane_kolejnosc = []
             domyslne_wartosci = {}
             
@@ -89,27 +89,15 @@ def _load_data_cached(sheet_name, sync_token):
                 domyslne_wartosci = {"Typ_Operacji": "Montaż", "Data_Slota": str(datetime.date.today())}
 
             if wymagane_kolejnosc:
-                # 1. Uzupełnienie brakujących kolumn
+                # 1. Uzupełnienie brakujących kolumn na końcu (bez zaburzania fizycznej kolejności w arkuszu)
                 for kol in wymagane_kolejnosc:
                     if kol not in df.columns:
                         df[kol] = ""
                 
                 # 2. Uzupełnienie wartości domyślnych (tylko w pustych komórkach)
                 for kol, val in domyslne_wartosci.items():
-                    df[kol] = df[kol].apply(lambda x: val if pd.isna(x) or str(x).strip() == "" else x)
-                    
-                # 3. Dynamiczne filtrowanie zachowujące oryginalną kolejność arkusza!
-                oryginalne_kolumny = [k for k in df.columns if not str(k).startswith("Brak_Nazwy_") and "duplikat" not in str(k) and k != "sheet_row"]
-                
-                # Upewnijmy się, że wszystkie wymagane są na liście
-                for kol in wymagane_kolejnosc:
-                    if kol not in oryginalne_kolumny:
-                        oryginalne_kolumny.append(kol)
-                        
-                if 'sheet_row' in df.columns:
-                    oryginalne_kolumny.append('sheet_row')
-                    
-                df = df[oryginalne_kolumny]
+                    if kol in df.columns:
+                        df[kol] = df[kol].apply(lambda x: val if pd.isna(x) or str(x).strip() == "" else x)
 
             return worksheet, df
 
