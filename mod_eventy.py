@@ -63,9 +63,9 @@ def is_past_end_date(row, dzisiaj_date):
 # ==============================================================================
 # DETALE ZLECENIA 
 # ==============================================================================
-def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
-    dane_eventu = df_widok[df_widok["ID_Zlecenia"] == wybrany_id].iloc[0]
+def render_event_details(dane_eventu, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
     is_sqm = dane_eventu.get('Typ_Transportu', '') == "Własny SQM"
+    target_row = dane_eventu.get('sheet_row')
     
     raw_name = str(dane_eventu['Nazwa_Targow'])
     if " | " in raw_name:
@@ -83,7 +83,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
     
     c_id, c_cmr, c_dup = st.columns([4, 3, 3])
     with c_id:
-        st.caption(f"🆔 {dane_eventu['ID_Zlecenia']}<br>👤 {dane_eventu['Przewoznik']}", unsafe_allow_html=True)
+        st.caption(f"🆔 {dane_eventu.get('ID_Zlecenia', 'Brak ID')}<br>👤 {dane_eventu.get('Przewoznik', '')}", unsafe_allow_html=True)
         
     with c_cmr:
         waga_val = str(dane_eventu.get("Waga", "0"))
@@ -91,14 +91,16 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
         nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
         
         if not nr_cmr_zapisany or nr_cmr_zapisany.strip() in ["", "nan", "None"]:
-            if st.button("📝 Wygeneruj Nr CMR", use_container_width=True, key=f"btn_cmr_gen_{dane_eventu.get('ID_Zlecenia', '')}"):
+            if st.button("📝 Wygeneruj Nr CMR", width="stretch", key=f"btn_cmr_gen_{target_row}"):
                 with st.spinner("Pobieranie numeru CMR z puli..."):
                     nowy_nr = db.get_next_cmr_number()
-                    idx = df_widok[df_widok['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                    df_do_zapisu = df.copy()
-                    df_do_zapisu.at[idx, 'Nr_CMR'] = str(nowy_nr)
-                    db.update_single_row_safe("DB_Eventy", int(df_do_zapisu.at[idx, 'sheet_row']), df_do_zapisu.loc[idx])
-                    st.rerun()
+                    matched_indices = df[df['sheet_row'] == target_row].index
+                    if len(matched_indices) > 0:
+                        idx = matched_indices[0]
+                        df_do_zapisu = df.copy()
+                        df_do_zapisu.at[idx, 'Nr_CMR'] = str(nowy_nr)
+                        db.update_single_row_safe("DB_Eventy", int(df_do_zapisu.at[idx, 'sheet_row']), df_do_zapisu.loc[idx])
+                        st.rerun()
         else:
             try:
                 resolved_dest = get_full_address(str(dane_eventu.get("Miejsce_Przeznaczenia", base_name)), df_miejsca)
@@ -109,13 +111,13 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
                     "waga": waga_int, "nr_cmr": str(nr_cmr_zapisany), "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
                     "kierowca": str(dane_eventu.get("Kierowca", "")), "przewoznik": str(dane_eventu.get("Przewoznik", ""))
                 }
-                st.download_button(label=f"📥 Pobierz ZAKTUALIZOWANY CMR ({nr_cmr_zapisany})", data=generate_cmr_excel(dane_cmr), file_name=f"CMR_{dane_eventu['ID_Zlecenia']}_{nr_cmr_zapisany}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                st.download_button(label=f"📥 Pobierz ZAKTUALIZOWANY CMR ({nr_cmr_zapisany})", data=generate_cmr_excel(dane_cmr), file_name=f"CMR_{dane_eventu.get('ID_Zlecenia', 'Brak')}_{nr_cmr_zapisany}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
                 
                 st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'><p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🔙 Dokument na drogę powrotną</p>", unsafe_allow_html=True)
-                data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{dane_eventu['ID_Zlecenia']}")
+                data_powrotu_cmr = st.date_input("Data załadunku powrotnego:", value=None, key=f"ret_date_{target_row}")
                 
                 if data_powrotu_cmr:
-                    if st.button("⚙️ Nadaj nowy nr i Generuj Powrót", use_container_width=True, key=f"btn_powrot_{dane_eventu['ID_Zlecenia']}"):
+                    if st.button("⚙️ Nadaj nowy nr i Generuj Powrót", width="stretch", key=f"btn_powrot_{target_row}"):
                         with st.spinner("Pobieranie kolejnego numeru..."):
                             nowy_nr_powrotny = db.get_next_cmr_number()
                             target_place_name = str(dane_eventu.get("Miejsce_Przeznaczenia", base_name))
@@ -128,23 +130,23 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
                                 "nr_cmr": str(nowy_nr_powrotny), "auto": str(dane_eventu.get("Nr_Rejestracyjny", "")),
                                 "kierowca": str(dane_eventu.get("Kierowca", "")), "przewoznik": str(dane_eventu.get("Przewoznik", ""))
                             }
-                            st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"] = generate_cmr_excel(dane_cmr_powrot)
-                            st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"] = nowy_nr_powrotny
+                            st.session_state[f"powrot_bytes_{target_row}"] = generate_cmr_excel(dane_cmr_powrot)
+                            st.session_state[f"powrot_nr_{target_row}"] = nowy_nr_powrotny
                             
-                    if f"powrot_bytes_{dane_eventu['ID_Zlecenia']}" in st.session_state:
-                        nr_gen = st.session_state[f"powrot_nr_{dane_eventu['ID_Zlecenia']}"]
-                        st.download_button(label=f"🔙 Pobierz gotowy CMR POWRÓT ({nr_gen})", data=st.session_state[f"powrot_bytes_{dane_eventu['ID_Zlecenia']}"], file_name=f"CMR_POWROT_{dane_eventu['ID_Zlecenia']}_{nr_gen}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True, key=f"dl_pow_{dane_eventu['ID_Zlecenia']}")
+                    if f"powrot_bytes_{target_row}" in st.session_state:
+                        nr_gen = st.session_state[f"powrot_nr_{target_row}"]
+                        st.download_button(label=f"🔙 Pobierz gotowy CMR POWRÓT ({nr_gen})", data=st.session_state[f"powrot_bytes_{target_row}"], file_name=f"CMR_POWROT_{dane_eventu.get('ID_Zlecenia', 'Brak')}_{nr_gen}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch", key=f"dl_pow_{target_row}")
             except Exception: st.error("Szablon CMR niedostępny.")
 
         if not is_sqm:
             st.markdown("<hr style='border-color: rgba(255,255,255,0.1); margin: 15px 0;'><p style='font-size: 12px; color: #8C8477; margin-bottom: 5px;'>🚀 Pełne zlecenie transportowe</p>", unsafe_allow_html=True)
-            if st.button("📄 Przekaż do Generatora Zleceń PRO", type="primary", use_container_width=True, key=f"bridge_pro_{dane_eventu['ID_Zlecenia']}"):
+            if st.button("📄 Przekaż do Generatora Zleceń PRO", type="primary", width="stretch", key=f"bridge_pro_{target_row}"):
                 st.session_state['import_z_eventu'] = dane_eventu.to_dict()
                 st.session_state['menu_option'] = "GENERATOR ZLECEŃ PRO"
                 st.rerun()
 
     with c_dup:
-        if st.button("📋 Klonuj", key=f"clone_{dane_eventu.get('ID_Zlecenia', '')}", use_container_width=True):
+        if st.button("📋 Klonuj", key=f"clone_{target_row}", width="stretch"):
             nowy_wiersz = dane_eventu.copy().to_dict()
             nowy_wiersz['ID_Zlecenia'] = "" 
             nowy_wiersz['Faza_Procesu'], nowy_wiersz['Status_Magazyn'] = "Planowanie", "Brak gotowości"
@@ -168,6 +170,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
             kolumny = [k for k in df.columns if k != 'sheet_row']
             db.append_data("DB_Eventy", [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny])
             st.session_state["wybrany_event_id"] = None 
+            st.session_state["wybrany_event_row"] = None
             st.success("✅ Skopiowano zlecenie (Bezpieczny zapis)!")
             st.rerun()
 
@@ -193,7 +196,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
     det_info, det_har, det_fin, det_arch = st.tabs(["📝 EDYCJA", "⏱️ HARMONOGRAM", "💼 FINANSE", "🏁 ZAKOŃCZ"])
     
     with det_info:
-        with st.form(key=f"edit_all_{dane_eventu['ID_Zlecenia']}"):
+        with st.form(key=f"edit_all_{target_row}"):
             st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>🔄 Edycja Danych Podstawowych</p>", unsafe_allow_html=True)
             
             c_ed1, c_ed2 = st.columns(2)
@@ -260,15 +263,15 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
 
             u_data_roz_1 = r_ed1.date_input("Rozładunek 1:", value=roz_1_val)
             u_data_roz_2 = r_ed2.date_input("Rozładunek 2:", value=roz_2_val)
-            usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj rozładunek 2", key=f"del_roz2_{dane_eventu['ID_Zlecenia']}")
+            usun_roz_2 = r_ed2.checkbox("🗑️ Skasuj rozładunek 2", key=f"del_roz2_{target_row}")
             
             st.markdown("<p style='font-size: 12px; color: #8C8477; margin-bottom: 2px; margin-top: 10px;'>Kalendarz powrotny (Demontaż i Baza):</p>", unsafe_allow_html=True)
             r_dem1, r_dem2, r_pow = st.columns(3)
             
             u_dem_1 = r_dem1.date_input("Start demontażu (dla auta):", value=dem_1_val)
-            usun_dem_1 = r_dem1.checkbox("🗑️ Skasuj start", key=f"del_dem1_{dane_eventu['ID_Zlecenia']}")
+            usun_dem_1 = r_dem1.checkbox("🗑️ Skasuj start", key=f"del_dem1_{target_row}")
             u_dem_2 = r_dem2.date_input("Koniec demontażu (dla auta):", value=dem_2_val)
-            usun_dem_2 = r_dem2.checkbox("🗑️ Skasuj koniec", key=f"del_dem2_{dane_eventu['ID_Zlecenia']}")
+            usun_dem_2 = r_dem2.checkbox("🗑️ Skasuj koniec", key=f"del_dem2_{target_row}")
             
             obecny_koniec = parse_date_safe(dane_eventu.get("Data_Zakonczenia_Uslugi"))
             u_data_zakonczenia = r_pow.date_input("Powrót do bazy (Zakończenie):", value=obecny_koniec if obecny_koniec else pd.Timestamp.today().date())
@@ -277,48 +280,49 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
             u_notatki = st.text_area("Notatki", value=notatki_czyste)
             
             if st.form_submit_button("💾 Zapisz Zmiany"):
-                idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                
-                final_nazwa_targow = u_baza_targow if not u_dopisek.strip() else f"{u_baza_targow} | {u_dopisek.strip()}"
-                df.at[idx, 'ID_Zlecenia'] = str(u_id_zlecenia)
-                df.at[idx, 'Nazwa_Targow'] = str(final_nazwa_targow)
-                df.at[idx, 'Miejsce_Przeznaczenia'] = str(final_miejsce_edit)
-                df.at[idx, 'Przewoznik'] = str(u_przewoznik)
-                df.at[idx, 'Typ_Transportu'] = str(u_typ_transp)
-                df.at[idx, 'Typ_Pojazdu'] = str(u_typ_pojazd)
-                df.at[idx, 'Nr_Rejestracyjny'] = str(u_nr_rejestracyjny)
-                df.at[idx, 'Kierowca'] = str(u_kierowca)
-                df.at[idx, 'Waga'] = str(u_waga) 
-                df.at[idx, 'Nr_Zlecenia_Zewn'] = str(u_id_zlecenia) if u_typ_transp == "Zewnętrzny" else "FLOTA WŁASNA"
-                df.at[idx, 'Faza_Procesu'] = str(u_faza)
-                df.at[idx, 'Status_Magazyn'] = str(u_status_mag)
-                df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
-                
-                rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
-                final_roz_2 = "" if usun_roz_2 else (str(u_data_roz_2) if u_data_roz_2 else "")
-                if final_roz_2: rozładunki_str += f", {final_roz_2}"
-                
-                final_dem_1 = "" if usun_dem_1 else (str(u_dem_1) if u_dem_1 else "")
-                final_dem_2 = "" if usun_dem_2 else (str(u_dem_2) if u_dem_2 else "")
-                dem_str = final_dem_1
-                if final_dem_2: dem_str += f",{final_dem_2}"
-                
-                zlozona_notatka = str(u_notatki).strip()
-                if dem_str: zlozona_notatka = f"[DEM: {dem_str}] {zlozona_notatka}"
-                if rozładunki_str: zlozona_notatka = f"[Rozładunki: {rozładunki_str}] {zlozona_notatka}"
-                df.at[idx, 'Notatki'] = zlozona_notatka.strip()
-                
-                final_powrot = "" if usun_powrot else (str(u_data_zakonczenia) if u_data_zakonczenia else "")
-                df.at[idx, 'Data_Zakonczenia_Uslugi'] = final_powrot
-                
-                db.update_single_row_safe("DB_Eventy", int(df.at[idx, 'sheet_row']), df.loc[idx])
-                st.session_state["wybrany_event_id"] = str(u_id_zlecenia) 
-                st.success("Pomyślnie zaktualizowano dane!")
-                st.rerun()
+                matched_indices = df[df['sheet_row'] == target_row].index
+                if len(matched_indices) > 0:
+                    idx = matched_indices[0]
+                    final_nazwa_targow = u_baza_targow if not u_dopisek.strip() else f"{u_baza_targow} | {u_dopisek.strip()}"
+                    df.at[idx, 'ID_Zlecenia'] = str(u_id_zlecenia)
+                    df.at[idx, 'Nazwa_Targow'] = str(final_nazwa_targow)
+                    df.at[idx, 'Miejsce_Przeznaczenia'] = str(final_miejsce_edit)
+                    df.at[idx, 'Przewoznik'] = str(u_przewoznik)
+                    df.at[idx, 'Typ_Transportu'] = str(u_typ_transp)
+                    df.at[idx, 'Typ_Pojazdu'] = str(u_typ_pojazd)
+                    df.at[idx, 'Nr_Rejestracyjny'] = str(u_nr_rejestracyjny)
+                    df.at[idx, 'Kierowca'] = str(u_kierowca)
+                    df.at[idx, 'Waga'] = str(u_waga) 
+                    df.at[idx, 'Nr_Zlecenia_Zewn'] = str(u_id_zlecenia) if u_typ_transp == "Zewnętrzny" else "FLOTA WŁASNA"
+                    df.at[idx, 'Faza_Procesu'] = str(u_faza)
+                    df.at[idx, 'Status_Magazyn'] = str(u_status_mag)
+                    df.at[idx, 'Data_Zlecenia_Tr'] = str(u_data_tr) if u_data_tr else ""
+                    
+                    rozładunki_str = str(u_data_roz_1) if u_data_roz_1 else ""
+                    final_roz_2 = "" if usun_roz_2 else (str(u_data_roz_2) if u_data_roz_2 else "")
+                    if final_roz_2: rozładunki_str += f", {final_roz_2}"
+                    
+                    final_dem_1 = "" if usun_dem_1 else (str(u_dem_1) if u_dem_1 else "")
+                    final_dem_2 = "" if usun_dem_2 else (str(u_dem_2) if u_dem_2 else "")
+                    dem_str = final_dem_1
+                    if final_dem_2: dem_str += f",{final_dem_2}"
+                    
+                    zlozona_notatka = str(u_notatki).strip()
+                    if dem_str: zlozona_notatka = f"[DEM: {dem_str}] {zlozona_notatka}"
+                    if rozładunki_str: zlozona_notatka = f"[Rozładunki: {rozładunki_str}] {zlozona_notatka}"
+                    df.at[idx, 'Notatki'] = zlozona_notatka.strip()
+                    
+                    final_powrot = "" if usun_powrot else (str(u_data_zakonczenia) if u_data_zakonczenia else "")
+                    df.at[idx, 'Data_Zakonczenia_Uslugi'] = final_powrot
+                    
+                    db.update_single_row_safe("DB_Eventy", int(df.at[idx, 'sheet_row']), df.loc[idx])
+                    st.session_state["wybrany_event_id"] = str(u_id_zlecenia) 
+                    st.success("Pomyślnie zaktualizowano dane!")
+                    st.rerun()
 
     with det_har:
         worksheet_sloty, df_sloty = load_data(sh, "DB_Sloty")
-        sloty_eventu = df_sloty[df_sloty['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']] if not df_sloty.empty else pd.DataFrame()
+        sloty_eventu = df_sloty[df_sloty['ID_Zlecenia'] == dane_eventu.get('ID_Zlecenia', '')] if not df_sloty.empty else pd.DataFrame()
         st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:15px; font-size: 14px;'>📍 Zarezerwowane Okna Czasowe</p>", unsafe_allow_html=True)
         if not sloty_eventu.empty:
             for idx, slot in sloty_eventu.iterrows():
@@ -326,7 +330,7 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
         else:
             st.info("Brak przypisanych slotów dla tego transportu.")
 
-        with st.form(key=f"form_add_slot_{dane_eventu['ID_Zlecenia']}", clear_on_submit=True):
+        with st.form(key=f"form_add_slot_{target_row}", clear_on_submit=True):
             st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>➕ Dodaj Nowy Slot</p>", unsafe_allow_html=True)
             s_col1, s_col2 = st.columns(2)
             with s_col1:
@@ -339,12 +343,12 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
                 s_brama = st.text_input("Brama / Rampa (Gate)")
             s_notatki = st.text_input("Dodatkowe Notatki")
             if st.form_submit_button("💾 Zapisz Slot"):
-                db.append_data("DB_Sloty", [str(dane_eventu['ID_Zlecenia']), str(s_typ), str(s_data) if s_data else "", s_od.strftime("%H:%M") if s_od else "", s_do.strftime("%H:%M") if s_do else "", str(s_brama), str(s_notatki)])
+                db.append_data("DB_Sloty", [str(dane_eventu.get('ID_Zlecenia', '')), str(s_typ), str(s_data) if s_data else "", s_od.strftime("%H:%M") if s_od else "", s_do.strftime("%H:%M") if s_do else "", str(s_brama), str(s_notatki)])
                 st.success("Dodano nowy slot!"); st.rerun()
         
     with det_fin:
-        with st.form(key=f"update_fin_{dane_eventu['ID_Zlecenia']}"):
-            st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃️ Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
+        with st.form(key=f"update_fin_{target_row}"):
+            st.markdown("<p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>🗃 Status Dokumentacji i Rozliczeń</p>", unsafe_allow_html=True)
             if is_sqm:
                 u_cmr = st.selectbox("CMR Gotowe?", ["", "NIE", "TAK"], index=["", "NIE", "TAK"].index(dane_eventu.get("CMR_Gotowe", "")) if dane_eventu.get("CMR_Gotowe", "") in ["", "NIE", "TAK"] else 0)
                 st.info("🚚 Pojazd własnej floty SQM. Pola finansowe są automatycznie ustawione na N/A.")
@@ -368,28 +372,33 @@ def render_event_details(wybrany_id, df_widok, df, df_miejsca, df_przewoznicy, o
                     except: dp_val_parsed = None
                     u_data_platnosci = st.date_input("Termin Płatności", value=dp_val_parsed)
             if st.form_submit_button("💾 Zapisz Aktualizacje"):
-                idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-                df.at[idx, 'CMR_Gotowe'], df.at[idx, 'CMR_Podpisane_POD'], df.at[idx, 'PP_Otrzymane'], df.at[idx, 'Nr_Faktury'] = str(u_cmr), str(u_pod), str(u_pp), str(u_nr_fak)
-                if not is_sqm:
-                    df.at[idx, 'Koszt_Transportu_EUR'], df.at[idx, 'Faktura_Oplacona'], df.at[idx, 'Data_Platnosci'] = str(u_koszt), str(u_faktura_opl), str(u_data_platnosci) if u_data_platnosci else ""
-                db.update_single_row_safe("DB_Eventy", int(df.at[idx, 'sheet_row']), df.loc[idx])
-                st.success("Zaktualizowano finanse!"); st.rerun()
+                matched_indices = df[df['sheet_row'] == target_row].index
+                if len(matched_indices) > 0:
+                    idx = matched_indices[0]
+                    df.at[idx, 'CMR_Gotowe'], df.at[idx, 'CMR_Podpisane_POD'], df.at[idx, 'PP_Otrzymane'], df.at[idx, 'Nr_Faktury'] = str(u_cmr), str(u_pod), str(u_pp), str(u_nr_fak)
+                    if not is_sqm:
+                        df.at[idx, 'Koszt_Transportu_EUR'], df.at[idx, 'Faktura_Oplacona'], df.at[idx, 'Data_Platnosci'] = str(u_koszt), str(u_faktura_opl), str(u_data_platnosci) if u_data_platnosci else ""
+                    db.update_single_row_safe("DB_Eventy", int(df.at[idx, 'sheet_row']), df.loc[idx])
+                    st.success("Zaktualizowano finanse!"); st.rerun()
 
     with det_arch:
         st.info("Zarchiwizowanie transportu usunie go z widoku aktywnych operacji i przeniesie do Cold Storage.")
-        if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ", type="primary", use_container_width=True):
-            idx = df[df['ID_Zlecenia'] == dane_eventu['ID_Zlecenia']].index[0]
-            if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
-                df.at[idx, 'Faktura_Oplacona'], df.at[idx, 'PP_Otrzymane'], df.at[idx, 'Data_Platnosci'] = "N/A", "N/A", "N/A"
-                df.at[idx, 'Koszt_Transportu_EUR'], df.at[idx, 'CMR_Podpisane_POD'], df.at[idx, 'Nr_Faktury'] = "N/A", "N/A", "N/A"
-                df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
-            df.at[idx, 'Faza_Procesu'], df.at[idx, 'Zakonczone_Arch'] = "Zamknięte", "TAK"
-            wiersz_do_archiwum = df.loc[idx].copy()
-            gs_row = int(wiersz_do_archiwum['sheet_row'])
-            if 'sheet_row' in wiersz_do_archiwum: wiersz_do_archiwum = wiersz_do_archiwum.drop('sheet_row')
-            db.archive_row_safe("DB_Eventy", "DB_Eventy ARCHIWUM", gs_row, wiersz_do_archiwum.tolist())
-            st.session_state["wybrany_event_id"] = None
-            st.success(f"Zlecenie zamknięte i przeniesione do fizycznego archiwum Cold Storage!"); st.rerun()
+        if st.button("🏁 ZAKOŃCZ I ARCHIWIZUJ", type="primary", width="stretch"):
+            matched_indices = df[df['sheet_row'] == target_row].index
+            if len(matched_indices) > 0:
+                idx = matched_indices[0]
+                if df.at[idx, 'Typ_Transportu'] == "Własny SQM":
+                    df.at[idx, 'Faktura_Oplacona'], df.at[idx, 'PP_Otrzymane'], df.at[idx, 'Data_Platnosci'] = "N/A", "N/A", "N/A"
+                    df.at[idx, 'Koszt_Transportu_EUR'], df.at[idx, 'CMR_Podpisane_POD'], df.at[idx, 'Nr_Faktury'] = "N/A", "N/A", "N/A"
+                    df.at[idx, 'Nr_Zlecenia_Zewn'] = "FLOTA WŁASNA"
+                df.at[idx, 'Faza_Procesu'], df.at[idx, 'Zakonczone_Arch'] = "Zamknięte", "TAK"
+                wiersz_do_archiwum = df.loc[idx].copy()
+                gs_row = int(wiersz_do_archiwum['sheet_row'])
+                if 'sheet_row' in wiersz_do_archiwum: wiersz_do_archiwum = wiersz_do_archiwum.drop('sheet_row')
+                db.archive_row_safe("DB_Eventy", "DB_Eventy ARCHIWUM", gs_row, wiersz_do_archiwum.tolist())
+                st.session_state["wybrany_event_id"] = None
+                st.session_state["wybrany_event_row"] = None
+                st.success(f"Zlecenie zamknięte i przeniesione do fizycznego archiwum Cold Storage!"); st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ==============================================================================
@@ -404,7 +413,6 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
     with st.form("form_event_pro", clear_on_submit=True):
         f_col1, f_col2 = st.columns(2)
         
-        # --- ZMIENNE Z IMPORTU ---
         val_typ_zlecenia = "Tylko dostawa"
         val_nazwa_przewoznika = ""
         val_zrodlo = "Przewoźnik z giełdy (Jednorazowy)"
@@ -548,6 +556,7 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
 # ==============================================================================
 def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisiaj_date, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh):
     if "wybrany_event_id" not in st.session_state: st.session_state["wybrany_event_id"] = None
+    if "wybrany_event_row" not in st.session_state: st.session_state["wybrany_event_row"] = None
     if "filtr_eventow" not in st.session_state: st.session_state["filtr_eventow"] = "Wszystkie"
 
     st.markdown("<p style='color: #94A3B8; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 5px; text-transform: uppercase;'>⚡ Wyszukaj i filtruj zlecenia:</p>", unsafe_allow_html=True)
@@ -564,30 +573,38 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
     with f_col1:
         f1_html = f"""<div style="{get_filter_style(active_filter == 'Wszystkie')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);"><div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Wszystkie</div><div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">すべて</div></div>"""
         st.markdown(f1_html.replace('\n', ''), unsafe_allow_html=True)
-        if st.button("Filtruj Wszystkie", use_container_width=True, key="btn_f_all"):
+        if st.button("Filtruj Wszystkie", width="stretch", key="btn_f_all"):
             st.session_state["filtr_eventow"] = "Wszystkie"
-            st.session_state["wybrany_event_id"] = None; st.rerun()
+            st.session_state["wybrany_event_id"] = None
+            st.session_state["wybrany_event_row"] = None
+            st.rerun()
 
     with f_col2:
         f2_html = f"""<div style="{get_filter_style(active_filter == 'BrakCMR')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);"><div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak CMR ({braki_cmr})</div><div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">CMRなし</div></div>"""
         st.markdown(f2_html.replace('\n', ''), unsafe_allow_html=True)
-        if st.button("Filtruj Brak CMR", use_container_width=True, key="btn_f_cmr"):
+        if st.button("Filtruj Brak CMR", width="stretch", key="btn_f_cmr"):
             st.session_state["filtr_eventow"] = "BrakCMR"
-            st.session_state["wybrany_event_id"] = None; st.rerun()
+            st.session_state["wybrany_event_id"] = None
+            st.session_state["wybrany_event_row"] = None
+            st.rerun()
 
     with f_col3:
         f3_html = f"""<div style="{get_filter_style(active_filter == 'BrakPOD')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);"><div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Brak POD ({braki_pod})</div><div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">POD受領待ち</div></div>"""
         st.markdown(f3_html.replace('\n', ''), unsafe_allow_html=True)
-        if st.button("Filtruj Brak POD", use_container_width=True, key="btn_f_pod"):
+        if st.button("Filtruj Brak POD", width="stretch", key="btn_f_pod"):
             st.session_state["filtr_eventow"] = "BrakPOD"
-            st.session_state["wybrany_event_id"] = None; st.rerun()
+            st.session_state["wybrany_event_id"] = None
+            st.session_state["wybrany_event_row"] = None
+            st.rerun()
 
     with f_col4:
         f4_html = f"""<div style="{get_filter_style(active_filter == 'BrakFaktury')} border-radius: 8px; padding: 12px 15px; text-align: center; height: 75px; display: flex; flex-direction: column; justify-content: center; backdrop-filter: blur(10px);"><div style="color: #E2DCD3; font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;">Nieopłacone ({braki_faktury})</div><div style="color: #8C8477; font-size: 11px; margin-top: 3px; font-family: 'Noto Serif JP', serif;">未払い請求書</div></div>"""
         st.markdown(f4_html.replace('\n', ''), unsafe_allow_html=True)
-        if st.button("Filtruj Nieopłacone", use_container_width=True, key="btn_f_fak"):
+        if st.button("Filtruj Nieopłacone", width="stretch", key="btn_f_fak"):
             st.session_state["filtr_eventow"] = "BrakFaktury"
-            st.session_state["wybrany_event_id"] = None; st.rerun()
+            st.session_state["wybrany_event_id"] = None
+            st.session_state["wybrany_event_row"] = None
+            st.rerun()
     
     df_widok = df_aktywne.copy()
     
@@ -627,12 +644,13 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
         df_zal = df_reszta[df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("załadunek", na=False)]
         df_tra = df_reszta[~df_reszta['Faza_Procesu'].fillna('').astype(str).str.lower().str.contains("planowanie|inicjacja|załadunek", na=False)]
 
-        def render_list(df_subset, tab_container):
+        def render_list(df_subset, tab_container, prefix):
             with tab_container:
                 if df_subset.empty:
                     st.info("Brak aktywnych zleceń w tej fazie procesu.")
                 else:
                     for index, row in enumerate(df_subset.to_dict('records')):
+                        sheet_row_val = row.get('sheet_row', index)
                         faza = str(row.get('Faza_Procesu', '')).lower()
                         is_sqm_row = str(row.get('Typ_Transportu', '')) == "Własny SQM"
                         braki_tagi_html = ""
@@ -707,19 +725,41 @@ def render_lista_eventow(df_aktywne, braki_cmr, braki_pod, braki_faktury, dzisia
                             
                         with c_btn:
                             st.markdown("<div style='height: 25px;'></div>", unsafe_allow_html=True) 
-                            is_primary = st.session_state.get("wybrany_event_id") == row.get('ID_Zlecenia')
-                            if st.button("🔍 Szczegóły", key=f"det_{index}_{row.get('ID_Zlecenia', '')}", type="primary" if is_primary else "secondary", use_container_width=True):
-                                st.session_state["wybrany_event_id"] = row.get('ID_Zlecenia')
+                            
+                            is_primary = False
+                            if st.session_state.get("wybrany_event_id") and str(row.get('ID_Zlecenia', '')).strip():
+                                is_primary = st.session_state.get("wybrany_event_id") == str(row.get('ID_Zlecenia', '')).strip()
+                            elif st.session_state.get("wybrany_event_row") == sheet_row_val:
+                                is_primary = True
+
+                            bezpieczny_klucz = f"det_{prefix}_{sheet_row_val}"
+                            
+                            if st.button("🔍 Szczegóły", key=bezpieczny_klucz, type="primary" if is_primary else "secondary", use_container_width=True):
+                                st.session_state["wybrany_event_id"] = str(row.get('ID_Zlecenia', '')).strip()
+                                st.session_state["wybrany_event_row"] = sheet_row_val
                                 st.rerun()
 
-        render_list(df_plan, t_plan)
-        render_list(df_zal, t_zal)
-        render_list(df_tra, t_tra)
-        render_list(df_zam, t_zam)
+        render_list(df_plan, t_plan, "plan")
+        render_list(df_zal, t_zal, "zal")
+        render_list(df_tra, t_tra, "tra")
+        render_list(df_zam, t_zam, "zam")
 
     with col_detale:
-        if st.session_state["wybrany_event_id"] and not df_widok[df_widok["ID_Zlecenia"] == st.session_state["wybrany_event_id"]].empty:
-            render_event_details(st.session_state["wybrany_event_id"], df_widok, df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh)
+        wybrany_id = st.session_state.get("wybrany_event_id")
+        wybrany_row = st.session_state.get("wybrany_event_row")
+        
+        df_matched = pd.DataFrame()
+        
+        if wybrany_row is not None:
+            df_matched = df_widok[df_widok["sheet_row"] == wybrany_row]
+            
+        if df_matched.empty and wybrany_id and str(wybrany_id).strip() and str(wybrany_id).strip() != "nan":
+            df_matched = df_widok[df_widok["ID_Zlecenia"].astype(str).str.strip() == str(wybrany_id).strip()]
+            
+        if not df_matched.empty:
+            render_event_details(df_matched.iloc[0], df, df_miejsca, df_przewoznicy, opcje_lokalizacji, lista_eventow_slownik, sh)
+        elif wybrany_id or wybrany_row:
+            st.info("Nie znaleziono wiersza o wybranym indeksie. Wybierz zlecenie ponownie z listy.")
 
 # ==============================================================================
 # GŁÓWNA FUNKCJA RENDER
@@ -754,7 +794,6 @@ def render(sh):
     
     df_aktywne = df[df.get("Zakonczone_Arch", pd.Series()) != "TAK"].copy() if not df.empty else df.copy()
     
-    # Szybka Wektoryzacja KPI
     braki_cmr, braki_pod, braki_faktury = 0, 0, 0
     if not df_aktywne.empty:
         cmr_nie = df_aktywne['CMR_Gotowe'] == 'NIE'
@@ -834,9 +873,9 @@ def render(sh):
         st.markdown("<h3 style='color: #E2DCD3; font-family: \"Shippori Mincho\", serif;'>Archiwum Historyczne (Cold Storage)</h3>", unsafe_allow_html=True)
         if "arch_loaded_eventy" not in st.session_state: st.session_state["arch_loaded_eventy"] = False
         if not st.session_state["arch_loaded_eventy"]:
-            if st.button("📥 Połącz i wczytaj bazę archiwalną", use_container_width=True): st.session_state["arch_loaded_eventy"] = True; st.rerun()
+            if st.button("📥 Połącz i wczytaj bazę archiwalną", width="stretch"): st.session_state["arch_loaded_eventy"] = True; st.rerun()
         if st.session_state["arch_loaded_eventy"]:
-            if st.button("❌ Ukryj archiwum (Zwolnij pamięć)", use_container_width=True, type="secondary"): st.session_state["arch_loaded_eventy"] = False; st.rerun()
+            if st.button("❌ Ukryj archiwum (Zwolnij pamięć)", type="secondary", width="stretch"): st.session_state["arch_loaded_eventy"] = False; st.rerun()
             df_arch = db.fetch_data("DB_Eventy ARCHIWUM")
             if not df_arch.empty: st.dataframe(df_arch, use_container_width=True, hide_index=True)
             else: st.warning("Archiwum jest puste.")
