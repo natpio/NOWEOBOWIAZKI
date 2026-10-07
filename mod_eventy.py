@@ -86,7 +86,8 @@ def render_event_details(dane_eventu, df, df_miejsca, df_przewoznicy, opcje_loka
         st.caption(f"🆔 {dane_eventu.get('ID_Zlecenia', 'Brak ID')}<br>👤 {dane_eventu.get('Przewoznik', '')}", unsafe_allow_html=True)
         
     with c_cmr:
-        waga_val = str(dane_eventu.get("Waga", "0"))
+        # BEZPIECZNE PARSOWANIE WAGI (Przecinki i spacje)
+        waga_val = str(dane_eventu.get("Waga", "0")).replace(' ', '').replace(',', '.')
         waga_int = int(float(waga_val)) if waga_val.replace('.','',1).isdigit() else 0
         nr_cmr_zapisany = str(dane_eventu.get("Nr_CMR", ""))
         
@@ -168,7 +169,14 @@ def render_event_details(dane_eventu, df, df_miejsca, df_przewoznicy, opcje_loka
                 nowy_wiersz_z_id['ID_Zlecenia'] = f"{base_id}-{str(int(time.time()))[-4:]}" if base_id else f"EVT-{str(int(time.time()))[-4:]}"
             
             kolumny = [k for k in df.columns if k != 'sheet_row']
-            db.append_data("DB_Eventy", [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny])
+            
+            # --- ZABEZPIECZENIE (KLONOWANIE): Bezpieczne usuwanie twardych 'nan' ---
+            dane_do_zapisu = []
+            for k in kolumny:
+                val = nowy_wiersz_z_id.get(k, "")
+                dane_do_zapisu.append("" if pd.isna(val) else str(val))
+                
+            db.append_data("DB_Eventy", dane_do_zapisu)
             st.session_state["wybrany_event_id"] = None 
             st.session_state["wybrany_event_row"] = None
             st.success("✅ Skopiowano zlecenie (Bezpieczny zapis)!")
@@ -228,7 +236,8 @@ def render_event_details(dane_eventu, df, df_miejsca, df_przewoznicy, opcje_loka
                 u_nr_rejestracyjny = st.text_input("Nr Rejestracyjny (do CMR)", value=str(dane_eventu.get('Nr_Rejestracyjny', '')))
                 u_kierowca = st.text_input("Imię Kierowcy (do CMR)", value=str(dane_eventu.get('Kierowca', '')))
                 
-                waga_akt = str(dane_eventu.get('Waga', '0'))
+                # BEZPIECZNE PARSOWANIE WAGI
+                waga_akt = str(dane_eventu.get('Waga', '0')).replace(' ', '').replace(',', '.')
                 u_waga = st.number_input("Waga (kg)", min_value=0, value=int(float(waga_akt)) if waga_akt.replace('.', '', 1).isdigit() else 0, step=100)
                 u_data_tr = st.date_input("Data Załadunku", value=parse_date_safe(dane_eventu.get("Data_Zlecenia_Tr")))
                 
@@ -361,7 +370,8 @@ def render_event_details(dane_eventu, df, df_miejsca, df_przewoznicy, opcje_loka
                 st.markdown("<hr style='border-color: rgba(255,255,255,0.05); margin: 10px 0;'><p style='color:#C5A880; font-weight:700; margin-bottom:5px; font-size: 14px;'>💰 Koszty i Faktury</p>", unsafe_allow_html=True)
                 col_f1, col_f2 = st.columns(2)
                 with col_f1: 
-                    koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0))
+                    # BEZPIECZNE PARSOWANIE KOSZTÓW
+                    koszt_str = str(dane_eventu.get("Koszt_Transportu_EUR", 0.0)).replace(' ', '').replace(',', '.')
                     u_koszt = st.number_input("Koszt (EUR)", min_value=0.0, value=float(koszt_str) if koszt_str.replace('.', '', 1).isdigit() else 0.0, step=50.0)
                     st.info(f"Nr referencyjny na zewnątrz: {dane_eventu.get('Nr_Zlecenia_Zewn', '')}")
                     u_nr_fak = st.text_input("Nr Faktury Zewn.", value=str(dane_eventu.get("Nr_Faktury", "")))
@@ -444,13 +454,13 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
             kier = str(import_data.get('Kierowca', '')).replace("nan", "").strip()
             if kier: val_c_kierowca = kier
             
-            try: val_waga = int(float(str(import_data.get('Waga', '1000')).replace(',', '.')))
+            try: val_waga = int(float(str(import_data.get('Waga', '1000')).replace(' ', '').replace(',', '.')))
             except: pass
             
             try: val_data_zal = datetime.datetime.strptime(str(import_data.get('Data_Zlecenia_Tr', '')), "%Y-%m-%d").date()
             except: pass
             
-            try: val_stawka_final = float(str(import_data.get('Koszt_Transportu_EUR', '0')).replace(',', '.'))
+            try: val_stawka_final = float(str(import_data.get('Koszt_Transportu_EUR', '0')).replace(' ', '').replace(',', '.'))
             except: pass
 
         with f_col1:
@@ -543,7 +553,14 @@ def render_new_event_form(df, df_miejsca, df_przewoznicy, lista_eventow_slownik,
                 df_temp = generuj_smart_id(df_temp, "Nazwa_Targow", "Przewoznik", "ID_Zlecenia")
                 nowy_wiersz_z_id = df_temp.iloc[-1]
                 kolumny = [k for k in df.columns if k != 'sheet_row']
-                db.append_data("DB_Eventy", [str(nowy_wiersz_z_id.get(k, "")) for k in kolumny])
+                
+                # --- ZABEZPIECZENIE: Bezpieczne usuwanie twardych 'nan' przy nowym zleceniu ---
+                dane_do_zapisu = []
+                for k in kolumny:
+                    val = nowy_wiersz_z_id.get(k, "")
+                    dane_do_zapisu.append("" if pd.isna(val) else str(val))
+                    
+                db.append_data("DB_Eventy", dane_do_zapisu)
                 
                 if 'import_z_eventu' in st.session_state:
                     del st.session_state['import_z_eventu']
